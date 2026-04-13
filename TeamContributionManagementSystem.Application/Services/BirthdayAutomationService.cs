@@ -1,0 +1,77 @@
+using TeamContributionManagementSystem.Application.DTOs.Events;
+using TeamContributionManagementSystem.Application.Interfaces.Repositories;
+using TeamContributionManagementSystem.Application.Interfaces.Services;
+using TeamContributionManagementSystem.Domain.Enums;
+
+namespace TeamContributionManagementSystem.Application.Services;
+
+public class BirthdayAutomationService : IBirthdayAutomationService
+{
+    private readonly IMemberRepository _memberRepository;
+    private readonly IEventTypeRepository _eventTypeRepository;
+    private readonly IUserRepository _userRepository;
+    private readonly IEventService _eventService;
+    private readonly IEventRepository _eventRepository;
+
+    public BirthdayAutomationService(
+        IMemberRepository memberRepository,
+        IEventTypeRepository eventTypeRepository,
+        IUserRepository userRepository,
+        IEventService eventService,
+        IEventRepository eventRepository)
+    {
+        _memberRepository = memberRepository;
+        _eventTypeRepository = eventTypeRepository;
+        _userRepository = userRepository;
+        _eventService = eventService;
+        _eventRepository = eventRepository;
+    }
+
+    public async Task<int> CreateMonthlyBirthdayEventsAsync(CancellationToken cancellationToken = default)
+    {
+        var today = DateTime.UtcNow.Date;
+        var birthdayEventType = await _eventTypeRepository.GetByNameAsync("Birthday", cancellationToken)
+            ?? throw new KeyNotFoundException("Birthday event type is not configured.");
+
+        var adminUser = await _userRepository.GetFirstAdminAsync(cancellationToken)
+            ?? throw new KeyNotFoundException("No admin user available for scheduled event creation.");
+
+        var birthdayMembers = await _memberRepository.GetActiveBirthdaysInMonthAsync(today.Month, cancellationToken);
+        var activeMembers = await _memberRepository.GetAllActiveAsync(cancellationToken);
+        var createdCount = 0;
+
+        foreach (var member in birthdayMembers)
+        {
+            var alreadyExists = await _eventRepository.BirthdayEventExistsAsync(member.MemberId, today.Month, today.Year, cancellationToken);
+            if (alreadyExists)
+            {
+                continue;
+            }
+
+            var eventDate = new DateTime(today.Year, today.Month, Math.Min(member.DateOfBirth.Day, DateTime.DaysInMonth(today.Year, today.Month)), 0, 0, 0, DateTimeKind.Utc);
+            var participants = activeMembers
+                .Where(x => x.MemberId != member.MemberId)
+                .Select(x => x.MemberId)
+                .ToList();
+
+            if (participants.Count == 0)
+            {
+                continue;
+            }
+
+            await _eventService.CreateAsync(adminUser.UserId, new CreateEventRequestDto
+            {
+                EventName = $"Birthday Celebration - {member.Name}",
+                EventTypeId = birthdayEventType.EventTypeId,
+                EventDate = eventDate,
+                Description = $"Auto-generated birthday contribution event for {member.Name}. birthday-member:{member.MemberId}",
+                Status = EventStatus.Planned,
+                ParticipantIds = participants
+            }, cancellationToken);
+
+            createdCount++;
+        }
+
+        return createdCount;
+    }
+}
