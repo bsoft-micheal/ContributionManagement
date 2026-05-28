@@ -37,9 +37,6 @@ public class ApplicationDbContextSeeder
             IsActive = true,
             CreatedOn = DateTime.UtcNow
         };
-
-        await _context.Roles.AddRangeAsync(roles, cancellationToken);
-        await _context.EventTypes.AddRangeAsync(eventTypes, cancellationToken);
         await _context.Users.AddAsync(adminUser, cancellationToken);
 
         // Seeding default Role Rights
