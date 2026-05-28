@@ -42,7 +42,7 @@ internal static partial class ModelBuilderExtensions
             return input;
         }
 
-        return SnakeCaseRegex().Replace(input, "_$1").TrimStart('_').ToLowerInvariant();
+        return SnakeCaseRegex().Replace(input, "$1_$2").ToLowerInvariant();
     }
 
     [GeneratedRegex("([a-z0-9])([A-Z])")]

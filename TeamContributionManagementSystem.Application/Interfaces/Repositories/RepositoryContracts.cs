@@ -40,6 +40,7 @@ public interface IEventRepository
     Task<Event?> GetByIdWithDetailsAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<bool> BirthdayEventExistsAsync(Guid memberId, int month, int year, CancellationToken cancellationToken = default);
     Task AddAsync(Event eventItem, CancellationToken cancellationToken = default);
+    void Update(Event eventItem);
 }
 
 public interface IContributionRepository

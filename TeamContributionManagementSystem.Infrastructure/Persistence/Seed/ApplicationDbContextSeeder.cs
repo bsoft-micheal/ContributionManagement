@@ -18,6 +18,8 @@ public class ApplicationDbContextSeeder
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
+        // 🚨 Temporarily deleting the database so it recreates with the correct snake_case schema
+        await _context.Database.EnsureDeletedAsync(cancellationToken);
         await _context.Database.EnsureCreatedAsync(cancellationToken);
 
         if (await _context.Roles.AnyAsync(cancellationToken))

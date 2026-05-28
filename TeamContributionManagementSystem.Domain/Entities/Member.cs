@@ -9,6 +9,7 @@ public class Member
     public Guid RoleId { get; set; }
     public DateTime DateOfBirth { get; set; }
     public DateTime JoiningDate { get; set; }
+    public string Gender { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
     public bool IsDeleted { get; set; }
