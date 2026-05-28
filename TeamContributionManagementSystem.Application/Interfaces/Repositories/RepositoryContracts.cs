@@ -46,6 +46,7 @@ public interface IEventRepository
 
 public interface IContributionRepository
 {
+    Task<List<Contribution>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<List<Contribution>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<Contribution?> GetByEventAndMemberAsync(Guid eventId, Guid memberId, CancellationToken cancellationToken = default);
     Task<List<Contribution>> GetPendingAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default);

@@ -117,4 +117,82 @@ public class UserManagementService : IUserManagementService
         _userRepository.Delete(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
+
+    // ── UPDATE PROFILE ───────────────────────────────────────────────────────
+    public async Task<UserDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new KeyNotFoundException("User not found.");
+
+        // Email uniqueness check (excluding self)
+        var emailOwner = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+        if (emailOwner is not null && emailOwner.UserId != userId)
+            throw new InvalidOperationException("A user with this email already exists.");
+
+        user.FullName = request.FullName.Trim();
+        user.Email    = request.Email.Trim().ToLowerInvariant();
+
+        // Handle profile image upload
+        if (request.ProfileImage == null)
+        {
+            if (!string.IsNullOrEmpty(user.ProfileImage))
+            {
+                var relativePath = user.ProfileImage.Split('?')[0];
+                var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath.TrimStart('/'));
+                if (File.Exists(oldFilePath))
+                {
+                    try { File.Delete(oldFilePath); } catch {}
+                }
+            }
+            user.ProfileImage = null;
+        }
+        else if (request.ProfileImage.StartsWith("data:image"))
+        {
+            // Delete old file if it exists to avoid server clutter and junk files
+            if (!string.IsNullOrEmpty(user.ProfileImage))
+            {
+                var relativePath = user.ProfileImage.Split('?')[0];
+                var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath.TrimStart('/'));
+                if (File.Exists(oldFilePath))
+                {
+                    try { File.Delete(oldFilePath); } catch {}
+                }
+            }
+
+            var base64Data = request.ProfileImage.Substring(request.ProfileImage.IndexOf(",") + 1);
+            var imageBytes = Convert.FromBase64String(base64Data);
+
+            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "user_images");
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+
+            // Detect image extension (default to png as requested, fallback if needed)
+            var extension = "png";
+            if (request.ProfileImage.Contains("image/jpeg") || request.ProfileImage.Contains("image/jpg"))
+            {
+                extension = "jpg";
+            }
+
+            var dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
+            var cleanUsername = user.Username.Replace(" ", "_").ToLowerInvariant();
+            var fileName = $"{dateStr}{cleanUsername}.{extension}";
+            var filePath = Path.Combine(folderPath, fileName);
+
+            await File.WriteAllBytesAsync(filePath, imageBytes, cancellationToken);
+            
+            // Append cache buster parameter to DB path to bypass browser caching and reflect instantly
+            var cacheBuster = DateTime.UtcNow.Ticks;
+            user.ProfileImage = $"/user_images/{fileName}?v={cacheBuster}";
+        }
+
+        _userRepository.Update(user);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var updated = await _userRepository.GetByIdAsync(user.UserId, cancellationToken)
+            ?? throw new KeyNotFoundException("Updated user could not be loaded.");
+
+        return _mapper.Map<UserDto>(updated);
+    }
 }

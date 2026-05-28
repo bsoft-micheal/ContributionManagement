@@ -193,6 +193,14 @@ public class ContributionRepository : IContributionRepository
         _context = context;
     }
 
+    public async Task<List<Contribution>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.Contributions
+            .Include(x => x.Event)
+            .Include(x => x.Member)
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.Event!.EventDate)
+            .ToListAsync(cancellationToken);
+
     public async Task<List<Contribution>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default)
         => await _context.Contributions
             .Include(x => x.Event)

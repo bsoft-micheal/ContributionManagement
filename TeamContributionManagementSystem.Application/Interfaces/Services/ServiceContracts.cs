@@ -41,6 +41,7 @@ public interface IEventService
 
 public interface IContributionService
 {
+    Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<ContributionDto>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<ContributionDto> PayAsync(PayContributionRequestDto request, CancellationToken cancellationToken = default);
 }
@@ -65,6 +66,7 @@ public interface IUserManagementService
     Task<IReadOnlyCollection<UserDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default);
     Task<UserDto> UpdateAsync(Guid userId, UpdateUserRequestDto request, CancellationToken cancellationToken = default);
+    Task<UserDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto request, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid userId, CancellationToken cancellationToken = default);
 }
 

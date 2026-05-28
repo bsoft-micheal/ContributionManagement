@@ -85,7 +85,8 @@ public class EventService : IEventService
             EventDate = request.EventDate.Date,
             CreatedBy = user.UserId,
             Description = request.Description.Trim(),
-            Status = request.Status
+            Status = request.Status,
+            BaseAmount = request.BaseAmount
         };
 
         foreach (var member in members)
@@ -139,6 +140,7 @@ public class EventService : IEventService
         eventItem.EventDate = request.EventDate.Date;
         eventItem.Description = request.Description.Trim();
         eventItem.Status = request.Status;
+        eventItem.BaseAmount = request.BaseAmount;
 
         _eventRepository.Update(eventItem);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

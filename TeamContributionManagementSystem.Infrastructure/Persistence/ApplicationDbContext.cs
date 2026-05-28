@@ -60,6 +60,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(150).IsRequired();
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
+            entity.Property(x => x.ProfileImage).HasMaxLength(500);
             entity.Property(x => x.CreatedOn);
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.Username).IsUnique();
@@ -82,6 +83,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
+            entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
             entity.HasIndex(x => new { x.EventDate, x.EventTypeId });
             entity.HasOne(x => x.EventType)
                 .WithMany(x => x.Events)

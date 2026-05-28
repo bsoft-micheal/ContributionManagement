@@ -19,6 +19,12 @@ public class ContributionService : IContributionService
         _mapper = mapper;
     }
 
+    public async Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var contributions = await _contributionRepository.GetAllAsync(cancellationToken);
+        return _mapper.Map<IReadOnlyCollection<ContributionDto>>(contributions);
+    }
+
     public async Task<IReadOnlyCollection<ContributionDto>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
         var contributions = await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);

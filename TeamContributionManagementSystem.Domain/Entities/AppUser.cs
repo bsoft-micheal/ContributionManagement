@@ -11,6 +11,7 @@ public class AppUser
     public UserRole Role { get; set; } = UserRole.User;
     public string FullName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public string? ProfileImage { get; set; }
     public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
 
     public ICollection<Event> CreatedEvents { get; set; } = new List<Event>();

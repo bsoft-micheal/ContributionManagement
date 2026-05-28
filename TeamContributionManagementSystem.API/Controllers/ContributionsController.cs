@@ -18,6 +18,10 @@ public class ContributionsController : ControllerBase
         _contributionService = contributionService;
     }
 
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyCollection<ContributionDto>>> GetAll(CancellationToken cancellationToken)
+        => Ok(await _contributionService.GetAllAsync(cancellationToken));
+
     [HttpGet("event/{eventId:guid}")]
     public async Task<ActionResult<IReadOnlyCollection<ContributionDto>>> GetByEvent(Guid eventId, CancellationToken cancellationToken)
         => Ok(await _contributionService.GetByEventIdAsync(eventId, cancellationToken));

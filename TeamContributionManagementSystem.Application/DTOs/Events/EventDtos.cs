@@ -12,6 +12,7 @@ public class EventSummaryDto
     public DateTime EventDate { get; set; }
     public string Description { get; set; } = string.Empty;
     public EventStatus Status { get; set; }
+    public decimal BaseAmount { get; set; }
     public int ParticipantCount { get; set; }
     public decimal TotalExpectedAmount { get; set; }
     public decimal TotalPaidAmount { get; set; }

@@ -55,6 +55,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             Email = user.Email,
             FullName = user.FullName,
             Role = user.Role.ToString(),
+            ProfileImage = user.ProfileImage,
             ExpiresAtUtc = expiresAtUtc
         };
     }
