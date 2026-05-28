@@ -45,21 +45,25 @@ public class ApplicationDbContextSeeder
         var adminUser = new AppUser
         {
             UserId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"),
+            Username = "admin",
             Email = "admin@teamcontribution.local",
             FullName = "System Administrator",
             PasswordHash = _passwordHasher.HashPassword("Admin@123"),
             Role = UserRole.Admin,
-            IsActive = true
+            IsActive = true,
+            CreatedOn = DateTime.UtcNow
         };
 
         var memberUser = new AppUser
         {
             UserId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2"),
+            Username = "member",
             Email = "member@teamcontribution.local",
             FullName = "General Member",
             PasswordHash = _passwordHasher.HashPassword("Member@123"),
             Role = UserRole.Member,
-            IsActive = true
+            IsActive = true,
+            CreatedOn = DateTime.UtcNow
         };
 
         var members = new[]
@@ -137,6 +141,56 @@ public class ApplicationDbContextSeeder
         await _context.Events.AddAsync(kickoffEvent, cancellationToken);
         await _context.EventParticipants.AddRangeAsync(participants, cancellationToken);
         await _context.Contributions.AddRangeAsync(contributions, cancellationToken);
+
+        // Seeding default Role Rights
+        var defaultPages = new[]
+        {
+            (Module: "Dashboard", SubModule: "Analytics", Page: "Dashboard"),
+            (Module: "Members", SubModule: "Directory", Page: "Members"),
+            (Module: "Events", SubModule: "Registry", Page: "Events"),
+            (Module: "Events", SubModule: "Calendar", Page: "Calendar"),
+            (Module: "Contributions", SubModule: "Ledger", Page: "Contributions"),
+            (Module: "Contributions", SubModule: "Calculation", Page: "Calculation"),
+            (Module: "Support Data", SubModule: "Categories", Page: "Event Types"),
+            (Module: "Support Data", SubModule: "Clearance", Page: "Exit Process"),
+            (Module: "Support Data", SubModule: "Admin", Page: "User Rights"),
+            (Module: "Support Data", SubModule: "Admin", Page: "Users"),
+            (Module: "Reports", SubModule: "Analytics", Page: "Reports")
+        };
+
+        var roleRightsList = new List<RoleRight>();
+
+        foreach (var role in Enum.GetValues<UserRole>())
+        {
+            foreach (var page in defaultPages)
+            {
+                string access = "readWrite"; // default for Admin / Manager
+
+                if (role == UserRole.User || role == UserRole.Member)
+                {
+                    if (page.Page == "Event Types" || page.Page == "Exit Process" || page.Page == "User Rights" || page.Page == "Users")
+                    {
+                        access = "deny";
+                    }
+                    else
+                    {
+                        access = "readOnly";
+                    }
+                }
+
+                roleRightsList.Add(new RoleRight
+                {
+                    RoleRightId = Guid.NewGuid(),
+                    Role = role,
+                    Module = page.Module,
+                    SubModule = page.SubModule,
+                    Page = page.Page,
+                    Access = access
+                });
+            }
+        }
+
+        await _context.RoleRights.AddRangeAsync(roleRightsList, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
     }

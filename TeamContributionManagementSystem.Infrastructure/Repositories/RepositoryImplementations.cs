@@ -245,8 +245,16 @@ public class UserRepository : IUserRepository
         _context = context;
     }
 
+    public async Task<List<AppUser>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.Users
+            .OrderBy(x => x.Username)
+            .ToListAsync(cancellationToken);
+
     public async Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
         => await _context.Users.FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
+
+    public async Task<AppUser?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
+        => await _context.Users.FirstOrDefaultAsync(x => x.Username.ToLower() == username.ToLower(), cancellationToken);
 
     public async Task<AppUser?> GetByIdAsync(Guid userId, CancellationToken cancellationToken = default)
         => await _context.Users.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
@@ -256,4 +264,36 @@ public class UserRepository : IUserRepository
 
     public async Task AddAsync(AppUser user, CancellationToken cancellationToken = default)
         => await _context.Users.AddAsync(user, cancellationToken);
+
+    public void Update(AppUser user)
+        => _context.Users.Update(user);
+
+    public void Delete(AppUser user)
+        => _context.Users.Remove(user);
+}
+
+public class RoleRightRepository : IRoleRightRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public RoleRightRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<RoleRight>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.RoleRights.OrderBy(x => x.Role).ThenBy(x => x.Module).ThenBy(x => x.Page).ToListAsync(cancellationToken);
+
+    public async Task<List<RoleRight>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
+        => await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+
+    public async Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default)
+    {
+        var existing = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+        if (existing.Count > 0)
+        {
+            _context.RoleRights.RemoveRange(existing);
+        }
+        await _context.RoleRights.AddRangeAsync(rights, cancellationToken);
+    }
 }

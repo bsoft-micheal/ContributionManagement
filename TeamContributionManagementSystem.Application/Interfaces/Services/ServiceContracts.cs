@@ -5,6 +5,7 @@ using TeamContributionManagementSystem.Application.DTOs.EventTypes;
 using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 
 namespace TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -57,4 +58,19 @@ public interface IReportService
 public interface IBirthdayAutomationService
 {
     Task<int> CreateMonthlyBirthdayEventsAsync(CancellationToken cancellationToken = default);
+}
+
+public interface IUserManagementService
+{
+    Task<IReadOnlyCollection<UserDto>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default);
+    Task<UserDto> UpdateAsync(Guid userId, UpdateUserRequestDto request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid userId, CancellationToken cancellationToken = default);
+}
+
+public interface IRoleRightsService
+{
+    Task<IReadOnlyCollection<RoleRightDto>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<RoleRightDto>> GetByRoleAsync(string roleName, CancellationToken cancellationToken = default);
+    Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, CancellationToken cancellationToken = default);
 }

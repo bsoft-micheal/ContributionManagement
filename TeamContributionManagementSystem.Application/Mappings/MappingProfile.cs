@@ -4,6 +4,7 @@ using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.EventTypes;
 using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
 
@@ -18,6 +19,9 @@ public class MappingProfile : Profile
         CreateMap<Member, MemberDto>()
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.RoleName : string.Empty))
             .ForMember(dest => dest.DefaultContributionAmount, opt => opt.MapFrom(src => src.Role != null ? src.Role.DefaultContributionAmount : 0));
+
+        CreateMap<AppUser, UserDto>()
+            .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.ToString()));
 
         CreateMap<EventType, EventTypeDto>();
 
@@ -40,5 +44,7 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.CreatedByName, opt => opt.MapFrom(src => src.CreatedByUser != null ? src.CreatedByUser.FullName : string.Empty))
             .ForMember(dest => dest.Participants, opt => opt.MapFrom(src => src.Participants))
             .ForMember(dest => dest.Contributions, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted)));
+
+        CreateMap<RoleRight, RoleRightDto>().ReverseMap();
     }
 }

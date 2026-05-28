@@ -1,4 +1,5 @@
 using TeamContributionManagementSystem.Domain.Entities;
+using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.Application.Interfaces.Repositories;
 
@@ -54,10 +55,21 @@ public interface IContributionRepository
 
 public interface IUserRepository
 {
+    Task<List<AppUser>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
+    Task<AppUser?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default);
     Task<AppUser?> GetByIdAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<AppUser?> GetFirstAdminAsync(CancellationToken cancellationToken = default);
     Task AddAsync(AppUser user, CancellationToken cancellationToken = default);
+    void Update(AppUser user);
+    void Delete(AppUser user);
+}
+
+public interface IRoleRightRepository
+{
+    Task<List<RoleRight>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<List<RoleRight>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default);
+    Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default);
 }
 
 public interface IUnitOfWork
