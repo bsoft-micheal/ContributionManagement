@@ -170,6 +170,9 @@ public class EventRepository : IEventRepository
     public async Task AddAsync(Event eventItem, CancellationToken cancellationToken = default)
         => await _context.Events.AddAsync(eventItem, cancellationToken);
 
+    public void Update(Event eventItem)
+        => _context.Events.Update(eventItem);
+
     private IQueryable<Event> BuildEventQuery()
         => _context.Events
             .Include(x => x.EventType)

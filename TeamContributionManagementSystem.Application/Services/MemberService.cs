@@ -47,6 +47,7 @@ public class MemberService : IMemberService
             RoleId = role.RoleId,
             DateOfBirth = request.DateOfBirth.Date,
             JoiningDate = request.JoiningDate.Date,
+            Gender = request.Gender,
             IsActive = request.IsActive,
             IsExited = request.IsExited
         };
@@ -80,6 +81,7 @@ public class MemberService : IMemberService
         member.RoleId = role.RoleId;
         member.DateOfBirth = request.DateOfBirth.Date;
         member.JoiningDate = request.JoiningDate.Date;
+        member.Gender = request.Gender;
         member.IsActive = request.IsActive;
         member.IsExited = request.IsExited;
 

@@ -13,6 +13,7 @@ public class MemberDto
     public decimal DefaultContributionAmount { get; set; }
     public DateTime DateOfBirth { get; set; }
     public DateTime JoiningDate { get; set; }
+    public string Gender { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public bool IsExited { get; set; }
 }
@@ -39,6 +40,10 @@ public class CreateMemberRequestDto
 
     [Required]
     public DateTime JoiningDate { get; set; }
+
+    [Required]
+    [MaxLength(20)]
+    public string Gender { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
