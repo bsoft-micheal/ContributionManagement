@@ -70,4 +70,7 @@ public class UpdateProfileRequestDto
     public string Email { get; set; } = string.Empty;
 
     public string? ProfileImage { get; set; }
+
+    [MinLength(6)]
+    public string? Password { get; set; }
 }

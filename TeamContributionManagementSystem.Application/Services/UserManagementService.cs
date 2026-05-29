@@ -132,6 +132,11 @@ public class UserManagementService : IUserManagementService
         user.FullName = request.FullName.Trim();
         user.Email    = request.Email.Trim().ToLowerInvariant();
 
+        if (!string.IsNullOrWhiteSpace(request.Password))
+        {
+            user.PasswordHash = _passwordHasher.HashPassword(request.Password);
+        }
+
         // Handle profile image upload
         if (request.ProfileImage == null)
         {
