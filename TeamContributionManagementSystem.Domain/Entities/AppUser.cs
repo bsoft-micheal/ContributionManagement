@@ -13,6 +13,8 @@ public class AppUser
     public bool IsActive { get; set; } = true;
     public string? ProfileImage { get; set; }
     public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
+    public string? PasswordResetOtp { get; set; }
+    public DateTime? PasswordResetOtpExpiry { get; set; }
 
     public ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
 }

@@ -44,6 +44,7 @@ public interface IContributionService
     Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<ContributionDto>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<ContributionDto> PayAsync(PayContributionRequestDto request, CancellationToken cancellationToken = default);
+    Task<MemberContributionSummaryDto> GetMySummaryAsync(string userEmail, CancellationToken cancellationToken = default);
 }
 
 public interface IDashboardService
@@ -75,4 +76,9 @@ public interface IRoleRightsService
     Task<IReadOnlyCollection<RoleRightDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<RoleRightDto>> GetByRoleAsync(string roleName, CancellationToken cancellationToken = default);
     Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, CancellationToken cancellationToken = default);
+}
+
+public interface IEmailService
+{
+    Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default);
 }

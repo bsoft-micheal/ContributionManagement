@@ -62,6 +62,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
             entity.Property(x => x.ProfileImage).HasMaxLength(500);
             entity.Property(x => x.CreatedOn);
+            entity.Property(x => x.PasswordResetOtp).HasMaxLength(10);
+            entity.Property(x => x.PasswordResetOtpExpiry);
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.Username).IsUnique();
         });

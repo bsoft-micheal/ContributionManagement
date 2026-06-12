@@ -31,7 +31,8 @@ public class MappingProfile : Profile
 
         CreateMap<Contribution, ContributionDto>()
             .ForMember(dest => dest.EventName, opt => opt.MapFrom(src => src.Event != null ? src.Event.EventName : string.Empty))
-            .ForMember(dest => dest.MemberName, opt => opt.MapFrom(src => src.Member != null ? src.Member.Name : string.Empty));
+            .ForMember(dest => dest.MemberName, opt => opt.MapFrom(src => src.Member != null ? src.Member.Name : string.Empty))
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Event != null && src.Event.EventType != null ? src.Event.EventType.EventTypeName : string.Empty));
 
         CreateMap<Event, EventSummaryDto>()
             .ForMember(dest => dest.EventTypeName, opt => opt.MapFrom(src => src.EventType != null ? src.EventType.EventTypeName : string.Empty))

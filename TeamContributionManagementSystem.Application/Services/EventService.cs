@@ -129,7 +129,7 @@ public class EventService : IEventService
     
     public async Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default)
     {
-        var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
+        var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
             ?? throw new KeyNotFoundException("Event not found.");
 
         var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
@@ -142,7 +142,118 @@ public class EventService : IEventService
         eventItem.Status = request.Status;
         eventItem.BaseAmount = request.BaseAmount;
 
-        _eventRepository.Update(eventItem);
+        var newParticipantIds = request.ParticipantIds.Distinct().ToList();
+        if (newParticipantIds.Count == 0)
+        {
+            throw new InvalidOperationException("At least one participant is required.");
+        }
+
+        var members = await _memberRepository.GetByIdsAsync(newParticipantIds, cancellationToken);
+        if (members.Count != newParticipantIds.Count)
+        {
+            throw new InvalidOperationException("One or more participants could not be found.");
+        }
+
+        var overrideLookup = request.ContributionOverrides
+            .GroupBy(x => x.MemberId)
+            .ToDictionary(x => x.Key, x => x.Last().Amount);
+
+        // 1. Map memberId to calculated amount
+        var memberAmounts = members.ToDictionary(
+            member => member.MemberId,
+            member =>
+            {
+                var baseAmount = overrideLookup.TryGetValue(member.MemberId, out var amount)
+                    ? amount
+                    : request.BaseAmount;
+
+                // Apply 50% reduction for members with less than 1 year of tenure
+                if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
+                {
+                    baseAmount *= 0.5m;
+                }
+
+                return baseAmount;
+            }
+        );
+
+        // 2. Perform Collection Diffing for Participants
+        var currentParticipantIds = eventItem.Participants.Select(p => p.MemberId).ToList();
+
+        // Identify participants to remove
+        var participantsToRemove = eventItem.Participants
+            .Where(p => !newParticipantIds.Contains(p.MemberId))
+            .ToList();
+        if (participantsToRemove.Any())
+        {
+            _eventRepository.DeleteParticipants(participantsToRemove);
+            foreach (var p in participantsToRemove)
+            {
+                eventItem.Participants.Remove(p);
+            }
+        }
+
+        // Identify participants to add
+        var participantIdsToAdd = newParticipantIds
+            .Where(id => !currentParticipantIds.Contains(id))
+            .ToList();
+        foreach (var memberId in participantIdsToAdd)
+        {
+            eventItem.Participants.Add(new EventParticipant
+            {
+                Id = Guid.NewGuid(),
+                EventId = eventItem.EventId,
+                MemberId = memberId
+            });
+        }
+
+        // 3. Perform Collection Diffing for Contributions
+        var currentContributions = eventItem.Contributions.ToList();
+
+        // Identify contributions to remove
+        var contributionsToRemove = currentContributions
+            .Where(c => !newParticipantIds.Contains(c.MemberId))
+            .ToList();
+        if (contributionsToRemove.Any())
+        {
+            _contributionRepository.DeleteRange(contributionsToRemove);
+            foreach (var c in contributionsToRemove)
+            {
+                eventItem.Contributions.Remove(c);
+            }
+        }
+
+        // Update amounts of existing contributions
+        var existingContributions = eventItem.Contributions.ToList();
+        foreach (var contribution in existingContributions)
+        {
+            if (memberAmounts.TryGetValue(contribution.MemberId, out var newAmount))
+            {
+                contribution.Amount = newAmount;
+            }
+        }
+
+        // Identify new contributions to add
+        var existingContributionMemberIds = existingContributions.Select(c => c.MemberId).ToList();
+        var contributionMemberIdsToAdd = newParticipantIds
+            .Where(id => !existingContributionMemberIds.Contains(id))
+            .ToList();
+        foreach (var memberId in contributionMemberIdsToAdd)
+        {
+            if (memberAmounts.TryGetValue(memberId, out var amount))
+            {
+                eventItem.Contributions.Add(new Contribution
+                {
+                    ContributionId = Guid.NewGuid(),
+                    EventId = eventItem.EventId,
+                    MemberId = memberId,
+                    Amount = amount,
+                    PaymentStatus = Domain.Enums.PaymentStatus.Pending
+                });
+            }
+        }
+
+        // Save all changes in a single transaction
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await GetByIdAsync(eventItem.EventId, cancellationToken);

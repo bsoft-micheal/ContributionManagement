@@ -23,4 +23,32 @@ public class AuthController : ControllerBase
         var response = await _authService.LoginAsync(request, cancellationToken);
         return Ok(response);
     }
+
+    [AllowAnonymous]
+    [HttpPost("forgot-password/request")]
+    public async Task<IActionResult> RequestForgotPasswordOtp([FromBody] ForgotPasswordRequestDto request, CancellationToken cancellationToken)
+    {
+        await _authService.RequestPasswordResetOtpAsync(request, cancellationToken);
+        return Ok(new { message = "If the email is registered, a password reset OTP has been sent." });
+    }
+
+    [AllowAnonymous]
+    [HttpPost("forgot-password/verify")]
+    public async Task<IActionResult> VerifyForgotPasswordOtp([FromBody] VerifyOtpRequestDto request, CancellationToken cancellationToken)
+    {
+        var isValid = await _authService.VerifyPasswordResetOtpAsync(request, cancellationToken);
+        if (!isValid)
+        {
+            return BadRequest(new { message = "Invalid or expired password reset OTP." });
+        }
+        return Ok(new { message = "OTP verified successfully." });
+    }
+
+    [AllowAnonymous]
+    [HttpPost("forgot-password/reset")]
+    public async Task<IActionResult> ResetPasswordWithOtp([FromBody] ResetPasswordRequestDto request, CancellationToken cancellationToken)
+    {
+        await _authService.ResetPasswordWithOtpAsync(request, cancellationToken);
+        return Ok(new { message = "Your password has been successfully reset. Please log in with your new credentials." });
+    }
 }

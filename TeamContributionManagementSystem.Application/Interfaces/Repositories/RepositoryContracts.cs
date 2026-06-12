@@ -42,6 +42,7 @@ public interface IEventRepository
     Task<bool> BirthdayEventExistsAsync(Guid memberId, int month, int year, CancellationToken cancellationToken = default);
     Task AddAsync(Event eventItem, CancellationToken cancellationToken = default);
     void Update(Event eventItem);
+    void DeleteParticipants(IEnumerable<EventParticipant> participants);
 }
 
 public interface IContributionRepository
@@ -50,8 +51,10 @@ public interface IContributionRepository
     Task<List<Contribution>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<Contribution?> GetByEventAndMemberAsync(Guid eventId, Guid memberId, CancellationToken cancellationToken = default);
     Task<List<Contribution>> GetPendingAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default);
+    Task<List<Contribution>> GetByMemberEmailAsync(string email, CancellationToken cancellationToken = default);
     Task AddRangeAsync(IEnumerable<Contribution> contributions, CancellationToken cancellationToken = default);
     void Update(Contribution contribution);
+    void DeleteRange(IEnumerable<Contribution> contributions);
 }
 
 public interface IUserRepository

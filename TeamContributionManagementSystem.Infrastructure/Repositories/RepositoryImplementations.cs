@@ -173,6 +173,9 @@ public class EventRepository : IEventRepository
     public void Update(Event eventItem)
         => _context.Events.Update(eventItem);
 
+    public void DeleteParticipants(IEnumerable<EventParticipant> participants)
+        => _context.EventParticipants.RemoveRange(participants);
+
     private IQueryable<Event> BuildEventQuery()
         => _context.Events
             .Include(x => x.EventType)
@@ -196,6 +199,7 @@ public class ContributionRepository : IContributionRepository
     public async Task<List<Contribution>> GetAllAsync(CancellationToken cancellationToken = default)
         => await _context.Contributions
             .Include(x => x.Event)
+                .ThenInclude(x => x!.EventType)
             .Include(x => x.Member)
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.Event!.EventDate)
@@ -242,6 +246,18 @@ public class ContributionRepository : IContributionRepository
 
     public void Update(Contribution contribution)
         => _context.Contributions.Update(contribution);
+
+    public void DeleteRange(IEnumerable<Contribution> contributions)
+        => _context.Contributions.RemoveRange(contributions);
+
+    public async Task<List<Contribution>> GetByMemberEmailAsync(string email, CancellationToken cancellationToken = default)
+        => await _context.Contributions
+            .Include(x => x.Event)
+                .ThenInclude(x => x!.EventType)
+            .Include(x => x.Member)
+            .Where(x => !x.IsDeleted && x.Member != null && x.Member.Email == email)
+            .OrderBy(x => x.Event!.EventDate)
+            .ToListAsync(cancellationToken);
 }
 
 public class UserRepository : IUserRepository
