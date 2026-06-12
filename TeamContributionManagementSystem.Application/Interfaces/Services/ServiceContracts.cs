@@ -37,6 +37,7 @@ public interface IEventService
     Task<EventDetailsDto> GetByIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<EventDetailsDto> CreateAsync(Guid createdByUserId, CreateEventRequestDto request, CancellationToken cancellationToken = default);
     Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid eventId, CancellationToken cancellationToken = default);
 }
 
 public interface IContributionService

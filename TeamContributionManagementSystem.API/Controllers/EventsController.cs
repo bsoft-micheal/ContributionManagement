@@ -45,4 +45,12 @@ public class EventsController : ControllerBase
         var eventItem = await _eventService.UpdateAsync(id, request, cancellationToken);
         return Ok(eventItem);
     }
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await _eventService.DeleteAsync(id, cancellationToken);
+        return NoContent();
+    }
 }
