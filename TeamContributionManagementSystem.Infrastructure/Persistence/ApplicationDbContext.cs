@@ -49,6 +49,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.EventTypeId);
             entity.Property(x => x.EventTypeName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
             entity.HasIndex(x => x.EventTypeName).IsUnique();
         });
 

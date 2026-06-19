@@ -24,6 +24,7 @@ public class ApplicationDbContextSeeder
         // Self-healing DB update for password reset OTP columns in Postgres
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp VARCHAR(10) NULL;");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_expiry TIMESTAMP WITH TIME ZONE NULL;");
+        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS base_amount DECIMAL(12, 2) NOT NULL DEFAULT 0;");
 
         if (await _context.Roles.AnyAsync(cancellationToken))
         {

@@ -105,11 +105,17 @@ public class EventTypeRepository : IEventTypeRepository
     public async Task<EventType?> GetByNameAsync(string eventTypeName, CancellationToken cancellationToken = default)
         => await _context.EventTypes.FirstOrDefaultAsync(x => x.EventTypeName.ToLower() == eventTypeName.ToLower(), cancellationToken);
 
+    public async Task<bool> HasEventsAsync(Guid eventTypeId, CancellationToken cancellationToken = default)
+        => await _context.Events.AnyAsync(x => x.EventTypeId == eventTypeId, cancellationToken);
+
     public async Task AddAsync(EventType eventType, CancellationToken cancellationToken = default)
         => await _context.EventTypes.AddAsync(eventType, cancellationToken);
 
     public void Update(EventType eventType)
         => _context.EventTypes.Update(eventType);
+
+    public void Delete(EventType eventType)
+        => _context.EventTypes.Remove(eventType);
 }
 
 public class EventRepository : IEventRepository

@@ -7,6 +7,7 @@ public class EventTypeDto
     public Guid EventTypeId { get; set; }
     public string EventTypeName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public decimal BaseAmount { get; set; }
 }
 
 public class CreateEventTypeRequestDto
@@ -16,6 +17,9 @@ public class CreateEventTypeRequestDto
     public string EventTypeName { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
+
+    [Range(0, 1000000)]
+    public decimal BaseAmount { get; set; }
 }
 
 public class UpdateEventTypeRequestDto : CreateEventTypeRequestDto

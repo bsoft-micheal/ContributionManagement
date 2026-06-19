@@ -29,6 +29,7 @@ public interface IEventTypeService
     Task<IReadOnlyCollection<EventTypeDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<EventTypeDto> CreateAsync(CreateEventTypeRequestDto request, CancellationToken cancellationToken = default);
     Task<EventTypeDto> UpdateAsync(Guid eventTypeId, UpdateEventTypeRequestDto request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
 }
 
 public interface IEventService
@@ -81,5 +82,12 @@ public interface IRoleRightsService
 
 public interface IEmailService
 {
-    Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default);
+    Task SendEmailAsync(
+        string toEmail,
+        string subject,
+        string body,
+        IEnumerable<InlineEmailImage>? inlineImages = null,
+        CancellationToken cancellationToken = default);
 }
+
+public sealed record InlineEmailImage(string ContentId, string FilePath, string? MediaType = null);

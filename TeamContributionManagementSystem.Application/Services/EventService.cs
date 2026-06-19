@@ -106,16 +106,41 @@ public class EventService : IEventService
             });
         }
 
-        var contributions = members.Select(member => 
-        {
-            var baseAmount = overrideLookup.TryGetValue(member.MemberId, out var amount)
-                ? amount
-                : request.BaseAmount;
+        int fullShareCount = 0;
+        int halfShareCount = 0;
 
-            // Apply 50% reduction for members with less than 1 year of tenure
+        foreach (var member in members)
+        {
+            if (overrideLookup.ContainsKey(member.MemberId))
+            {
+                continue;
+            }
             if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
             {
-                baseAmount *= 0.5m;
+                halfShareCount++;
+            }
+            else
+            {
+                fullShareCount++;
+            }
+        }
+
+        decimal overrideSum = request.ContributionOverrides.Sum(x => x.Amount);
+        decimal splitPool = Math.Max(0m, request.BaseAmount - overrideSum);
+        decimal divisor = fullShareCount + 0.5m * halfShareCount;
+        decimal fullShare = divisor > 0 ? (splitPool / divisor) : 0m;
+
+        var contributions = members.Select(member => 
+        {
+            decimal amount;
+            if (overrideLookup.TryGetValue(member.MemberId, out var customAmount))
+            {
+                amount = customAmount;
+            }
+            else
+            {
+                bool isHalfShare = member.JoiningDate.AddYears(1) > eventItem.EventDate;
+                amount = Math.Round(isHalfShare ? (fullShare * 0.5m) : fullShare, 2);
             }
 
             return new Contribution
@@ -123,7 +148,7 @@ public class EventService : IEventService
                 ContributionId = Guid.NewGuid(),
                 EventId = eventItem.EventId,
                 MemberId = member.MemberId,
-                Amount = baseAmount
+                Amount = amount
             };
         }).ToList();
 
@@ -136,6 +161,7 @@ public class EventService : IEventService
             var emailTasks = members.Select(async member =>
             {
                 var contributionAmount = contributions.FirstOrDefault(c => c.MemberId == member.MemberId)?.Amount ?? 0m;
+                var gpayImagePath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "gpay.png");
                  var emailBody = $@"
 <!DOCTYPE html>
 <html>
@@ -154,16 +180,17 @@ public class EventService : IEventService
             max-width: 600px;
             margin: 30px auto;
             background-color: #ffffff;
-            border-radius: 10px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 12px rgba(74, 63, 107, 0.08);
+            box-shadow: 0 10px 30px rgba(74, 63, 107, 0.08);
             border: 1px solid rgba(74, 63, 107, 0.08);
         }}
         .header {{
             background: linear-gradient(135deg, #4a3f6b 0%, #2d2550 100%);
-            padding: 30px 20px;
+            padding: 35px 20px;
             text-align: center;
             color: #ffffff;
+            border-bottom: 3px solid #7c3aed;
         }}
         .header h1 {{
             margin: 0;
@@ -187,16 +214,16 @@ public class EventService : IEventService
             color: #5b5280;
         }}
         .details-card {{
-            background-color: #ffffff;
+            background-color: #faf9fd;
             border: 1px solid rgba(74, 63, 107, 0.08);
-            border-radius: 8px;
-            padding: 20px;
+            border-radius: 10px;
+            padding: 24px;
             margin-bottom: 25px;
         }}
         .detail-row {{
-            margin-bottom: 12px;
-            border-bottom: 1px solid rgba(74, 63, 107, 0.05);
-            padding-bottom: 12px;
+            margin-bottom: 16px;
+            border-bottom: 1px dashed rgba(74, 63, 107, 0.1);
+            padding-bottom: 16px;
         }}
         .detail-row:last-child {{
             margin-bottom: 0;
@@ -207,7 +234,7 @@ public class EventService : IEventService
             font-weight: 700;
             color: #5b5280;
             display: inline-block;
-            width: 150px;
+            width: 160px;
         }}
         .detail-value {{
             color: #1e1a2e;
@@ -215,15 +242,28 @@ public class EventService : IEventService
         }}
         .amount-highlight {{
             font-size: 18px;
-            color: #4a3f6b;
+            color: #2d2550;
             font-weight: 800;
+            background-color: #f0ecf9;
+            padding: 4px 10px;
+            border-radius: 6px;
+            display: inline-block;
         }}
         .payment-card {{
-            background-color: #ffffff;
-            border: 1px solid rgba(74, 63, 107, 0.08);
-            border-radius: 8px;
-            padding: 16px 20px;
+            background: linear-gradient(to right, #ffffff, #faf9fd);
+            border: 1.5px solid #e9e6f5;
+            border-radius: 10px;
+            padding: 18px 24px;
             margin-bottom: 25px;
+            box-shadow: 0 4px 10px rgba(74, 63, 107, 0.04);
+        }}
+        .gpay-image {{
+            display: block;
+            width: 100%;
+            max-width: 520px;
+            height: auto;
+            margin: 0 auto 14px;
+            border-radius: 12px;
         }}
         .footer {{
             background-color: #ffffff;
@@ -238,7 +278,7 @@ public class EventService : IEventService
 <body>
     <div class=""container"">
         <div class=""header"">
-            <h1>New Event Notification</h1>
+            <h1>Event Detail</h1>
         </div>
         <div class=""content"">
             <div class=""greeting"">Hello {member.Name},</div>
@@ -267,11 +307,14 @@ public class EventService : IEventService
             <div class=""payment-card"">
                 <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"">
                     <tr>
-                        <td align=""left"" style=""vertical-align: middle; padding: 0;"">
-                            <img src=""https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Google_Pay_Logo_%282020%29.svg/512px-Google_Pay_Logo_%282020%29.svg.png"" alt=""Google Pay"" style=""height: 24px; display: block; border: 0;"" />
+                        <td align=""center"" style=""padding: 0 0 14px 0;"">
+                            <img src=""cid:gpay-banner"" alt=""GPay payment details"" class=""gpay-image"" style=""display:block;width:100%;max-width:520px;height:auto;margin:0 auto 14px;border-radius:12px;border:0;outline:none;text-decoration:none;"" />
                         </td>
+                    </tr>
+                    <tr>
                         <td align=""right"" style=""vertical-align: middle; padding: 0; font-size: 16px; color: #4a3f6b; font-weight: 800; font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif;"">
-                            <span style=""font-weight: 600; color: #5b5280; font-size: 14px; margin-right: 8px;"">GPay Number:</span> 9940839866
+                            <span style=""font-weight: 600; color: #5b5280; font-size: 14px; margin-right: 8px;"">GPay Number:</span>
+                            <span style=""color: #2d2550; background-color: #f0ecf9; padding: 4px 10px; border-radius: 6px; font-family: 'Outfit', 'Courier New', monospace; letter-spacing: 0.5px;"">9940839866</span>
                         </td>
                     </tr>
                 </table>
@@ -288,7 +331,10 @@ public class EventService : IEventService
                 {
                     if (!string.IsNullOrWhiteSpace(member.Email))
                     {
-                        await _emailService.SendEmailAsync(member.Email, $"New Event Notification: {eventItem.EventName}", emailBody, cancellationToken);
+                        var inlineImages = File.Exists(gpayImagePath)
+                            ? new[] { new InlineEmailImage("gpay-banner", gpayImagePath, "image/png") }
+                            : null;
+                        await _emailService.SendEmailAsync(member.Email, $"Event Detail: {eventItem.EventName}", emailBody, inlineImages, cancellationToken);
                         _logger.LogInformation("Successfully sent/logged event creation email to participant: {Email}", member.Email);
                     }
                 }
@@ -340,21 +386,41 @@ public class EventService : IEventService
             .ToDictionary(x => x.Key, x => x.Last().Amount);
 
         // 1. Map memberId to calculated amount
+        int fullShareCount = 0;
+        int halfShareCount = 0;
+
+        foreach (var member in members)
+        {
+            if (overrideLookup.ContainsKey(member.MemberId))
+            {
+                continue;
+            }
+            if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
+            {
+                halfShareCount++;
+            }
+            else
+            {
+                fullShareCount++;
+            }
+        }
+
+        decimal overrideSum = request.ContributionOverrides.Sum(x => x.Amount);
+        decimal splitPool = Math.Max(0m, request.BaseAmount - overrideSum);
+        decimal divisor = fullShareCount + 0.5m * halfShareCount;
+        decimal fullShare = divisor > 0 ? (splitPool / divisor) : 0m;
+
         var memberAmounts = members.ToDictionary(
             member => member.MemberId,
             member =>
             {
-                var baseAmount = overrideLookup.TryGetValue(member.MemberId, out var amount)
-                    ? amount
-                    : request.BaseAmount;
-
-                // Apply 50% reduction for members with less than 1 year of tenure
-                if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
+                if (overrideLookup.TryGetValue(member.MemberId, out var customAmount))
                 {
-                    baseAmount *= 0.5m;
+                    return customAmount;
                 }
 
-                return baseAmount;
+                bool isHalfShare = member.JoiningDate.AddYears(1) > eventItem.EventDate;
+                return Math.Round(isHalfShare ? (fullShare * 0.5m) : fullShare, 2);
             }
         );
 

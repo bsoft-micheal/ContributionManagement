@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -71,10 +72,17 @@ public class EmailService : IEmailService
         }
     }
 
-    public async Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default)
+    public async Task SendEmailAsync(
+        string toEmail,
+        string subject,
+        string body,
+        IEnumerable<InlineEmailImage>? inlineImages = null,
+        CancellationToken cancellationToken = default)
     {
         // Enforce the 500 emails/day restriction
         CheckAndIncrementEmailCount();
+        var inlineImageList = inlineImages?.Where(image => !string.IsNullOrWhiteSpace(image.ContentId) && !string.IsNullOrWhiteSpace(image.FilePath)).ToList()
+            ?? new List<InlineEmailImage>();
 
         var smtpSection = _configuration.GetSection("Smtp");
         var host = smtpSection["Host"];
@@ -138,6 +146,31 @@ public class EmailService : IEmailService
                 IsBodyHtml = true
             };
             mailMessage.To.Add(toEmail);
+
+            if (inlineImageList.Count > 0)
+            {
+                var alternateView = AlternateView.CreateAlternateViewFromString(body, null, MediaTypeNames.Text.Html);
+
+                foreach (var image in inlineImageList)
+                {
+                    if (!File.Exists(image.FilePath))
+                    {
+                        _logger.LogWarning("Inline email image not found at {FilePath}.", image.FilePath);
+                        continue;
+                    }
+
+                    var mediaType = string.IsNullOrWhiteSpace(image.MediaType) ? MediaTypeNames.Image.Jpeg : image.MediaType;
+                    var linkedResource = new LinkedResource(image.FilePath, mediaType)
+                    {
+                        ContentId = image.ContentId,
+                        TransferEncoding = TransferEncoding.Base64
+                    };
+                    linkedResource.ContentType.Name = Path.GetFileName(image.FilePath);
+                    alternateView.LinkedResources.Add(linkedResource);
+                }
+
+                mailMessage.AlternateViews.Add(alternateView);
+            }
 
             using var smtpClient = new SmtpClient(host, port)
             {

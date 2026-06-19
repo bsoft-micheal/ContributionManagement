@@ -29,8 +29,10 @@ public interface IEventTypeRepository
     Task<List<EventType>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<EventType?> GetByIdAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
     Task<EventType?> GetByNameAsync(string eventTypeName, CancellationToken cancellationToken = default);
+    Task<bool> HasEventsAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
     Task AddAsync(EventType eventType, CancellationToken cancellationToken = default);
     void Update(EventType eventType);
+    void Delete(EventType eventType);
 }
 
 public interface IEventRepository

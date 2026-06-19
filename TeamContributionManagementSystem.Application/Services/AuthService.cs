@@ -81,7 +81,7 @@ public class AuthService : IAuthService
     </div>
 </div>";
 
-        await _emailService.SendEmailAsync(user.Email, subject, emailBody, cancellationToken);
+        await _emailService.SendEmailAsync(user.Email, subject, emailBody, cancellationToken: cancellationToken);
     }
 
     public async Task<bool> VerifyPasswordResetOtpAsync(VerifyOtpRequestDto request, CancellationToken cancellationToken = default)
