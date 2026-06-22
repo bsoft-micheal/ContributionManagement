@@ -18,10 +18,11 @@ public class DashboardService : IDashboardService
 
     public async Task<DashboardSummaryDto> GetSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
     {
-        var targetDate = new DateTime(year ?? DateTime.UtcNow.Year, month ?? DateTime.UtcNow.Month, 1);
-        var monthlyEvents = await _eventRepository.GetAllAsync(targetDate.Month, targetDate.Year, cancellationToken);
-        var pendingContributions = await _contributionRepository.GetPendingAsync(targetDate.Month, targetDate.Year, cancellationToken);
-        var upcomingEvents = await _eventRepository.GetUpcomingAsync(5, cancellationToken);
+        int? filterMonth = (month == 0 || month == null) ? null : month;
+        int? filterYear = (year == 0 || year == null) ? null : year;
+
+        var monthlyEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
+        var pendingContributions = await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken);
 
         return new DashboardSummaryDto
         {
@@ -31,13 +32,20 @@ public class DashboardService : IDashboardService
                 .Where(x => !x.IsDeleted && x.PaymentStatus == PaymentStatus.Paid)
                 .Sum(x => x.Amount),
             PendingPayments = pendingContributions.Count,
-            UpcomingEvents = upcomingEvents.Select(x => new UpcomingEventDto
+            TotalPendingAmount = pendingContributions
+                .Where(x => !x.IsDeleted)
+                .Sum(x => x.Amount),
+            UpcomingEvents = monthlyEvents.Select(x => new UpcomingEventDto
             {
                 EventId = x.EventId,
                 EventName = x.EventName,
                 EventTypeName = x.EventType?.EventTypeName ?? string.Empty,
                 EventDate = x.EventDate,
-                ExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount)
+                ExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
+                CollectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
+                PendingAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid).Sum(c => c.Amount),
+                PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
+                TotalContributionsCount = x.Contributions.Count(c => !c.IsDeleted)
             }).ToList()
         };
     }
