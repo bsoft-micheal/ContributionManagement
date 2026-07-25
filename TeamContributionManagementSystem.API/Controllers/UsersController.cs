@@ -29,6 +29,44 @@ public class UsersController : ControllerBase
         return CreatedAtAction(nameof(GetAll), new { id = user.UserId }, user);
     }
 
+    [HttpPost("bulk")]
+    public async Task<ActionResult> CreateBulk([FromBody] System.Text.Json.JsonElement jsonElement, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rawJson = jsonElement.GetRawText();
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            var requests = System.Text.Json.JsonSerializer.Deserialize<List<CreateUserRequestDto>>(rawJson, options);
+            
+            if (requests == null || requests.Count == 0)
+            {
+                return BadRequest($"The request body deserialized to null or empty list. Raw JSON: {rawJson}");
+            }
+
+            var created = new List<UserDto>();
+            foreach (var req in requests)
+            {
+                if (req == null)
+                {
+                    return BadRequest("One of the user request items is null.");
+                }
+                created.Add(await _userService.CreateAsync(req, cancellationToken));
+            }
+            return Ok(created);
+        }
+        catch (System.Text.Json.JsonException jsonEx)
+        {
+            return BadRequest($"JSON deserialization failed: {jsonEx.Message}. Raw JSON received: {jsonElement.GetRawText()}");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Internal bulk error: {ex.Message}. StackTrace: {ex.StackTrace}");
+        }
+    }
+
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<UserDto>> Update(Guid id, [FromBody] UpdateUserRequestDto request, CancellationToken cancellationToken)
         => Ok(await _userService.UpdateAsync(id, request, cancellationToken));
