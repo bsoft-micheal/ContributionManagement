@@ -19,6 +19,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<EventParticipant> EventParticipants => Set<EventParticipant>();
     public DbSet<Contribution> Contributions => Set<Contribution>();
     public DbSet<AppUser> Users => Set<AppUser>();
+    public DbSet<RoleRight> RoleRights => Set<RoleRight>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,17 +49,35 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.EventTypeId);
             entity.Property(x => x.EventTypeName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
             entity.HasIndex(x => x.EventTypeName).IsUnique();
         });
 
         modelBuilder.Entity<AppUser>(entity =>
         {
             entity.HasKey(x => x.UserId);
+            entity.Property(x => x.Username).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Email).HasMaxLength(150).IsRequired();
             entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(150).IsRequired();
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
+            entity.Property(x => x.ProfileImage).HasMaxLength(500);
+            entity.Property(x => x.CreatedOn);
+            entity.Property(x => x.PasswordResetOtp).HasMaxLength(10);
+            entity.Property(x => x.PasswordResetOtpExpiry);
             entity.HasIndex(x => x.Email).IsUnique();
+            entity.HasIndex(x => x.Username).IsUnique();
+        });
+
+        modelBuilder.Entity<RoleRight>(entity =>
+        {
+            entity.HasKey(x => x.RoleRightId);
+            entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
+            entity.Property(x => x.Module).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.SubModule).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Page).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Access).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => new { x.Role, x.Module, x.SubModule, x.Page }).IsUnique();
         });
 
         modelBuilder.Entity<Event>(entity =>
@@ -67,6 +86,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
+            entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
             entity.HasIndex(x => new { x.EventDate, x.EventTypeId });
             entity.HasOne(x => x.EventType)
                 .WithMany(x => x.Events)

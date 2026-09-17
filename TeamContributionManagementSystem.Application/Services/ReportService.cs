@@ -18,8 +18,11 @@ public class ReportService : IReportService
 
     public async Task<ReportsSummaryDto> GetSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
     {
-        var events = await _eventRepository.GetAllAsync(month, year, cancellationToken);
-        var pendingDues = await _contributionRepository.GetPendingAsync(month, year, cancellationToken);
+        int? targetMonth = (month == 0 || month == null) ? null : month;
+        int? targetYear = (year == 0 || year == null) ? null : year;
+
+        var events = await _eventRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
+        var pendingDues = await _contributionRepository.GetPendingAsync(targetMonth, targetYear, cancellationToken);
         var contributions = events.SelectMany(x => x.Contributions.Where(c => !c.IsDeleted)).ToList();
 
         return new ReportsSummaryDto

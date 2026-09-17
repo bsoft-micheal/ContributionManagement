@@ -31,4 +31,12 @@ public class EventTypesController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<EventTypeDto>> Update(Guid id, [FromBody] UpdateEventTypeRequestDto request, CancellationToken cancellationToken)
         => Ok(await _eventTypeService.UpdateAsync(id, request, cancellationToken));
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await _eventTypeService.DeleteAsync(id, cancellationToken);
+        return NoContent();
+    }
 }

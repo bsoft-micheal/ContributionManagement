@@ -105,11 +105,17 @@ public class EventTypeRepository : IEventTypeRepository
     public async Task<EventType?> GetByNameAsync(string eventTypeName, CancellationToken cancellationToken = default)
         => await _context.EventTypes.FirstOrDefaultAsync(x => x.EventTypeName.ToLower() == eventTypeName.ToLower(), cancellationToken);
 
+    public async Task<bool> HasEventsAsync(Guid eventTypeId, CancellationToken cancellationToken = default)
+        => await _context.Events.AnyAsync(x => x.EventTypeId == eventTypeId, cancellationToken);
+
     public async Task AddAsync(EventType eventType, CancellationToken cancellationToken = default)
         => await _context.EventTypes.AddAsync(eventType, cancellationToken);
 
     public void Update(EventType eventType)
         => _context.EventTypes.Update(eventType);
+
+    public void Delete(EventType eventType)
+        => _context.EventTypes.Remove(eventType);
 }
 
 public class EventRepository : IEventRepository
@@ -173,6 +179,9 @@ public class EventRepository : IEventRepository
     public void Update(Event eventItem)
         => _context.Events.Update(eventItem);
 
+    public void DeleteParticipants(IEnumerable<EventParticipant> participants)
+        => _context.EventParticipants.RemoveRange(participants);
+
     private IQueryable<Event> BuildEventQuery()
         => _context.Events
             .Include(x => x.EventType)
@@ -192,6 +201,15 @@ public class ContributionRepository : IContributionRepository
     {
         _context = context;
     }
+
+    public async Task<List<Contribution>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.Contributions
+            .Include(x => x.Event)
+                .ThenInclude(x => x!.EventType)
+            .Include(x => x.Member)
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.Event!.EventDate)
+            .ToListAsync(cancellationToken);
 
     public async Task<List<Contribution>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default)
         => await _context.Contributions
@@ -234,6 +252,18 @@ public class ContributionRepository : IContributionRepository
 
     public void Update(Contribution contribution)
         => _context.Contributions.Update(contribution);
+
+    public void DeleteRange(IEnumerable<Contribution> contributions)
+        => _context.Contributions.RemoveRange(contributions);
+
+    public async Task<List<Contribution>> GetByMemberEmailAsync(string email, CancellationToken cancellationToken = default)
+        => await _context.Contributions
+            .Include(x => x.Event)
+                .ThenInclude(x => x!.EventType)
+            .Include(x => x.Member)
+            .Where(x => !x.IsDeleted && x.Member != null && x.Member.Email == email)
+            .OrderBy(x => x.Event!.EventDate)
+            .ToListAsync(cancellationToken);
 }
 
 public class UserRepository : IUserRepository
@@ -245,8 +275,16 @@ public class UserRepository : IUserRepository
         _context = context;
     }
 
+    public async Task<List<AppUser>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.Users
+            .OrderBy(x => x.Username)
+            .ToListAsync(cancellationToken);
+
     public async Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
         => await _context.Users.FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
+
+    public async Task<AppUser?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
+        => await _context.Users.FirstOrDefaultAsync(x => x.Username.ToLower() == username.ToLower(), cancellationToken);
 
     public async Task<AppUser?> GetByIdAsync(Guid userId, CancellationToken cancellationToken = default)
         => await _context.Users.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
@@ -256,4 +294,36 @@ public class UserRepository : IUserRepository
 
     public async Task AddAsync(AppUser user, CancellationToken cancellationToken = default)
         => await _context.Users.AddAsync(user, cancellationToken);
+
+    public void Update(AppUser user)
+        => _context.Users.Update(user);
+
+    public void Delete(AppUser user)
+        => _context.Users.Remove(user);
+}
+
+public class RoleRightRepository : IRoleRightRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public RoleRightRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<RoleRight>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.RoleRights.OrderBy(x => x.Role).ThenBy(x => x.Module).ThenBy(x => x.Page).ToListAsync(cancellationToken);
+
+    public async Task<List<RoleRight>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
+        => await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+
+    public async Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default)
+    {
+        var existing = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+        if (existing.Count > 0)
+        {
+            _context.RoleRights.RemoveRange(existing);
+        }
+        await _context.RoleRights.AddRangeAsync(rights, cancellationToken);
+    }
 }

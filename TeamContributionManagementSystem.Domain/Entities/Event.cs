@@ -11,6 +11,7 @@ public class Event
     public Guid CreatedBy { get; set; }
     public string Description { get; set; } = string.Empty;
     public EventStatus Status { get; set; } = EventStatus.Planned;
+    public decimal BaseAmount { get; set; }
     public bool IsDeleted { get; set; }
 
     public EventType? EventType { get; set; }

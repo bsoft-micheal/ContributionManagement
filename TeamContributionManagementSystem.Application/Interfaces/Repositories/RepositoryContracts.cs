@@ -1,4 +1,5 @@
 using TeamContributionManagementSystem.Domain.Entities;
+using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.Application.Interfaces.Repositories;
 
@@ -28,8 +29,10 @@ public interface IEventTypeRepository
     Task<List<EventType>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<EventType?> GetByIdAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
     Task<EventType?> GetByNameAsync(string eventTypeName, CancellationToken cancellationToken = default);
+    Task<bool> HasEventsAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
     Task AddAsync(EventType eventType, CancellationToken cancellationToken = default);
     void Update(EventType eventType);
+    void Delete(EventType eventType);
 }
 
 public interface IEventRepository
@@ -41,23 +44,38 @@ public interface IEventRepository
     Task<bool> BirthdayEventExistsAsync(Guid memberId, int month, int year, CancellationToken cancellationToken = default);
     Task AddAsync(Event eventItem, CancellationToken cancellationToken = default);
     void Update(Event eventItem);
+    void DeleteParticipants(IEnumerable<EventParticipant> participants);
 }
 
 public interface IContributionRepository
 {
+    Task<List<Contribution>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<List<Contribution>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<Contribution?> GetByEventAndMemberAsync(Guid eventId, Guid memberId, CancellationToken cancellationToken = default);
     Task<List<Contribution>> GetPendingAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default);
+    Task<List<Contribution>> GetByMemberEmailAsync(string email, CancellationToken cancellationToken = default);
     Task AddRangeAsync(IEnumerable<Contribution> contributions, CancellationToken cancellationToken = default);
     void Update(Contribution contribution);
+    void DeleteRange(IEnumerable<Contribution> contributions);
 }
 
 public interface IUserRepository
 {
+    Task<List<AppUser>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
+    Task<AppUser?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default);
     Task<AppUser?> GetByIdAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<AppUser?> GetFirstAdminAsync(CancellationToken cancellationToken = default);
     Task AddAsync(AppUser user, CancellationToken cancellationToken = default);
+    void Update(AppUser user);
+    void Delete(AppUser user);
+}
+
+public interface IRoleRightRepository
+{
+    Task<List<RoleRight>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<List<RoleRight>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default);
+    Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default);
 }
 
 public interface IUnitOfWork

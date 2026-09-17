@@ -5,6 +5,7 @@ using TeamContributionManagementSystem.Application.DTOs.EventTypes;
 using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 
 namespace TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -28,6 +29,7 @@ public interface IEventTypeService
     Task<IReadOnlyCollection<EventTypeDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<EventTypeDto> CreateAsync(CreateEventTypeRequestDto request, CancellationToken cancellationToken = default);
     Task<EventTypeDto> UpdateAsync(Guid eventTypeId, UpdateEventTypeRequestDto request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
 }
 
 public interface IEventService
@@ -36,12 +38,15 @@ public interface IEventService
     Task<EventDetailsDto> GetByIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<EventDetailsDto> CreateAsync(Guid createdByUserId, CreateEventRequestDto request, CancellationToken cancellationToken = default);
     Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid eventId, CancellationToken cancellationToken = default);
 }
 
 public interface IContributionService
 {
+    Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<ContributionDto>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<ContributionDto> PayAsync(PayContributionRequestDto request, CancellationToken cancellationToken = default);
+    Task<MemberContributionSummaryDto> GetMySummaryAsync(string userEmail, CancellationToken cancellationToken = default);
 }
 
 public interface IDashboardService
@@ -58,3 +63,31 @@ public interface IBirthdayAutomationService
 {
     Task<int> CreateMonthlyBirthdayEventsAsync(CancellationToken cancellationToken = default);
 }
+
+public interface IUserManagementService
+{
+    Task<IReadOnlyCollection<UserDto>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default);
+    Task<UserDto> UpdateAsync(Guid userId, UpdateUserRequestDto request, CancellationToken cancellationToken = default);
+    Task<UserDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid userId, CancellationToken cancellationToken = default);
+}
+
+public interface IRoleRightsService
+{
+    Task<IReadOnlyCollection<RoleRightDto>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<RoleRightDto>> GetByRoleAsync(string roleName, CancellationToken cancellationToken = default);
+    Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, CancellationToken cancellationToken = default);
+}
+
+public interface IEmailService
+{
+    Task SendEmailAsync(
+        string toEmail,
+        string subject,
+        string body,
+        IEnumerable<InlineEmailImage>? inlineImages = null,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record InlineEmailImage(string ContentId, string FilePath, string? MediaType = null);

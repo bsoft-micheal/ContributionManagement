@@ -37,7 +37,8 @@ public class EventTypeService : IEventTypeService
         {
             EventTypeId = Guid.NewGuid(),
             EventTypeName = request.EventTypeName.Trim(),
-            IsActive = request.IsActive
+            IsActive = request.IsActive,
+            BaseAmount = request.BaseAmount
         };
 
         await _eventTypeRepository.AddAsync(eventType, cancellationToken);
@@ -59,10 +60,25 @@ public class EventTypeService : IEventTypeService
 
         eventType.EventTypeName = request.EventTypeName.Trim();
         eventType.IsActive = request.IsActive;
+        eventType.BaseAmount = request.BaseAmount;
 
         _eventTypeRepository.Update(eventType);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<EventTypeDto>(eventType);
+    }
+
+    public async Task DeleteAsync(Guid eventTypeId, CancellationToken cancellationToken = default)
+    {
+        var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId, cancellationToken)
+            ?? throw new KeyNotFoundException("Event type not found.");
+
+        if (await _eventTypeRepository.HasEventsAsync(eventTypeId, cancellationToken))
+        {
+            throw new InvalidOperationException("Cannot delete this event type because it is associated with existing events.");
+        }
+
+        _eventTypeRepository.Delete(eventType);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

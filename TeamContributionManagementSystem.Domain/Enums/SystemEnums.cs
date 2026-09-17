@@ -28,5 +28,7 @@ public enum PaymentMode
 public enum UserRole
 {
     Admin = 1,
-    Member = 2
+    Manager = 2,
+    User = 3,
+    Member = 4
 }

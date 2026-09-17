@@ -19,6 +19,12 @@ public class ContributionService : IContributionService
         _mapper = mapper;
     }
 
+    public async Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var contributions = await _contributionRepository.GetAllAsync(cancellationToken);
+        return _mapper.Map<IReadOnlyCollection<ContributionDto>>(contributions);
+    }
+
     public async Task<IReadOnlyCollection<ContributionDto>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
         var contributions = await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);
@@ -43,5 +49,55 @@ public class ContributionService : IContributionService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<ContributionDto>(contribution);
+    }
+
+    public async Task<MemberContributionSummaryDto> GetMySummaryAsync(string userEmail, CancellationToken cancellationToken = default)
+    {
+        var contributions = await _contributionRepository.GetByMemberEmailAsync(userEmail, cancellationToken);
+
+        if (contributions.Count == 0)
+        {
+            return new MemberContributionSummaryDto
+            {
+                MemberName = string.Empty,
+                TotalPaidAmount = 0,
+                TotalPendingAmount = 0
+            };
+        }
+
+        var member = contributions.First().Member!;
+        var paidContributions = contributions.Where(c => c.PaymentStatus == PaymentStatus.Paid).ToList();
+
+        var categoryBreakdown = paidContributions
+            .GroupBy(c => c.Event?.EventType?.EventTypeName ?? "Uncategorized")
+            .Select(g => new ContributionCategoryBreakdownDto
+            {
+                CategoryName = g.Key,
+                TotalPaid = g.Sum(c => c.Amount),
+                EventCount = g.Select(c => c.EventId).Distinct().Count()
+            })
+            .OrderByDescending(x => x.TotalPaid)
+            .ToList();
+
+        var eventBreakdown = contributions
+            .Select(c => new ContributionEventBreakdownDto
+            {
+                EventName = c.Event?.EventName ?? "Unknown Event",
+                CategoryName = c.Event?.EventType?.EventTypeName ?? "Uncategorized",
+                Amount = c.Amount,
+                PaymentStatus = c.PaymentStatus.ToString(),
+                PaymentDate = c.PaymentDate
+            })
+            .ToList();
+
+        return new MemberContributionSummaryDto
+        {
+            MemberId = member.MemberId,
+            MemberName = member.Name,
+            TotalPaidAmount = paidContributions.Sum(c => c.Amount),
+            TotalPendingAmount = contributions.Where(c => c.PaymentStatus != PaymentStatus.Paid).Sum(c => c.Amount),
+            CategoryBreakdown = categoryBreakdown,
+            EventBreakdown = eventBreakdown
+        };
     }
 }

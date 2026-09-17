@@ -4,6 +4,7 @@ using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.EventTypes;
 using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
 
@@ -19,6 +20,9 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.RoleName : string.Empty))
             .ForMember(dest => dest.DefaultContributionAmount, opt => opt.MapFrom(src => src.Role != null ? src.Role.DefaultContributionAmount : 0));
 
+        CreateMap<AppUser, UserDto>()
+            .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.ToString()));
+
         CreateMap<EventType, EventTypeDto>();
 
         CreateMap<EventParticipant, EventParticipantDto>()
@@ -27,7 +31,8 @@ public class MappingProfile : Profile
 
         CreateMap<Contribution, ContributionDto>()
             .ForMember(dest => dest.EventName, opt => opt.MapFrom(src => src.Event != null ? src.Event.EventName : string.Empty))
-            .ForMember(dest => dest.MemberName, opt => opt.MapFrom(src => src.Member != null ? src.Member.Name : string.Empty));
+            .ForMember(dest => dest.MemberName, opt => opt.MapFrom(src => src.Member != null ? src.Member.Name : string.Empty))
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Event != null && src.Event.EventType != null ? src.Event.EventType.EventTypeName : string.Empty));
 
         CreateMap<Event, EventSummaryDto>()
             .ForMember(dest => dest.EventTypeName, opt => opt.MapFrom(src => src.EventType != null ? src.EventType.EventTypeName : string.Empty))
@@ -40,5 +45,7 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.CreatedByName, opt => opt.MapFrom(src => src.CreatedByUser != null ? src.CreatedByUser.FullName : string.Empty))
             .ForMember(dest => dest.Participants, opt => opt.MapFrom(src => src.Participants))
             .ForMember(dest => dest.Contributions, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted)));
+
+        CreateMap<RoleRight, RoleRightDto>().ReverseMap();
     }
 }
