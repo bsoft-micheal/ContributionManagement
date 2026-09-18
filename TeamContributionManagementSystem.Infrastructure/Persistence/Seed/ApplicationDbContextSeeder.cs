@@ -25,26 +25,31 @@ public class ApplicationDbContextSeeder
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp VARCHAR(10) NULL;");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_expiry TIMESTAMP WITH TIME ZONE NULL;");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS base_amount DECIMAL(12, 2) NOT NULL DEFAULT 0;");
+        await _context.Database.ExecuteSqlRawAsync("UPDATE event_types SET base_amount = 500 WHERE LOWER(event_type_name) LIKE '%birthday%' AND (base_amount = 0 OR base_amount IS NULL);");
 
-        if (await _context.Roles.AnyAsync(cancellationToken))
+        if (!await _context.Users.AnyAsync(cancellationToken))
         {
-            return;
+            var adminUser = new AppUser
+            {
+                UserId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"),
+                Username = "admin",
+                Email = "admin@teamcontribution.local",
+                FullName = "System Administrator",
+                PasswordHash = _passwordHasher.HashPassword("Admin@123"),
+                Role = UserRole.Admin,
+                IsActive = true,
+                CreatedOn = DateTime.UtcNow
+            };
+            await _context.Users.AddAsync(adminUser, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
-        var adminUser = new AppUser
-        {
-            UserId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"),
-            Username = "admin",
-            Email = "admin@teamcontribution.local",
-            FullName = "System Administrator",
-            PasswordHash = _passwordHasher.HashPassword("Admin@123"),
-            Role = UserRole.Admin,
-            IsActive = true,
-            CreatedOn = DateTime.UtcNow
-        };
-        await _context.Users.AddAsync(adminUser, cancellationToken);
-
         // Seeding default Role Rights
+        var existingRoleRights = await _context.RoleRights.ToListAsync(cancellationToken);
+        var existingKeySet = existingRoleRights
+            .Select(x => $"{x.Role}|{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var defaultPages = new[]
         {
             (Module: "Dashboard", SubModule: "Analytics", Page: "Dashboard"),
@@ -57,7 +62,11 @@ public class ApplicationDbContextSeeder
             (Module: "Support Data", SubModule: "Clearance", Page: "Exit Process"),
             (Module: "Support Data", SubModule: "Admin", Page: "User Rights"),
             (Module: "Support Data", SubModule: "Admin", Page: "Users"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Reports")
+            (Module: "Support Data", SubModule: "Admin", Page: "Roles"),
+            (Module: "Reports", SubModule: "Analytics", Page: "Event Audit"),
+            (Module: "Reports", SubModule: "Analytics", Page: "Member Velocity"),
+            (Module: "Reports", SubModule: "Analytics", Page: "Pending Dues"),
+            (Module: "Reports", SubModule: "Analytics", Page: "Member Category Paid")
         };
 
         var roleRightsList = new List<RoleRight>();
@@ -66,6 +75,12 @@ public class ApplicationDbContextSeeder
         {
             foreach (var page in defaultPages)
             {
+                var key = $"{role}|{page.Module.Trim()}|{page.SubModule.Trim()}|{page.Page.Trim()}";
+                if (existingKeySet.Contains(key))
+                {
+                    continue;
+                }
+
                 string access = "readWrite"; // default for Admin / Manager
 
                 if (role == UserRole.User || role == UserRole.Member)
@@ -89,11 +104,14 @@ public class ApplicationDbContextSeeder
                     Page = page.Page,
                     Access = access
                 });
+                existingKeySet.Add(key);
             }
         }
 
-        await _context.RoleRights.AddRangeAsync(roleRightsList, cancellationToken);
-
-        await _context.SaveChangesAsync(cancellationToken);
+        if (roleRightsList.Count > 0)
+        {
+            await _context.RoleRights.AddRangeAsync(roleRightsList, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
 }

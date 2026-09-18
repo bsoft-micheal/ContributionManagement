@@ -80,11 +80,17 @@ public class RoleRepository : IRoleRepository
     public async Task<Role?> GetByNameAsync(string roleName, CancellationToken cancellationToken = default)
         => await _context.Roles.FirstOrDefaultAsync(x => x.RoleName.ToLower() == roleName.ToLower(), cancellationToken);
 
+    public async Task<bool> HasMembersAsync(Guid roleId, CancellationToken cancellationToken = default)
+        => await _context.Members.AnyAsync(x => x.RoleId == roleId && !x.IsDeleted, cancellationToken);
+
     public async Task AddAsync(Role role, CancellationToken cancellationToken = default)
         => await _context.Roles.AddAsync(role, cancellationToken);
 
     public void Update(Role role)
         => _context.Roles.Update(role);
+
+    public void Delete(Role role)
+        => _context.Roles.Remove(role);
 }
 
 public class EventTypeRepository : IEventTypeRepository
@@ -320,10 +326,47 @@ public class RoleRightRepository : IRoleRightRepository
     public async Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default)
     {
         var existing = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
-        if (existing.Count > 0)
+        var rightsList = rights
+            .GroupBy(r => new { Module = r.Module.Trim(), SubModule = r.SubModule.Trim(), Page = r.Page.Trim() })
+            .Select(g => g.First())
+            .ToList();
+
+        var existingMap = existing.ToDictionary(
+            x => $"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}",
+            StringComparer.OrdinalIgnoreCase);
+
+        var incomingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var right in rightsList)
         {
-            _context.RoleRights.RemoveRange(existing);
+            var key = $"{right.Module.Trim()}|{right.SubModule.Trim()}|{right.Page.Trim()}";
+            incomingKeys.Add(key);
+
+            if (existingMap.TryGetValue(key, out var existingRight))
+            {
+                existingRight.Access = right.Access;
+            }
+            else
+            {
+                await _context.RoleRights.AddAsync(new RoleRight
+                {
+                    RoleRightId = Guid.NewGuid(),
+                    Role = role,
+                    Module = right.Module.Trim(),
+                    SubModule = right.SubModule.Trim(),
+                    Page = right.Page.Trim(),
+                    Access = right.Access
+                }, cancellationToken);
+            }
         }
-        await _context.RoleRights.AddRangeAsync(rights, cancellationToken);
+
+        var toDelete = existing
+            .Where(x => !incomingKeys.Contains($"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}"))
+            .ToList();
+
+        if (toDelete.Count > 0)
+        {
+            _context.RoleRights.RemoveRange(toDelete);
+        }
     }
 }

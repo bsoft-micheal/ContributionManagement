@@ -22,6 +22,7 @@ public interface IRoleService
     Task<IReadOnlyCollection<RoleDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<RoleDto> CreateAsync(CreateRoleRequestDto request, CancellationToken cancellationToken = default);
     Task<RoleDto> UpdateAsync(Guid roleId, UpdateRoleRequestDto request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid roleId, CancellationToken cancellationToken = default);
 }
 
 public interface IEventTypeService
