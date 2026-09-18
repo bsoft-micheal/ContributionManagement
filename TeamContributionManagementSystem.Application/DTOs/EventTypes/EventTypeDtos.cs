@@ -18,7 +18,7 @@ public class CreateEventTypeRequestDto
 
     public bool IsActive { get; set; } = true;
 
-    [Range(0, 1000000)]
+    [Range(1, 1000000, ErrorMessage = "Base amount must be greater than 0.")]
     public decimal BaseAmount { get; set; }
 }
 
