@@ -20,8 +20,10 @@ public interface IRoleRepository
     Task<List<Role>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<Role?> GetByIdAsync(Guid roleId, CancellationToken cancellationToken = default);
     Task<Role?> GetByNameAsync(string roleName, CancellationToken cancellationToken = default);
+    Task<bool> HasMembersAsync(Guid roleId, CancellationToken cancellationToken = default);
     Task AddAsync(Role role, CancellationToken cancellationToken = default);
     void Update(Role role);
+    void Delete(Role role);
 }
 
 public interface IEventTypeRepository

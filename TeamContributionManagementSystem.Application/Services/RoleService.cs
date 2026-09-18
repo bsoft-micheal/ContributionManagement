@@ -65,4 +65,18 @@ public class RoleService : IRoleService
 
         return _mapper.Map<RoleDto>(role);
     }
+
+    public async Task DeleteAsync(Guid roleId, CancellationToken cancellationToken = default)
+    {
+        var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
+            ?? throw new KeyNotFoundException("Role not found.");
+
+        if (await _roleRepository.HasMembersAsync(roleId, cancellationToken))
+        {
+            throw new InvalidOperationException("Cannot delete role because members are assigned to this role.");
+        }
+
+        _roleRepository.Delete(role);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
 }

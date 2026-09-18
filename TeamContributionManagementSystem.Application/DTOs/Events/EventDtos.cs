@@ -59,6 +59,8 @@ public class CreateEventRequestDto
     public string Description { get; set; } = string.Empty;
 
     public EventStatus Status { get; set; } = EventStatus.Planned;
+
+    [Range(1, 1000000, ErrorMessage = "Base amount must be greater than 0.")]
     public decimal BaseAmount { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
