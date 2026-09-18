@@ -171,7 +171,6 @@ public class EventRepository : IEventRepository
         => await _context.Events
             .Include(x => x.EventType)
             .AnyAsync(x =>
-                !x.IsDeleted &&
                 x.EventType != null &&
                 x.EventType.EventTypeName == "Birthday" &&
                 x.EventDate.Month == month &&
