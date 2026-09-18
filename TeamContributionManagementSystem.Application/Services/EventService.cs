@@ -106,41 +106,60 @@ public class EventService : IEventService
             });
         }
 
-        int fullShareCount = 0;
-        int halfShareCount = 0;
-
-        foreach (var member in members)
-        {
-            if (overrideLookup.ContainsKey(member.MemberId))
-            {
-                continue;
-            }
-            if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
-            {
-                halfShareCount++;
-            }
-            else
-            {
-                fullShareCount++;
-            }
-        }
+        bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventType.EventTypeName) &&
+            eventType.EventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase);
 
         decimal overrideSum = request.ContributionOverrides.Sum(x => x.Amount);
         decimal splitPool = Math.Max(0m, request.BaseAmount - overrideSum);
-        decimal divisor = fullShareCount + 0.5m * halfShareCount;
-        decimal fullShare = divisor > 0 ? (splitPool / divisor) : 0m;
 
-        var contributions = members.Select(member => 
+        int fullShareCount = 0;
+        int halfShareCount = 0;
+        int regularParticipantsCount = 0;
+
+        if (isBirthdayEvent)
+        {
+            foreach (var member in members)
+            {
+                if (overrideLookup.ContainsKey(member.MemberId))
+                {
+                    continue;
+                }
+                if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
+                {
+                    halfShareCount++;
+                }
+                else
+                {
+                    fullShareCount++;
+                }
+            }
+        }
+        else
+        {
+            regularParticipantsCount = members.Count(m => !overrideLookup.ContainsKey(m.MemberId));
+        }
+
+        decimal divisor = isBirthdayEvent
+            ? (fullShareCount + 0.5m * halfShareCount)
+            : regularParticipantsCount;
+
+        decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
+
+        var contributions = members.Select(member =>
         {
             decimal amount;
             if (overrideLookup.TryGetValue(member.MemberId, out var customAmount))
             {
                 amount = customAmount;
             }
-            else
+            else if (isBirthdayEvent)
             {
                 bool isHalfShare = member.JoiningDate.AddYears(1) > eventItem.EventDate;
-                amount = Math.Round(isHalfShare ? (fullShare * 0.5m) : fullShare, 2);
+                amount = Math.Round(isHalfShare ? (standardShare * 0.5m) : standardShare, 2);
+            }
+            else
+            {
+                amount = Math.Round(standardShare, 2);
             }
 
             return new Contribution
@@ -158,11 +177,73 @@ public class EventService : IEventService
 
         try
         {
+            var gpayImagePath = ResolveGpayImagePath();
+            if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+            {
+                try
+                {
+                    var targetDir = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+                    var targetFile = Path.Combine(targetDir, "gpay.png");
+                    if (!File.Exists(targetFile))
+                    {
+                        Directory.CreateDirectory(targetDir);
+                        File.Copy(gpayImagePath, targetFile, true);
+                    }
+                }
+                catch { }
+            }
+
+            var birthdayCelebrants = isBirthdayEvent 
+                ? await _memberRepository.GetActiveBirthdaysInMonthAsync(eventItem.EventDate.Month, cancellationToken)
+                : new List<Member>();
+
+            var celebrantNames = birthdayCelebrants.Select(m => m.Name).Distinct().ToList();
+
+            if (celebrantNames.Count == 0 && isBirthdayEvent)
+            {
+                var nameParts = eventItem.EventName.Split(new[] { '-', ':' }, 2);
+                if (nameParts.Length > 1 && !string.IsNullOrWhiteSpace(nameParts[1]))
+                {
+                    var parsed = nameParts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(p => p.Trim())
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .ToList();
+                    if (parsed.Count > 0)
+                    {
+                        celebrantNames = parsed;
+                    }
+                }
+            }
+
+            string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
+
             var emailTasks = members.Select(async member =>
             {
                 var contributionAmount = contributions.FirstOrDefault(c => c.MemberId == member.MemberId)?.Amount ?? 0m;
-                var gpayImagePath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "gpay.png");
-                 var emailBody = $@"
+
+                string emailSubject = isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
+                    ? $"Birthday Celebration - {celebrantsFormatted}"
+                    : $"Event Detail: {eventItem.EventName}";
+
+                string emailHeader = isBirthdayEvent ? "Birthday Celebration" : "Event Detail";
+
+                string introText = isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
+                    ? $"We are celebrating the birthdays of our team members this month: <strong>{celebrantsFormatted}</strong>! Here are the event details and your contribution amount:"
+                    : "You have been added to a new event. Here are the event details and your contribution amount:";
+
+                string celebrantsRow = isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
+                    ? $@"
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Birthday Celebrants:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{celebrantsFormatted}</span>
+                </div>"
+                    : string.Empty;
+
+                string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
+                    ? $"Rs.{eventItem.BaseAmount:F2} ({celebrantNames.Count} celebrants combined)"
+                    : $"Rs.{eventItem.BaseAmount:F2}";
+
+                var emailBody = $@"
 <!DOCTYPE html>
 <html>
 <head>
@@ -278,20 +359,25 @@ public class EventService : IEventService
 <body>
     <div class=""container"">
         <div class=""header"">
-            <h1>Event Detail</h1>
+            <h1>{emailHeader}</h1>
         </div>
         <div class=""content"">
             <div class=""greeting"">Hello {member.Name},</div>
-            <div class=""intro"">You have been added to a new event. Here are the event details and your contribution amount:</div>
+            <div class=""intro"">{introText}</div>
             
             <div class=""details-card"">
                 <div class=""detail-row"">
                     <span class=""detail-label"">Event Name:</span>
                     <span class=""detail-value"" style=""font-weight: 700;"">{eventItem.EventName}</span>
                 </div>
+                {celebrantsRow}
                 <div class=""detail-row"">
-                    <span class=""detail-label"">Date:</span>
+                    <span class=""detail-label"">Event Date:</span>
                     <span class=""detail-value"">{eventItem.EventDate:MMMM dd, yyyy}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Total Amount:</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{totalAmountDisplay}</span>
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Description:</span>
@@ -331,10 +417,10 @@ public class EventService : IEventService
                 {
                     if (!string.IsNullOrWhiteSpace(member.Email))
                     {
-                        var inlineImages = File.Exists(gpayImagePath)
+                        var inlineImages = !string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath)
                             ? new[] { new InlineEmailImage("gpay-banner", gpayImagePath, "image/png") }
                             : null;
-                        await _emailService.SendEmailAsync(member.Email, $"Event Detail: {eventItem.EventName}", emailBody, inlineImages, cancellationToken);
+                        await _emailService.SendEmailAsync(member.Email, emailSubject, emailBody, inlineImages, cancellationToken);
                         _logger.LogInformation("Successfully sent/logged event creation email to participant: {Email}", member.Email);
                     }
                 }
@@ -353,7 +439,7 @@ public class EventService : IEventService
 
         return await GetByIdAsync(eventItem.EventId, cancellationToken);
     }
-    
+
     public async Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default)
     {
         var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
@@ -386,29 +472,44 @@ public class EventService : IEventService
             .ToDictionary(x => x.Key, x => x.Last().Amount);
 
         // 1. Map memberId to calculated amount
-        int fullShareCount = 0;
-        int halfShareCount = 0;
-
-        foreach (var member in members)
-        {
-            if (overrideLookup.ContainsKey(member.MemberId))
-            {
-                continue;
-            }
-            if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
-            {
-                halfShareCount++;
-            }
-            else
-            {
-                fullShareCount++;
-            }
-        }
+        bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventType.EventTypeName) &&
+            eventType.EventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase);
 
         decimal overrideSum = request.ContributionOverrides.Sum(x => x.Amount);
         decimal splitPool = Math.Max(0m, request.BaseAmount - overrideSum);
-        decimal divisor = fullShareCount + 0.5m * halfShareCount;
-        decimal fullShare = divisor > 0 ? (splitPool / divisor) : 0m;
+
+        int fullShareCount = 0;
+        int halfShareCount = 0;
+        int regularParticipantsCount = 0;
+
+        if (isBirthdayEvent)
+        {
+            foreach (var member in members)
+            {
+                if (overrideLookup.ContainsKey(member.MemberId))
+                {
+                    continue;
+                }
+                if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
+                {
+                    halfShareCount++;
+                }
+                else
+                {
+                    fullShareCount++;
+                }
+            }
+        }
+        else
+        {
+            regularParticipantsCount = members.Count(m => !overrideLookup.ContainsKey(m.MemberId));
+        }
+
+        decimal divisor = isBirthdayEvent
+            ? (fullShareCount + 0.5m * halfShareCount)
+            : regularParticipantsCount;
+
+        decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
 
         var memberAmounts = members.ToDictionary(
             member => member.MemberId,
@@ -419,8 +520,13 @@ public class EventService : IEventService
                     return customAmount;
                 }
 
-                bool isHalfShare = member.JoiningDate.AddYears(1) > eventItem.EventDate;
-                return Math.Round(isHalfShare ? (fullShare * 0.5m) : fullShare, 2);
+                if (isBirthdayEvent)
+                {
+                    bool isHalfShare = member.JoiningDate.AddYears(1) > eventItem.EventDate;
+                    return Math.Round(isHalfShare ? (standardShare * 0.5m) : standardShare, 2);
+                }
+
+                return Math.Round(standardShare, 2);
             }
         );
 
@@ -520,5 +626,30 @@ public class EventService : IEventService
 
         _eventRepository.Update(eventItem);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private static string? ResolveGpayImagePath()
+    {
+        var candidatePaths = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "wwwroot", "gpay.png"),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot", "gpay.png"),
+            Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "gpay.png"),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "wwwroot", "gpay.png")),
+            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "wwwroot", "gpay.png")),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "TeamContributionManagementSystem.API", "wwwroot", "gpay.png")),
+            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "TeamContributionManagementSystem.API", "wwwroot", "gpay.png")),
+            @"d:\ContributionManagement\backend\ContributionManagement\TeamContributionManagementSystem.API\wwwroot\gpay.png"
+        };
+
+        foreach (var path in candidatePaths)
+        {
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return null;
     }
 }
