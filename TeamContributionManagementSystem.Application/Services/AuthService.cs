@@ -35,7 +35,7 @@ public class AuthService : IAuthService
         var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
         if (user is null || !user.IsActive || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
-            throw new InvalidOperationException("Invalid email or password.");
+            throw new InvalidOperationException("Invalid email or password");
         }
 
         var response = _jwtTokenGenerator.GenerateToken(user);
