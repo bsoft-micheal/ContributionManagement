@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -7,18 +8,22 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class ReportService : IReportService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<ReportService> _logger;
     private readonly IEventRepository _eventRepository;
     private readonly IContributionRepository _contributionRepository;
 
-    public ReportService(IEventRepository eventRepository, IContributionRepository contributionRepository)
+    public ReportService(Microsoft.Extensions.Logging.ILogger<ReportService> logger, IEventRepository eventRepository, IContributionRepository contributionRepository)
     {
+        _logger = logger;
         _eventRepository = eventRepository;
         _contributionRepository = contributionRepository;
     }
 
     public async Task<ReportsSummaryDto> GetSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
     {
-        int? targetMonth = (month == 0 || month == null) ? null : month;
+        try
+        {
+            int? targetMonth = (month == 0 || month == null) ? null : month;
         int? targetYear = (year == 0 || year == null) ? null : year;
 
         var events = await _eventRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
@@ -59,5 +64,11 @@ public class ReportService : IReportService
                 Amount = x.Amount
             }).OrderBy(x => x.EventDate).ToList()
         };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetSummaryAsync");
+            throw;
+        }
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Expenses;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -8,12 +9,14 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class ExpenseService : IExpenseService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<ExpenseService> _logger;
     private readonly IExpenseRepository _expenseRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public ExpenseService(IExpenseRepository expenseRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public ExpenseService(Microsoft.Extensions.Logging.ILogger<ExpenseService> logger, IExpenseRepository expenseRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
+        _logger = logger;
         _expenseRepository = expenseRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
@@ -21,20 +24,38 @@ public class ExpenseService : IExpenseService
 
     public async Task<IReadOnlyCollection<ExpenseDto>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
     {
-        var expenses = await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
+        try
+        {
+            var expenses = await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
         return _mapper.Map<IReadOnlyCollection<ExpenseDto>>(expenses);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<ExpenseDto> GetByIdAsync(Guid expenseId, CancellationToken cancellationToken = default)
     {
-        var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
+        try
+        {
+            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
             ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
         return _mapper.Map<ExpenseDto>(expense);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByIdAsync");
+            throw;
+        }
     }
 
     public async Task<ExpenseDto> CreateAsync(CreateExpenseRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
-        var expense = new Expense
+        try
+        {
+            var expense = new Expense
         {
             ExpenseId = Guid.NewGuid(),
             EventName = request.EventName.Trim(),
@@ -61,11 +82,19 @@ public class ExpenseService : IExpenseService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<ExpenseDto>(expense);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateAsync");
+            throw;
+        }
     }
 
     public async Task<ExpenseDto> UpdateAsync(Guid expenseId, UpdateExpenseRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
-        var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
+        try
+        {
+            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
             ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
 
         expense.EventName = request.EventName.Trim();
@@ -89,14 +118,28 @@ public class ExpenseService : IExpenseService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<ExpenseDto>(expense);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateAsync");
+            throw;
+        }
     }
 
     public async Task DeleteAsync(Guid expenseId, CancellationToken cancellationToken = default)
     {
-        var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
+        try
+        {
+            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
             ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
 
         _expenseRepository.Delete(expense);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteAsync");
+            throw;
+        }
     }
 }

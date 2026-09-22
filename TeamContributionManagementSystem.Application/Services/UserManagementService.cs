@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
@@ -10,17 +11,19 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class UserManagementService : IUserManagementService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<UserManagementService> _logger;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
 
-    public UserManagementService(
+    public UserManagementService(Microsoft.Extensions.Logging.ILogger<UserManagementService> logger, 
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
         IMapper mapper)
     {
+        _logger = logger;
         _userRepository = userRepository;
         _unitOfWork     = unitOfWork;
         _passwordHasher = passwordHasher;
@@ -30,14 +33,24 @@ public class UserManagementService : IUserManagementService
     // ── GET ALL ──────────────────────────────────────────────────────────────
     public async Task<IReadOnlyCollection<UserDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var users = await _userRepository.GetAllAsync(cancellationToken);
+        try
+        {
+            var users = await _userRepository.GetAllAsync(cancellationToken);
         return _mapper.Map<IReadOnlyCollection<UserDto>>(users);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     // ── CREATE ───────────────────────────────────────────────────────────────
     public async Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default)
     {
-        // Unique email check
+        try
+        {
+            // Unique email check
         var emailExists = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
         if (emailExists is not null)
             throw new InvalidOperationException("A user with this email already exists.");
@@ -69,12 +82,20 @@ public class UserManagementService : IUserManagementService
             ?? throw new KeyNotFoundException("Created user could not be loaded.");
 
         return _mapper.Map<UserDto>(created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateAsync");
+            throw;
+        }
     }
 
     // ── UPDATE ───────────────────────────────────────────────────────────────
     public async Task<UserDto> UpdateAsync(Guid userId, UpdateUserRequestDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+        try
+        {
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
             ?? throw new KeyNotFoundException("User not found.");
 
         // Email uniqueness (excluding self)
@@ -106,22 +127,38 @@ public class UserManagementService : IUserManagementService
             ?? throw new KeyNotFoundException("Updated user could not be loaded.");
 
         return _mapper.Map<UserDto>(updated);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateAsync");
+            throw;
+        }
     }
 
     // ── DELETE ───────────────────────────────────────────────────────────────
     public async Task DeleteAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+        try
+        {
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
             ?? throw new KeyNotFoundException("User not found.");
 
         _userRepository.Delete(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteAsync");
+            throw;
+        }
     }
 
     // ── UPDATE PROFILE ───────────────────────────────────────────────────────
     public async Task<UserDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+        try
+        {
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
             ?? throw new KeyNotFoundException("User not found.");
 
         // Email uniqueness check (excluding self)
@@ -199,5 +236,11 @@ public class UserManagementService : IUserManagementService
             ?? throw new KeyNotFoundException("Updated user could not be loaded.");
 
         return _mapper.Map<UserDto>(updated);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateProfileAsync");
+            throw;
+        }
     }
 }

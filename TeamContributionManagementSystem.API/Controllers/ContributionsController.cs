@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -25,40 +26,56 @@ public class ContributionsController : ControllerBase
     /// <summary>
     /// Retrieves a list of all contributions across all events.
     /// </summary>
-    [HttpGet]
-    public async Task<ActionResult<IReadOnlyCollection<ContributionDto>>> GetAll(CancellationToken cancellationToken)
-        => Ok(await _contributionService.GetAllAsync(cancellationToken));
+    [HttpGet("getAllContributionAsync")]
+    [ActionName("GetAllContributionAsync")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<ContributionDto>>>> GetAllContributionAsync(CancellationToken cancellationToken)
+    {
+        var result = await _contributionService.GetAllContributionAsync(cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<ContributionDto>>.SuccessResult(result, CommonMessages.Contributions.GetAllSuccess, CommonStatusCodes.Status200OK));
+    }
 
     /// <summary>
     /// Retrieves all contributions for a specific event.
     /// </summary>
     /// <param name="eventId">The unique identifier of the event.</param>
-    [HttpGet("event/{eventId:guid}")]
-    public async Task<ActionResult<IReadOnlyCollection<ContributionDto>>> GetByEvent(Guid eventId, CancellationToken cancellationToken)
-        => Ok(await _contributionService.GetByEventIdAsync(eventId, cancellationToken));
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("getContributionAsyncByEvent/{eventId:guid}")]
+    [ActionName("GetContributionAsyncByEvent")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<ContributionDto>>>> GetContributionAsyncByEvent(Guid eventId, CancellationToken cancellationToken)
+    {
+        var result = await _contributionService.GetContributionAsyncByEventId(eventId, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<ContributionDto>>.SuccessResult(result, CommonMessages.Contributions.GetByEventSuccess, CommonStatusCodes.Status200OK));
+    }
 
     /// <summary>
     /// Retrieves a summary of the currently authenticated user's personal contributions (total paid, pending, etc.).
     /// </summary>
-    [HttpGet("my-summary")]
-    public async Task<ActionResult<MemberContributionSummaryDto>> GetMySummary(CancellationToken cancellationToken)
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("getMySummaryAsync")]
+    [ActionName("GetMySummaryAsync")]
+    public async Task<ActionResult<ApiResponse<MemberContributionSummaryDto>>> GetMySummaryAsync(CancellationToken cancellationToken)
     {
         var email = User.FindFirstValue(ClaimTypes.Email)
             ?? User.FindFirstValue(ClaimTypes.Name)
             ?? User.FindFirstValue("email");
 
         if (string.IsNullOrEmpty(email))
-            return Unauthorized(new { message = "Unable to determine current user identity." });
+            return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<MemberContributionSummaryDto>.FailureResult("Unable to determine current user identity.", CommonStatusCodes.Status401Unauthorized));
 
         var summary = await _contributionService.GetMySummaryAsync(email, cancellationToken);
-        return Ok(summary);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<MemberContributionSummaryDto>.SuccessResult(summary, CommonMessages.Contributions.GetMySummarySuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
     /// Processes a contribution payment for a specific event.
     /// </summary>
     /// <param name="request">The payment details (amount, event ID, etc.).</param>
-    [HttpPost("pay")]
-    public async Task<ActionResult<ContributionDto>> Pay([FromBody] PayContributionRequestDto request, CancellationToken cancellationToken)
-        => Ok(await _contributionService.PayAsync(request, cancellationToken));
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpPost("savePayContributionAsync")]
+    [ActionName("SavePayContributionAsync")]
+    public async Task<ActionResult<ApiResponse<ContributionDto>>> SavePayContributionAsync([FromBody] PayContributionRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await _contributionService.SavePayContributionAsync(request, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<ContributionDto>.SuccessResult(result, CommonMessages.Contributions.PaySuccess, CommonStatusCodes.Status200OK));
+    }
 }

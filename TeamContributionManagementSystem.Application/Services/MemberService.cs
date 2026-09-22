@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -8,13 +9,15 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class MemberService : IMemberService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<MemberService> _logger;
     private readonly IMemberRepository _memberRepository;
     private readonly IRoleRepository _roleRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public MemberService(IMemberRepository memberRepository, IRoleRepository roleRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public MemberService(Microsoft.Extensions.Logging.ILogger<MemberService> logger, IMemberRepository memberRepository, IRoleRepository roleRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
+        _logger = logger;
         _memberRepository = memberRepository;
         _roleRepository = roleRepository;
         _unitOfWork = unitOfWork;
@@ -23,13 +26,23 @@ public class MemberService : IMemberService
 
     public async Task<IReadOnlyCollection<MemberDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var members = await _memberRepository.GetAllAsync(cancellationToken);
+        try
+        {
+            var members = await _memberRepository.GetAllAsync(cancellationToken);
         return _mapper.Map<IReadOnlyCollection<MemberDto>>(members);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<MemberDto> CreateAsync(CreateMemberRequestDto request, CancellationToken cancellationToken = default)
     {
-        var existingMember = await _memberRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+        try
+        {
+            var existingMember = await _memberRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
         if (existingMember is not null)
         {
             throw new InvalidOperationException("A member with the same email already exists.");
@@ -60,11 +73,19 @@ public class MemberService : IMemberService
             ?? throw new KeyNotFoundException("Created member could not be loaded.");
 
         return _mapper.Map<MemberDto>(created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateAsync");
+            throw;
+        }
     }
 
     public async Task<MemberDto> UpdateAsync(Guid memberId, UpdateMemberRequestDto request, CancellationToken cancellationToken = default)
     {
-        var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
+        try
+        {
+            var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
             ?? throw new KeyNotFoundException("Member not found.");
 
         var duplicate = await _memberRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
@@ -94,11 +115,19 @@ public class MemberService : IMemberService
             ?? throw new KeyNotFoundException("Updated member could not be loaded.");
 
         return _mapper.Map<MemberDto>(updated);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateAsync");
+            throw;
+        }
     }
 
     public async Task DeleteAsync(Guid memberId, CancellationToken cancellationToken = default)
     {
-        var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
+        try
+        {
+            var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
             ?? throw new KeyNotFoundException("Member not found.");
 
         member.IsDeleted = true;
@@ -106,5 +135,11 @@ public class MemberService : IMemberService
 
         _memberRepository.Update(member);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteAsync");
+            throw;
+        }
     }
 }

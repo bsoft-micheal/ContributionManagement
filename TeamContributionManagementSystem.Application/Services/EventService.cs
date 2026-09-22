@@ -47,21 +47,39 @@ public class EventService : IEventService
 
     public async Task<IReadOnlyCollection<EventSummaryDto>> GetAllAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
     {
-        var events = await _eventRepository.GetAllAsync(month, year, cancellationToken);
+        try
+        {
+            var events = await _eventRepository.GetAllAsync(month, year, cancellationToken);
         return _mapper.Map<IReadOnlyCollection<EventSummaryDto>>(events);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<EventDetailsDto> GetByIdAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
-        var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
+        try
+        {
+            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
             ?? throw new KeyNotFoundException("Event not found.");
 
         return _mapper.Map<EventDetailsDto>(eventItem);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByIdAsync");
+            throw;
+        }
     }
 
     public async Task<EventDetailsDto> CreateAsync(Guid createdByUserId, CreateEventRequestDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByIdAsync(createdByUserId, cancellationToken)
+        try
+        {
+            var user = await _userRepository.GetByIdAsync(createdByUserId, cancellationToken)
             ?? throw new KeyNotFoundException("Creating user not found.");
 
         var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
@@ -615,11 +633,19 @@ public class EventService : IEventService
         }
 
         return createdEvent;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateAsync");
+            throw;
+        }
     }
 
     public async Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default)
     {
-        var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
+        try
+        {
+            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
             ?? throw new KeyNotFoundException("Event not found.");
 
         var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
@@ -787,11 +813,19 @@ public class EventService : IEventService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await GetByIdAsync(eventItem.EventId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateAsync");
+            throw;
+        }
     }
 
     public async Task DeleteAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
-        var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
+        try
+        {
+            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
             ?? throw new KeyNotFoundException("Event not found.");
 
         eventItem.IsDeleted = true;
@@ -803,6 +837,12 @@ public class EventService : IEventService
 
         _eventRepository.Update(eventItem);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteAsync");
+            throw;
+        }
     }
 
     private static string? ResolveGpayImagePath()

@@ -13,6 +13,12 @@ public interface IMemberRepository
     Task<List<Member>> GetActiveBirthdaysInMonthAsync(int month, CancellationToken cancellationToken = default);
     Task AddAsync(Member member, CancellationToken cancellationToken = default);
     void Update(Member member);
+
+    // Standardized naming
+    Task<List<Member>> GetAllMemberAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
+    Task<Member?> GetMemberAsyncById(Guid memberId, CancellationToken cancellationToken = default) => GetByIdAsync(memberId, cancellationToken);
+    Task SaveMemberAsync(Member member, CancellationToken cancellationToken = default) => AddAsync(member, cancellationToken);
+    void UpdateMemberAsyncById(Member member) => Update(member);
 }
 
 public interface IRoleRepository
@@ -24,6 +30,13 @@ public interface IRoleRepository
     Task AddAsync(Role role, CancellationToken cancellationToken = default);
     void Update(Role role);
     void Delete(Role role);
+
+    // Standardized naming
+    Task<List<Role>> GetAllRoleAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
+    Task<Role?> GetRoleAsyncById(Guid roleId, CancellationToken cancellationToken = default) => GetByIdAsync(roleId, cancellationToken);
+    Task SaveRoleAsync(Role role, CancellationToken cancellationToken = default) => AddAsync(role, cancellationToken);
+    void UpdateRoleAsyncById(Role role) => Update(role);
+    void DeleteRoleAsyncById(Role role) => Delete(role);
 }
 
 public interface IEventTypeRepository
@@ -35,6 +48,13 @@ public interface IEventTypeRepository
     Task AddAsync(EventType eventType, CancellationToken cancellationToken = default);
     void Update(EventType eventType);
     void Delete(EventType eventType);
+
+    // Standardized naming
+    Task<List<EventType>> GetAllEventTypeAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
+    Task<EventType?> GetEventTypeAsyncById(Guid eventTypeId, CancellationToken cancellationToken = default) => GetByIdAsync(eventTypeId, cancellationToken);
+    Task SaveEventTypeAsync(EventType eventType, CancellationToken cancellationToken = default) => AddAsync(eventType, cancellationToken);
+    void UpdateEventTypeAsyncById(EventType eventType) => Update(eventType);
+    void DeleteEventTypeAsyncById(EventType eventType) => Delete(eventType);
 }
 
 public interface IEventRepository
@@ -47,6 +67,12 @@ public interface IEventRepository
     Task AddAsync(Event eventItem, CancellationToken cancellationToken = default);
     void Update(Event eventItem);
     void DeleteParticipants(IEnumerable<EventParticipant> participants);
+
+    // Standardized naming
+    Task<List<Event>> GetAllEventAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetAllAsync(month, year, cancellationToken);
+    Task<Event?> GetEventAsyncById(Guid eventId, CancellationToken cancellationToken = default) => GetByIdAsync(eventId, cancellationToken);
+    Task SaveEventAsync(Event eventItem, CancellationToken cancellationToken = default) => AddAsync(eventItem, cancellationToken);
+    void UpdateEventAsyncById(Event eventItem) => Update(eventItem);
 }
 
 public interface IContributionRepository
@@ -59,6 +85,11 @@ public interface IContributionRepository
     Task AddRangeAsync(IEnumerable<Contribution> contributions, CancellationToken cancellationToken = default);
     void Update(Contribution contribution);
     void DeleteRange(IEnumerable<Contribution> contributions);
+
+    // Standardized naming
+    Task<List<Contribution>> GetAllContributionAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
+    Task<List<Contribution>> GetContributionAsyncByEventId(Guid eventId, CancellationToken cancellationToken = default) => GetByEventIdAsync(eventId, cancellationToken);
+    void UpdateContributionAsyncById(Contribution contribution) => Update(contribution);
 }
 
 public interface IUserRepository
@@ -71,6 +102,13 @@ public interface IUserRepository
     Task AddAsync(AppUser user, CancellationToken cancellationToken = default);
     void Update(AppUser user);
     void Delete(AppUser user);
+
+    // Standardized naming
+    Task<List<AppUser>> GetAllUserAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
+    Task<AppUser?> GetUserAsyncById(Guid userId, CancellationToken cancellationToken = default) => GetByIdAsync(userId, cancellationToken);
+    Task SaveUserAsync(AppUser user, CancellationToken cancellationToken = default) => AddAsync(user, cancellationToken);
+    void UpdateUserAsyncById(AppUser user) => Update(user);
+    void DeleteUserAsyncById(AppUser user) => Delete(user);
 }
 
 public interface IRoleRightRepository
@@ -78,6 +116,10 @@ public interface IRoleRightRepository
     Task<List<RoleRight>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<List<RoleRight>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default);
     Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default);
+
+    // Standardized naming
+    Task<List<RoleRight>> GetAllRoleRightAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
+    Task<List<RoleRight>> GetRoleRightAsyncByRole(UserRole role, CancellationToken cancellationToken = default) => GetByRoleAsync(role, cancellationToken);
 }
 
 public interface IExpenseRepository
@@ -87,6 +129,13 @@ public interface IExpenseRepository
     Task AddAsync(Expense expense, CancellationToken cancellationToken = default);
     void Update(Expense expense);
     void Delete(Expense expense);
+
+    // Standardized naming
+    Task<List<Expense>> GetAllExpenseAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default) => GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
+    Task<Expense?> GetExpenseAsyncById(Guid expenseId, CancellationToken cancellationToken = default) => GetByIdAsync(expenseId, cancellationToken);
+    Task SaveExpenseAsync(Expense expense, CancellationToken cancellationToken = default) => AddAsync(expense, cancellationToken);
+    void UpdateExpenseAsyncById(Expense expense) => Update(expense);
+    void DeleteExpenseAsyncById(Expense expense) => Delete(expense);
 }
 
 public interface ISupportTicketRepository
@@ -97,6 +146,13 @@ public interface ISupportTicketRepository
     Task AddAsync(SupportTicket ticket, CancellationToken cancellationToken = default);
     void Update(SupportTicket ticket);
     void Delete(SupportTicket ticket);
+
+    // Standardized naming
+    Task<List<SupportTicket>> GetAllSupportTicketAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default) => GetAllAsync(status, ticketType, priority, cancellationToken);
+    Task<SupportTicket?> GetSupportTicketAsyncById(Guid ticketId, CancellationToken cancellationToken = default) => GetByIdAsync(ticketId, cancellationToken);
+    Task SaveSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken = default) => AddAsync(ticket, cancellationToken);
+    void UpdateSupportTicketAsyncById(SupportTicket ticket) => Update(ticket);
+    void DeleteSupportTicketAsyncById(SupportTicket ticket) => Delete(ticket);
 }
 
 public interface ISystemSettingRepository
@@ -105,6 +161,11 @@ public interface ISystemSettingRepository
     Task<SystemSetting?> GetByKeyAsync(string key, CancellationToken cancellationToken = default);
     Task AddRangeAsync(IEnumerable<SystemSetting> settings, CancellationToken cancellationToken = default);
     void Update(SystemSetting setting);
+
+    // Standardized naming
+    Task<List<SystemSetting>> GetAllSettingAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
+    Task<SystemSetting?> GetSettingAsyncByKey(string key, CancellationToken cancellationToken = default) => GetByKeyAsync(key, cancellationToken);
+    void UpdateSettingAsync(SystemSetting setting) => Update(setting);
 }
 
 public interface IPaymentTransactionRepository
@@ -114,6 +175,13 @@ public interface IPaymentTransactionRepository
     Task AddAsync(PaymentTransaction transaction, CancellationToken cancellationToken = default);
     void Update(PaymentTransaction transaction);
     void Delete(PaymentTransaction transaction);
+
+    // Standardized naming
+    Task<List<PaymentTransaction>> GetAllPaymentAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default) => GetAllAsync(eventName, mode, status, startDate, endDate, cancellationToken);
+    Task<PaymentTransaction?> GetPaymentAsyncById(Guid transactionId, CancellationToken cancellationToken = default) => GetByIdAsync(transactionId, cancellationToken);
+    Task SavePaymentAsync(PaymentTransaction transaction, CancellationToken cancellationToken = default) => AddAsync(transaction, cancellationToken);
+    void UpdatePaymentAsyncById(PaymentTransaction transaction) => Update(transaction);
+    void DeletePaymentAsyncById(PaymentTransaction transaction) => Delete(transaction);
 }
 
 public interface IGalleryRepository
@@ -122,10 +190,15 @@ public interface IGalleryRepository
     Task<GalleryPhoto?> GetByIdAsync(Guid photoId, CancellationToken cancellationToken = default);
     Task AddAsync(GalleryPhoto photo, CancellationToken cancellationToken = default);
     void Delete(GalleryPhoto photo);
+
+    // Standardized naming
+    Task<List<GalleryPhoto>> GetAllGalleryAsync(string? eventName = null, string? category = null, CancellationToken cancellationToken = default) => GetAllAsync(eventName, category, cancellationToken);
+    Task<GalleryPhoto?> GetGalleryAsyncById(Guid photoId, CancellationToken cancellationToken = default) => GetByIdAsync(photoId, cancellationToken);
+    Task SaveGalleryAsync(GalleryPhoto photo, CancellationToken cancellationToken = default) => AddAsync(photo, cancellationToken);
+    void DeleteGalleryAsyncById(GalleryPhoto photo) => Delete(photo);
 }
 
 public interface IUnitOfWork
 {
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
-

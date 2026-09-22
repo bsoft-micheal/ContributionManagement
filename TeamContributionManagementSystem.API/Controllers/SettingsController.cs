@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Settings;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -19,27 +20,30 @@ public class SettingsController : ControllerBase
         _settingService = settingService;
     }
 
-    [HttpGet]
-    public async Task<ActionResult<SystemSettingsDto>> Get(CancellationToken cancellationToken)
+    [HttpGet("getSettingAsync")]
+    [ActionName("GetSettingAsync")]
+    public async Task<ActionResult<ApiResponse<SystemSettingsDto>>> GetSettingAsync(CancellationToken cancellationToken)
     {
-        var settings = await _settingService.GetSettingsAsync(cancellationToken);
-        return Ok(settings);
+        var settings = await _settingService.GetSettingAsync(cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(settings, CommonMessages.Settings.GetSuccess, CommonStatusCodes.Status200OK));
     }
 
     [Authorize(Roles = "Admin")]
-    [HttpPost]
-    public async Task<ActionResult<SystemSettingsDto>> Update([FromBody] SystemSettingsDto settings, CancellationToken cancellationToken)
+    [HttpPost("updateSettingAsync")]
+    [ActionName("UpdateSettingAsync")]
+    public async Task<ActionResult<ApiResponse<SystemSettingsDto>>> UpdateSettingAsync([FromBody] SystemSettingsDto settings, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "Admin";
-        var result = await _settingService.UpdateSettingsAsync(settings, currentUser, cancellationToken);
-        return Ok(result);
+        var result = await _settingService.UpdateSettingAsync(settings, currentUser, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(result, CommonMessages.Settings.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
 
     [Authorize(Roles = "Admin")]
-    [HttpPost("reset")]
-    public async Task<ActionResult<SystemSettingsDto>> Reset(CancellationToken cancellationToken)
+    [HttpPost("resetSettingAsync")]
+    [ActionName("ResetSettingAsync")]
+    public async Task<ActionResult<ApiResponse<SystemSettingsDto>>> ResetSettingAsync(CancellationToken cancellationToken)
     {
-        var result = await _settingService.ResetSettingsAsync(cancellationToken);
-        return Ok(result);
+        var result = await _settingService.ResetSettingAsync(cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(result, CommonMessages.Settings.ResetSuccess, CommonStatusCodes.Status200OK));
     }
 }

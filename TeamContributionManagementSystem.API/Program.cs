@@ -10,7 +10,6 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
-using TeamContributionManagementSystem.API.HostedServices;
 using TeamContributionManagementSystem.API.Middleware;
 using TeamContributionManagementSystem.Infrastructure;
 using TeamContributionManagementSystem.Infrastructure.Persistence;

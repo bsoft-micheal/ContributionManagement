@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -8,12 +9,14 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class RoleService : IRoleService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<RoleService> _logger;
     private readonly IRoleRepository _roleRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public RoleService(IRoleRepository roleRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public RoleService(Microsoft.Extensions.Logging.ILogger<RoleService> logger, IRoleRepository roleRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
+        _logger = logger;
         _roleRepository = roleRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
@@ -21,13 +24,23 @@ public class RoleService : IRoleService
 
     public async Task<IReadOnlyCollection<RoleDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var roles = await _roleRepository.GetAllAsync(cancellationToken);
+        try
+        {
+            var roles = await _roleRepository.GetAllAsync(cancellationToken);
         return _mapper.Map<IReadOnlyCollection<RoleDto>>(roles);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<RoleDto> CreateAsync(CreateRoleRequestDto request, CancellationToken cancellationToken = default)
     {
-        var existing = await _roleRepository.GetByNameAsync(request.RoleName.Trim(), cancellationToken);
+        try
+        {
+            var existing = await _roleRepository.GetByNameAsync(request.RoleName.Trim(), cancellationToken);
         if (existing is not null)
         {
             throw new InvalidOperationException("Role already exists.");
@@ -44,11 +57,19 @@ public class RoleService : IRoleService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<RoleDto>(role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateAsync");
+            throw;
+        }
     }
 
     public async Task<RoleDto> UpdateAsync(Guid roleId, UpdateRoleRequestDto request, CancellationToken cancellationToken = default)
     {
-        var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
+        try
+        {
+            var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
             ?? throw new KeyNotFoundException("Role not found.");
 
         var duplicate = await _roleRepository.GetByNameAsync(request.RoleName.Trim(), cancellationToken);
@@ -64,11 +85,19 @@ public class RoleService : IRoleService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<RoleDto>(role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateAsync");
+            throw;
+        }
     }
 
     public async Task DeleteAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
-        var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
+        try
+        {
+            var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
             ?? throw new KeyNotFoundException("Role not found.");
 
         if (await _roleRepository.HasMembersAsync(roleId, cancellationToken))
@@ -78,5 +107,11 @@ public class RoleService : IRoleService
 
         _roleRepository.Delete(role);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteAsync");
+            throw;
+        }
     }
 }
