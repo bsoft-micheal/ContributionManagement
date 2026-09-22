@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -8,12 +9,14 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class SupportTicketService : ISupportTicketService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<SupportTicketService> _logger;
     private readonly ISupportTicketRepository _ticketRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public SupportTicketService(ISupportTicketRepository ticketRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public SupportTicketService(Microsoft.Extensions.Logging.ILogger<SupportTicketService> logger, ISupportTicketRepository ticketRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
+        _logger = logger;
         _ticketRepository = ticketRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
@@ -21,20 +24,38 @@ public class SupportTicketService : ISupportTicketService
 
     public async Task<IReadOnlyCollection<SupportTicketDto>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default)
     {
-        var tickets = await _ticketRepository.GetAllAsync(status, ticketType, priority, cancellationToken);
+        try
+        {
+            var tickets = await _ticketRepository.GetAllAsync(status, ticketType, priority, cancellationToken);
         return _mapper.Map<IReadOnlyCollection<SupportTicketDto>>(tickets);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<SupportTicketDto> GetByIdAsync(Guid ticketId, CancellationToken cancellationToken = default)
     {
-        var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
+        try
+        {
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
             ?? throw new KeyNotFoundException($"Support ticket with ID {ticketId} not found.");
         return _mapper.Map<SupportTicketDto>(ticket);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByIdAsync");
+            throw;
+        }
     }
 
     public async Task<SupportTicketDto> CreateAsync(CreateSupportTicketRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
-        var all = await _ticketRepository.GetAllAsync(cancellationToken: cancellationToken);
+        try
+        {
+            var all = await _ticketRepository.GetAllAsync(cancellationToken: cancellationToken);
         var nextNumber = all.Count + 1;
         var ticketNo = $"TKT-{DateTime.UtcNow.Year}-{nextNumber:D3}";
 
@@ -64,11 +85,19 @@ public class SupportTicketService : ISupportTicketService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<SupportTicketDto>(ticket);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateAsync");
+            throw;
+        }
     }
 
     public async Task<SupportTicketDto> UpdateAsync(Guid ticketId, UpdateSupportTicketRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
-        var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
+        try
+        {
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
             ?? throw new KeyNotFoundException($"Support ticket with ID {ticketId} not found.");
 
         if (!string.IsNullOrWhiteSpace(request.Status))
@@ -98,11 +127,19 @@ public class SupportTicketService : ISupportTicketService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<SupportTicketDto>(ticket);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateAsync");
+            throw;
+        }
     }
 
     public async Task<SupportTicketDto> ReplyAsync(Guid ticketId, ReplyTicketRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
-        var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
+        try
+        {
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
             ?? throw new KeyNotFoundException($"Support ticket with ID {ticketId} not found.");
 
         var timestamp = DateTime.UtcNow.ToString("dd MMM yyyy, hh:mm tt");
@@ -115,7 +152,7 @@ public class SupportTicketService : ISupportTicketService
         }
         else
         {
-            ticket.ResolutionNotes += "\n" + newNote;
+            ticket.ResolutionNotes += "\n            " + newNote;
         }
 
         if (!string.IsNullOrWhiteSpace(request.Status))
@@ -130,14 +167,28 @@ public class SupportTicketService : ISupportTicketService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<SupportTicketDto>(ticket);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in ReplyAsync");
+            throw;
+        }
     }
 
     public async Task DeleteAsync(Guid ticketId, CancellationToken cancellationToken = default)
     {
-        var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
+        try
+        {
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
             ?? throw new KeyNotFoundException($"Support ticket with ID {ticketId} not found.");
 
         _ticketRepository.Delete(ticket);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteAsync");
+            throw;
+        }
     }
 }

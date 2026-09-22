@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.EventTypes;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -8,12 +9,14 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class EventTypeService : IEventTypeService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<EventTypeService> _logger;
     private readonly IEventTypeRepository _eventTypeRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public EventTypeService(IEventTypeRepository eventTypeRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public EventTypeService(Microsoft.Extensions.Logging.ILogger<EventTypeService> logger, IEventTypeRepository eventTypeRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
+        _logger = logger;
         _eventTypeRepository = eventTypeRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
@@ -21,13 +24,23 @@ public class EventTypeService : IEventTypeService
 
     public async Task<IReadOnlyCollection<EventTypeDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var eventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
+        try
+        {
+            var eventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
         return _mapper.Map<IReadOnlyCollection<EventTypeDto>>(eventTypes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<EventTypeDto> CreateAsync(CreateEventTypeRequestDto request, CancellationToken cancellationToken = default)
     {
-        var existing = await _eventTypeRepository.GetByNameAsync(request.EventTypeName.Trim(), cancellationToken);
+        try
+        {
+            var existing = await _eventTypeRepository.GetByNameAsync(request.EventTypeName.Trim(), cancellationToken);
         if (existing is not null)
         {
             throw new InvalidOperationException("Event type already exists.");
@@ -45,11 +58,19 @@ public class EventTypeService : IEventTypeService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<EventTypeDto>(eventType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateAsync");
+            throw;
+        }
     }
 
     public async Task<EventTypeDto> UpdateAsync(Guid eventTypeId, UpdateEventTypeRequestDto request, CancellationToken cancellationToken = default)
     {
-        var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId, cancellationToken)
+        try
+        {
+            var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId, cancellationToken)
             ?? throw new KeyNotFoundException("Event type not found.");
 
         var duplicate = await _eventTypeRepository.GetByNameAsync(request.EventTypeName.Trim(), cancellationToken);
@@ -66,11 +87,19 @@ public class EventTypeService : IEventTypeService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<EventTypeDto>(eventType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateAsync");
+            throw;
+        }
     }
 
     public async Task DeleteAsync(Guid eventTypeId, CancellationToken cancellationToken = default)
     {
-        var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId, cancellationToken)
+        try
+        {
+            var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId, cancellationToken)
             ?? throw new KeyNotFoundException("Event type not found.");
 
         if (await _eventTypeRepository.HasEventsAsync(eventTypeId, cancellationToken))
@@ -80,5 +109,11 @@ public class EventTypeService : IEventTypeService
 
         _eventTypeRepository.Delete(eventType);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteAsync");
+            throw;
+        }
     }
 }

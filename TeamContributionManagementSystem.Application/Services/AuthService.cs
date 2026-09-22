@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -7,6 +8,7 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class AuthService : IAuthService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<AuthService> _logger;
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
@@ -15,7 +17,7 @@ public class AuthService : IAuthService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDeviceSessionRepository _deviceSessionRepository;
 
-    public AuthService(
+    public AuthService(Microsoft.Extensions.Logging.ILogger<AuthService> logger, 
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
@@ -24,6 +26,7 @@ public class AuthService : IAuthService
         IUnitOfWork unitOfWork,
         IDeviceSessionRepository deviceSessionRepository)
     {
+        _logger = logger;
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
@@ -35,7 +38,9 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+        try
+        {
+            var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
         if (user is null || !user.IsActive || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
             throw new InvalidOperationException("Invalid email or password");
@@ -51,11 +56,19 @@ public class AuthService : IAuthService
         }
 
         return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in LoginAsync");
+            throw;
+        }
     }
 
     public async Task<AuthResponseDto> VerifyTwoFactorAsync(VerifyTwoFactorRequestDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+        try
+        {
+            var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
         if (user is null || !user.IsActive)
         {
             throw new InvalidOperationException("Invalid user.");
@@ -87,6 +100,12 @@ public class AuthService : IAuthService
 
 
         return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in VerifyTwoFactorAsync");
+            throw;
+        }
     }
 
     private async Task<AuthResponseDto> GenerateAuthResponseAndLogSessionAsync(TeamContributionManagementSystem.Domain.Entities.AppUser user, DeviceDetailPayloadDto? deviceInfo, CancellationToken cancellationToken)
@@ -154,7 +173,9 @@ public class AuthService : IAuthService
 
     public async Task RequestPasswordResetOtpAsync(ForgotPasswordRequestDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+        try
+        {
+            var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
         if (user is null)
         {
             throw new InvalidOperationException("A user with this email address was not found.");
@@ -191,11 +212,19 @@ public class AuthService : IAuthService
 </div>";
 
         await _emailService.SendEmailAsync(user.Email, subject, emailBody, cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in RequestPasswordResetOtpAsync");
+            throw;
+        }
     }
 
     public async Task<bool> VerifyPasswordResetOtpAsync(VerifyOtpRequestDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+        try
+        {
+            var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
         if (user is null)
         {
             throw new InvalidOperationException("A user with this email address was not found.");
@@ -212,11 +241,19 @@ public class AuthService : IAuthService
         }
 
         return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in VerifyPasswordResetOtpAsync");
+            throw;
+        }
     }
 
     public async Task ResetPasswordWithOtpAsync(ResetPasswordRequestDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+        try
+        {
+            var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
         if (user is null)
         {
             throw new InvalidOperationException("A user with this email address was not found.");
@@ -238,5 +275,11 @@ public class AuthService : IAuthService
 
         _userRepository.Update(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in ResetPasswordWithOtpAsync");
+            throw;
+        }
     }
 }

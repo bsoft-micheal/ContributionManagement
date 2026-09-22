@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -27,31 +28,43 @@ public class EventsController : ControllerBase
     /// </summary>
     /// <param name="month">Optional month filter (1-12).</param>
     /// <param name="year">Optional year filter.</param>
-    [HttpGet]
-    public async Task<ActionResult<IReadOnlyCollection<EventSummaryDto>>> GetAll([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
-        => Ok(await _eventService.GetAllAsync(month, year, cancellationToken));
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("getAllEventAsync")]
+    [ActionName("GetAllEventAsync")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<EventSummaryDto>>>> GetAllEventAsync([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
+    {
+        var result = await _eventService.GetAllEventAsync(month, year, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<EventSummaryDto>>.SuccessResult(result, CommonMessages.Events.GetAllSuccess, CommonStatusCodes.Status200OK));
+    }
 
     /// <summary>
     /// Retrieves full details of a specific event, including all participants and their contribution status.
     /// </summary>
     /// <param name="id">The unique identifier of the event.</param>
-    [HttpGet("{id:guid}")]
-    public async Task<ActionResult<EventDetailsDto>> GetById(Guid id, CancellationToken cancellationToken)
-        => Ok(await _eventService.GetByIdAsync(id, cancellationToken));
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("getEventAsyncById/{id:guid}")]
+    [ActionName("GetEventAsyncById")]
+    public async Task<ActionResult<ApiResponse<EventDetailsDto>>> GetEventAsyncById(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _eventService.GetEventAsyncById(id, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<EventDetailsDto>.SuccessResult(result, CommonMessages.Events.GetByIdSuccess, CommonStatusCodes.Status200OK));
+    }
 
     /// <summary>
     /// Creates a new event and automatically adds the specified members as participants (Admin only).
     /// </summary>
     /// <param name="request">The event details and participant list.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     [Authorize(Roles = "Admin")]
-    [HttpPost]
-    public async Task<ActionResult<EventDetailsDto>> Create([FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
+    [HttpPost("saveEventAsync")]
+    [ActionName("SaveEventAsync")]
+    public async Task<ActionResult<ApiResponse<EventDetailsDto>>> SaveEventAsync([FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? throw new UnauthorizedAccessException("User identity is not available.");
 
-        var eventItem = await _eventService.CreateAsync(Guid.Parse(userIdClaim), request, cancellationToken);
-        return CreatedAtAction(nameof(GetById), new { id = eventItem.EventId }, eventItem);
+        var eventItem = await _eventService.SaveEventAsync(Guid.Parse(userIdClaim), request, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<EventDetailsDto>.SuccessResult(eventItem, CommonMessages.Events.SaveSuccess, CommonStatusCodes.Status201Created));
     }
 
     /// <summary>
@@ -59,23 +72,27 @@ public class EventsController : ControllerBase
     /// </summary>
     /// <param name="id">The unique identifier of the event to update.</param>
     /// <param name="request">The updated event details and participant list.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     [Authorize(Roles = "Admin")]
-    [HttpPut("{id:guid}")]
-    public async Task<ActionResult<EventDetailsDto>> Update(Guid id, [FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
+    [HttpPut("updateEventAsyncById/{id:guid}")]
+    [ActionName("UpdateEventAsyncById")]
+    public async Task<ActionResult<ApiResponse<EventDetailsDto>>> UpdateEventAsyncById(Guid id, [FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
     {
-        var eventItem = await _eventService.UpdateAsync(id, request, cancellationToken);
-        return Ok(eventItem);
+        var eventItem = await _eventService.UpdateEventAsyncById(id, request, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<EventDetailsDto>.SuccessResult(eventItem, CommonMessages.Events.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
     /// Deletes an event and all associated contributions/participants (Admin only).
     /// </summary>
     /// <param name="id">The unique identifier of the event to delete.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     [Authorize(Roles = "Admin")]
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    [HttpDelete("deleteEventAsyncById/{id:guid}")]
+    [ActionName("DeleteEventAsyncById")]
+    public async Task<ActionResult<ApiResponse>> DeleteEventAsyncById(Guid id, CancellationToken cancellationToken)
     {
-        await _eventService.DeleteAsync(id, cancellationToken);
-        return NoContent();
+        await _eventService.DeleteEventAsyncById(id, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Events.DeleteSuccess, CommonStatusCodes.Status200OK));
     }
 }

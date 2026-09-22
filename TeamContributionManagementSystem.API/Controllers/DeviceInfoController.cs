@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
 namespace TeamContributionManagementSystem.API.Controllers;
@@ -23,42 +24,47 @@ public class DeviceInfoController : ControllerBase
     /// <summary>
     /// Retrieves a list of all currently active sessions (devices) for the authenticated user.
     /// </summary>
-    [HttpGet("active")]
-    public async Task<IActionResult> GetActiveSessions(CancellationToken cancellationToken)
+    [HttpGet("getActiveSessionAsync")]
+    [ActionName("GetActiveSessionAsync")]
+    public async Task<ActionResult<ApiResponse<object>>> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         var userId = GetUserId();
         var sessions = await _sessionService.GetActiveSessionsAsync(userId, cancellationToken);
-        return Ok(sessions);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(sessions, CommonMessages.DeviceInfo.GetActiveSessionsSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
     /// Retrieves the historical log of past and present logins for the authenticated user.
     /// </summary>
-    [HttpGet("history")]
-    public async Task<IActionResult> GetSessionHistory(CancellationToken cancellationToken)
+    [HttpGet("getSessionHistoryAsync")]
+    [ActionName("GetSessionHistoryAsync")]
+    public async Task<ActionResult<ApiResponse<object>>> GetSessionHistoryAsync(CancellationToken cancellationToken)
     {
         var userId = GetUserId();
         var history = await _sessionService.GetSessionHistoryAsync(userId, cancellationToken);
-        return Ok(history);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(history, CommonMessages.DeviceInfo.GetSessionHistorySuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
     /// Terminates a specific remote session by its history ID.
     /// </summary>
     /// <param name="historyId">The unique identifier of the session history record.</param>
-    [HttpDelete("{historyId}")]
-    public async Task<IActionResult> LogoutSession(Guid historyId, CancellationToken cancellationToken)
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpDelete("logoutSessionAsync/{historyId:guid}")]
+    [ActionName("LogoutSessionAsync")]
+    public async Task<ActionResult<ApiResponse>> LogoutSessionAsync(Guid historyId, CancellationToken cancellationToken)
     {
         var userId = GetUserId();
         await _sessionService.LogoutSessionAsync(historyId, userId, cancellationToken);
-        return NoContent();
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.DeviceInfo.LogoutSessionSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
     /// Terminates the current active session (the device making this request).
     /// </summary>
-    [HttpPost("logout")]
-    public async Task<IActionResult> LogoutCurrentSession(CancellationToken cancellationToken)
+    [HttpPost("logoutCurrentSessionAsync")]
+    [ActionName("LogoutCurrentSessionAsync")]
+    public async Task<ActionResult<ApiResponse>> LogoutCurrentSessionAsync(CancellationToken cancellationToken)
     {
         var userId = GetUserId();
         var sessionIdClaim = User.FindFirst("SessionId")?.Value;
@@ -66,7 +72,7 @@ public class DeviceInfoController : ControllerBase
         {
             await _sessionService.LogoutSessionAsync(sessionId, userId, cancellationToken);
         }
-        return NoContent();
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.DeviceInfo.LogoutCurrentSessionSuccess, CommonStatusCodes.Status200OK));
     }
 
     private Guid GetUserId()

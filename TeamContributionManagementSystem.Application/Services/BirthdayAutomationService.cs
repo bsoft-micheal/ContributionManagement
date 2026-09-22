@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -7,19 +8,21 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class BirthdayAutomationService : IBirthdayAutomationService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<BirthdayAutomationService> _logger;
     private readonly IMemberRepository _memberRepository;
     private readonly IEventTypeRepository _eventTypeRepository;
     private readonly IUserRepository _userRepository;
     private readonly IEventService _eventService;
     private readonly IEventRepository _eventRepository;
 
-    public BirthdayAutomationService(
+    public BirthdayAutomationService(Microsoft.Extensions.Logging.ILogger<BirthdayAutomationService> logger, 
         IMemberRepository memberRepository,
         IEventTypeRepository eventTypeRepository,
         IUserRepository userRepository,
         IEventService eventService,
         IEventRepository eventRepository)
     {
+        _logger = logger;
         _memberRepository = memberRepository;
         _eventTypeRepository = eventTypeRepository;
         _userRepository = userRepository;
@@ -29,7 +32,9 @@ public class BirthdayAutomationService : IBirthdayAutomationService
 
     public async Task<int> CreateMonthlyBirthdayEventsAsync(CancellationToken cancellationToken = default)
     {
-        var today = DateTime.UtcNow.Date;
+        try
+        {
+            var today = DateTime.UtcNow.Date;
         var birthdayEventType = await _eventTypeRepository.GetByNameAsync("Birthday", cancellationToken)
             ?? throw new KeyNotFoundException("Birthday event type is not configured.");
 
@@ -74,5 +79,11 @@ public class BirthdayAutomationService : IBirthdayAutomationService
         }
 
         return createdCount;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateMonthlyBirthdayEventsAsync");
+            throw;
+        }
     }
 }
