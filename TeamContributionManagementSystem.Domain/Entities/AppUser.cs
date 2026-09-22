@@ -16,5 +16,9 @@ public class AppUser
     public string? PasswordResetOtp { get; set; }
     public DateTime? PasswordResetOtpExpiry { get; set; }
 
+    public bool IsTwoFactorEnabled { get; set; } = false;
+
+    public ICollection<UserMfaDevice> MfaDevices { get; set; } = new List<UserMfaDevice>();
+
     public ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
 }

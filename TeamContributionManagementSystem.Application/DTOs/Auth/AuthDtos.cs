@@ -11,6 +11,8 @@ public class LoginRequestDto
 
     [Required]
     public string Password { get; set; } = string.Empty;
+
+    public DeviceDetailPayloadDto DeviceInfo { get; set; }
 }
 
 public class AuthResponseDto
@@ -22,6 +24,20 @@ public class AuthResponseDto
     public string? ProfileImage { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
     public IReadOnlyCollection<RoleRightDto> Rights { get; set; } = Array.Empty<RoleRightDto>();
+    public bool RequiresTwoFactor { get; set; } = false;
+}
+
+public class VerifyTwoFactorRequestDto
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(6, MinimumLength = 6)]
+    public string Otp { get; set; } = string.Empty;
+
+    public DeviceDetailPayloadDto DeviceInfo { get; set; }
 }
 
 public class ForgotPasswordRequestDto

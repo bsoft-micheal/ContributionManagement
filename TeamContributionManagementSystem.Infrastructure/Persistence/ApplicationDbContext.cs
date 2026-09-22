@@ -20,6 +20,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<Contribution> Contributions => Set<Contribution>();
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RoleRight> RoleRights => Set<RoleRight>();
+    public DbSet<DeviceDetail> DeviceDetails => Set<DeviceDetail>();
+    public DbSet<DeviceLoginHistory> DeviceLoginHistories => Set<DeviceLoginHistory>();
+    public DbSet<UserMfaDevice> UserMfaDevices => Set<UserMfaDevice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -67,6 +70,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.PasswordResetOtpExpiry);
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.Username).IsUnique();
+            entity.HasMany(x => x.MfaDevices).WithOne(x => x.User).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<RoleRight>(entity =>
@@ -128,6 +132,32 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .WithMany(x => x.Contributions)
                 .HasForeignKey(x => x.MemberId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DeviceDetail>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => x.DeviceId);
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DeviceLoginHistory>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => x.DeviceDetailId);
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.DeviceDetail)
+                .WithMany(x => x.LoginHistories)
+                .HasForeignKey(x => x.DeviceDetailId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.ApplySnakeCaseNames();

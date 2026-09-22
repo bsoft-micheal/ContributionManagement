@@ -199,6 +199,60 @@ public class EventRepository : IEventRepository
                 .ThenInclude(x => x.Member);
 }
 
+public class DeviceSessionRepository : IDeviceSessionRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public DeviceSessionRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public void Add(DeviceDetail deviceDetail)
+    {
+        _context.DeviceDetails.Add(deviceDetail);
+    }
+
+    public void Update(DeviceDetail deviceDetail)
+    {
+        _context.DeviceDetails.Update(deviceDetail);
+    }
+
+    public async Task<DeviceDetail?> GetDeviceByDeviceIdAsync(Guid userId, string deviceId, CancellationToken cancellationToken = default)
+    {
+        return await _context.DeviceDetails
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.DeviceId == deviceId, cancellationToken);
+    }
+
+    public async Task<IEnumerable<DeviceDetail>> GetActiveSessionsAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.DeviceDetails
+            .Include(d => d.LoginHistories.Where(h => h.IsActive))
+            .Where(d => d.UserId == userId && d.IsActive)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<DeviceDetail>> GetSessionHistoryAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.DeviceDetails
+            .Include(d => d.LoginHistories.OrderByDescending(h => h.LoginTime))
+            .Where(d => d.UserId == userId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<DeviceLoginHistory?> GetLoginHistoryByIdAsync(Guid historyId, CancellationToken cancellationToken = default)
+    {
+        return await _context.DeviceLoginHistories
+            .Include(h => h.DeviceDetail)
+            .FirstOrDefaultAsync(h => h.Id == historyId, cancellationToken);
+    }
+
+    public void AddLoginHistory(DeviceLoginHistory loginHistory)
+    {
+        _context.DeviceLoginHistories.Add(loginHistory);
+    }
+}
+
 public class ContributionRepository : IContributionRepository
 {
     private readonly ApplicationDbContext _context;
@@ -287,13 +341,17 @@ public class UserRepository : IUserRepository
             .ToListAsync(cancellationToken);
 
     public async Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
-        => await _context.Users.FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
+        => await _context.Users
+            .Include(u => u.MfaDevices)
+            .FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
 
     public async Task<AppUser?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
         => await _context.Users.FirstOrDefaultAsync(x => x.Username.ToLower() == username.ToLower(), cancellationToken);
 
     public async Task<AppUser?> GetByIdAsync(Guid userId, CancellationToken cancellationToken = default)
-        => await _context.Users.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+        => await _context.Users
+            .Include(u => u.MfaDevices)
+            .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
 
     public async Task<AppUser?> GetFirstAdminAsync(CancellationToken cancellationToken = default)
         => await _context.Users.FirstOrDefaultAsync(x => x.Role == UserRole.Admin && x.IsActive, cancellationToken);
@@ -369,4 +427,33 @@ public class RoleRightRepository : IRoleRightRepository
             _context.RoleRights.RemoveRange(toDelete);
         }
     }
+}
+
+public class UserMfaDeviceRepository : IUserMfaDeviceRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public UserMfaDeviceRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task AddAsync(UserMfaDevice device, CancellationToken cancellationToken = default)
+        => await _context.UserMfaDevices.AddAsync(device, cancellationToken);
+
+    public async Task<IEnumerable<UserMfaDevice>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        => await _context.UserMfaDevices
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.DateAdded)
+            .ToListAsync(cancellationToken);
+
+    public Task RemoveAsync(UserMfaDevice device, CancellationToken cancellationToken = default)
+    {
+        _context.UserMfaDevices.Remove(device);
+        return Task.CompletedTask;
+    }
+
+    public async Task<UserMfaDevice?> GetByIdAsync(Guid userId, Guid deviceId, CancellationToken cancellationToken = default)
+        => await _context.UserMfaDevices
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.Id == deviceId, cancellationToken);
 }
