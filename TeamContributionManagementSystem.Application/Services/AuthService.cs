@@ -13,6 +13,7 @@ public class AuthService : IAuthService
     private readonly IRoleRightsService _roleRightsService;
     private readonly IEmailService _emailService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDeviceSessionRepository _deviceSessionRepository;
 
     public AuthService(
         IUserRepository userRepository,
@@ -20,7 +21,8 @@ public class AuthService : IAuthService
         IJwtTokenGenerator jwtTokenGenerator,
         IRoleRightsService roleRightsService,
         IEmailService emailService,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IDeviceSessionRepository deviceSessionRepository)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
@@ -28,6 +30,7 @@ public class AuthService : IAuthService
         _roleRightsService = roleRightsService;
         _emailService = emailService;
         _unitOfWork = unitOfWork;
+        _deviceSessionRepository = deviceSessionRepository;
     }
 
     public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
@@ -38,8 +41,114 @@ public class AuthService : IAuthService
             throw new InvalidOperationException("Invalid email or password");
         }
 
-        var response = _jwtTokenGenerator.GenerateToken(user);
+        if (user.MfaDevices != null && user.MfaDevices.Any())
+        {
+            return new AuthResponseDto
+            {
+                RequiresTwoFactor = true,
+                Email = user.Email
+            };
+        }
+
+        return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
+    }
+
+    public async Task<AuthResponseDto> VerifyTwoFactorAsync(VerifyTwoFactorRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+        if (user is null || !user.IsActive)
+        {
+            throw new InvalidOperationException("Invalid user.");
+        }
+
+        if (user.MfaDevices == null || !user.MfaDevices.Any())
+        {
+            throw new InvalidOperationException("MFA is not enabled for this user.");
+        }
+
+        bool isValid = false;
+        foreach (var mfaDevice in user.MfaDevices)
+        {
+            var base32Bytes = OtpNet.Base32Encoding.ToBytes(mfaDevice.SecretKey);
+            var totp = new OtpNet.Totp(base32Bytes);
+            if (totp.VerifyTotp(request.Otp.Trim(), out long timeStepMatched, new OtpNet.VerificationWindow(2, 2)))
+            {
+                isValid = true;
+                break;
+            }
+        }
+
+        if (!isValid)
+        {
+            throw new InvalidOperationException("Invalid OTP code.");
+        }
+
+        // Save changes will be called inside GenerateAuthResponseAndLogSessionAsync via _unitOfWork
+
+
+        return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
+    }
+
+    private async Task<AuthResponseDto> GenerateAuthResponseAndLogSessionAsync(TeamContributionManagementSystem.Domain.Entities.AppUser user, DeviceDetailPayloadDto? deviceInfo, CancellationToken cancellationToken)
+    {
+        Guid? sessionId = null;
+
+        if (deviceInfo != null)
+        {
+            var device = await _deviceSessionRepository.GetDeviceByDeviceIdAsync(user.UserId, deviceInfo.DeviceId, cancellationToken);
+            if (device == null)
+            {
+                device = new TeamContributionManagementSystem.Domain.Entities.DeviceDetail
+                {
+                    UserId = user.UserId,
+                    DeviceId = deviceInfo.DeviceId,
+                    DeviceName = deviceInfo.DeviceName,
+                    Brand = deviceInfo.Brand,
+                    Model = deviceInfo.Model,
+                    Os = deviceInfo.Os,
+                    OsVersion = deviceInfo.OsVersion,
+                    SystemName = deviceInfo.SystemName,
+                    SystemVersion = deviceInfo.SystemVersion,
+                    DeviceType = deviceInfo.DeviceType,
+                    AppVersion = deviceInfo.AppVersion,
+                    TotalMemory = deviceInfo.TotalMemory,
+                    Browser = deviceInfo.Browser,
+                    BrowserVersion = deviceInfo.BrowserVersion,
+                    IsActive = true,
+                    LastSeenAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _deviceSessionRepository.Add(device);
+            }
+            else
+            {
+                device.LastSeenAt = DateTime.UtcNow;
+                device.UpdatedAt = DateTime.UtcNow;
+                device.IsActive = true;
+                _deviceSessionRepository.Update(device);
+            }
+
+            var loginHistory = new TeamContributionManagementSystem.Domain.Entities.DeviceLoginHistory
+            {
+                UserId = user.UserId,
+                DeviceDetail = device,
+                LoginTime = DateTime.UtcNow,
+                IsActive = true
+            };
+            _deviceSessionRepository.AddLoginHistory(loginHistory);
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            sessionId = loginHistory.Id;
+        }
+        else
+        {
+             await _unitOfWork.SaveChangesAsync(cancellationToken); // To save OTP clear if applicable
+        }
+
+        var response = _jwtTokenGenerator.GenerateToken(user, sessionId);
         response.Rights = await _roleRightsService.GetByRoleAsync(user.Role.ToString(), cancellationToken);
+        response.RequiresTwoFactor = false;
         return response;
     }
 

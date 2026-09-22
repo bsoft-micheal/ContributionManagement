@@ -18,7 +18,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         _configuration = configuration;
     }
 
-    public AuthResponseDto GenerateToken(AppUser user)
+    public AuthResponseDto GenerateToken(AppUser user, Guid? sessionId = null)
     {
         var secret = _configuration["Jwt:Secret"]
             ?? throw new InvalidOperationException("JWT secret is not configured.");
@@ -37,6 +37,11 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             new(ClaimTypes.Email, user.Email),
             new(ClaimTypes.Role, user.Role.ToString())
         };
+
+        if (sessionId.HasValue)
+        {
+            claims.Add(new Claim("SessionId", sessionId.Value.ToString()));
+        }
 
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),

@@ -34,6 +34,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ISystemSettingRepository, SystemSettingRepository>();
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
         services.AddScoped<IGalleryRepository, GalleryRepository>();
+        services.AddScoped<IDeviceSessionRepository, DeviceSessionRepository>();
+        services.AddScoped<IUserMfaDeviceRepository, UserMfaDeviceRepository>();
 
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IRoleService, RoleService>();
@@ -44,6 +46,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IBirthdayAutomationService, BirthdayAutomationService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IMfaService, MfaService>();
+        services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<IRoleRightsService, RoleRightsService>();
         services.AddScoped<IExpenseService, ExpenseService>();
