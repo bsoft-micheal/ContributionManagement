@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -9,15 +10,17 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class RoleRightsService : IRoleRightsService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<RoleRightsService> _logger;
     private readonly IRoleRightRepository _roleRightRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public RoleRightsService(
+    public RoleRightsService(Microsoft.Extensions.Logging.ILogger<RoleRightsService> logger, 
         IRoleRightRepository roleRightRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper)
     {
+        _logger = logger;
         _roleRightRepository = roleRightRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
@@ -25,24 +28,42 @@ public class RoleRightsService : IRoleRightsService
 
     public async Task<IReadOnlyCollection<RoleRightDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var rights = await _roleRightRepository.GetAllAsync(cancellationToken);
+        try
+        {
+            var rights = await _roleRightRepository.GetAllAsync(cancellationToken);
         return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<IReadOnlyCollection<RoleRightDto>> GetByRoleAsync(string roleName, CancellationToken cancellationToken = default)
     {
-        if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var role))
+        try
+        {
+            if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var role))
         {
             throw new ArgumentException($"Invalid role: '{roleName}'");
         }
 
         var rights = await _roleRightRepository.GetByRoleAsync(role, cancellationToken);
         return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByRoleAsync");
+            throw;
+        }
     }
 
     public async Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, CancellationToken cancellationToken = default)
     {
-        if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
+        try
+        {
+            if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
         {
             throw new ArgumentException($"Invalid role: '{request.RoleName}'");
         }
@@ -59,5 +80,11 @@ public class RoleRightsService : IRoleRightsService
 
         await _roleRightRepository.SaveRoleRightsAsync(role, entities, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in SaveRoleRightsAsync");
+            throw;
+        }
     }
 }

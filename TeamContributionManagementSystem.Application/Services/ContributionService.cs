@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -8,12 +9,14 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class ContributionService : IContributionService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<ContributionService> _logger;
     private readonly IContributionRepository _contributionRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public ContributionService(IContributionRepository contributionRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public ContributionService(Microsoft.Extensions.Logging.ILogger<ContributionService> logger, IContributionRepository contributionRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
+        _logger = logger;
         _contributionRepository = contributionRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
@@ -21,19 +24,37 @@ public class ContributionService : IContributionService
 
     public async Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var contributions = await _contributionRepository.GetAllAsync(cancellationToken);
+        try
+        {
+            var contributions = await _contributionRepository.GetAllAsync(cancellationToken);
         return _mapper.Map<IReadOnlyCollection<ContributionDto>>(contributions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<IReadOnlyCollection<ContributionDto>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
-        var contributions = await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);
+        try
+        {
+            var contributions = await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);
         return _mapper.Map<IReadOnlyCollection<ContributionDto>>(contributions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByEventIdAsync");
+            throw;
+        }
     }
 
     public async Task<ContributionDto> PayAsync(PayContributionRequestDto request, CancellationToken cancellationToken = default)
     {
-        var contribution = await _contributionRepository.GetByEventAndMemberAsync(request.EventId, request.MemberId, cancellationToken)
+        try
+        {
+            var contribution = await _contributionRepository.GetByEventAndMemberAsync(request.EventId, request.MemberId, cancellationToken)
             ?? throw new KeyNotFoundException("Contribution record not found.");
 
         if (request.Amount.HasValue)
@@ -49,11 +70,19 @@ public class ContributionService : IContributionService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<ContributionDto>(contribution);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in PayAsync");
+            throw;
+        }
     }
 
     public async Task<MemberContributionSummaryDto> GetMySummaryAsync(string userEmail, CancellationToken cancellationToken = default)
     {
-        var contributions = await _contributionRepository.GetByMemberEmailAsync(userEmail, cancellationToken);
+        try
+        {
+            var contributions = await _contributionRepository.GetByMemberEmailAsync(userEmail, cancellationToken);
 
         if (contributions.Count == 0)
         {
@@ -99,5 +128,11 @@ public class ContributionService : IContributionService
             CategoryBreakdown = categoryBreakdown,
             EventBreakdown = eventBreakdown
         };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetMySummaryAsync");
+            throw;
+        }
     }
 }

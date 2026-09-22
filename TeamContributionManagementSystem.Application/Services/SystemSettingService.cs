@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.DTOs.Settings;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -7,18 +8,22 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class SystemSettingService : ISystemSettingService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<SystemSettingService> _logger;
     private readonly ISystemSettingRepository _settingRepository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public SystemSettingService(ISystemSettingRepository settingRepository, IUnitOfWork unitOfWork)
+    public SystemSettingService(Microsoft.Extensions.Logging.ILogger<SystemSettingService> logger, ISystemSettingRepository settingRepository, IUnitOfWork unitOfWork)
     {
+        _logger = logger;
         _settingRepository = settingRepository;
         _unitOfWork = unitOfWork;
     }
 
     public async Task<SystemSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
-        var settings = await _settingRepository.GetAllAsync(cancellationToken);
+        try
+        {
+            var settings = await _settingRepository.GetAllAsync(cancellationToken);
         var map = settings.ToDictionary(x => x.SettingKey, x => x.SettingValue, StringComparer.OrdinalIgnoreCase);
 
         var dto = new SystemSettingsDto();
@@ -55,11 +60,19 @@ public class SystemSettingService : ISystemSettingService
         if (map.TryGetValue("retentionPeriod", out var retentionPeriod)) dto.RetentionPeriod = retentionPeriod;
 
         return dto;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetSettingsAsync");
+            throw;
+        }
     }
 
     public async Task<SystemSettingsDto> UpdateSettingsAsync(SystemSettingsDto settings, string? user = null, CancellationToken cancellationToken = default)
     {
-        var dict = new Dictionary<string, (string Value, string Category)>
+        try
+        {
+            var dict = new Dictionary<string, (string Value, string Category)>
         {
             ["orgName"] = (settings.OrgName, "General"),
             ["defaultCurrency"] = (settings.DefaultCurrency, "General"),
@@ -125,11 +138,25 @@ public class SystemSettingService : ISystemSettingService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await GetSettingsAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in UpdateSettingsAsync");
+            throw;
+        }
     }
 
     public async Task<SystemSettingsDto> ResetSettingsAsync(CancellationToken cancellationToken = default)
     {
-        var defaults = new SystemSettingsDto();
+        try
+        {
+            var defaults = new SystemSettingsDto();
         return await UpdateSettingsAsync(defaults, "System", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in ResetSettingsAsync");
+            throw;
+        }
     }
 }

@@ -1,0 +1,161 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Interfaces.Repositories;
+using TeamContributionManagementSystem.Domain.Entities;
+using TeamContributionManagementSystem.Domain.Enums;
+using TeamContributionManagementSystem.Infrastructure.Persistence;
+
+namespace TeamContributionManagementSystem.Infrastructure.Repositories;
+
+public class ContributionRepository : IContributionRepository
+{
+    private readonly ApplicationDbContext _context;
+    private readonly Microsoft.Extensions.Logging.ILogger<ContributionRepository> _logger;
+
+    public ContributionRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<ContributionRepository> logger)
+    {
+        _context = context;
+        _logger = logger;
+    }
+
+    public async Task<List<Contribution>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Contributions
+            .Include(x => x.Event)
+                .ThenInclude(x => x!.EventType)
+            .Include(x => x.Member)
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.Event!.EventDate)
+            .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
+    }
+
+    public async Task<List<Contribution>> GetByEventIdAsync(Guid eventId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Contributions
+            .Include(x => x.Event)
+            .Include(x => x.Member)
+            .Where(x => x.EventId == eventId && !x.IsDeleted)
+            .OrderBy(x => x.Member!.Name)
+            .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByEventIdAsync");
+            throw;
+        }
+    }
+
+    public async Task<Contribution?> GetByEventAndMemberAsync(Guid eventId, Guid memberId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Contributions
+            .Include(x => x.Event)
+            .Include(x => x.Member)
+            .FirstOrDefaultAsync(x => x.EventId == eventId && x.MemberId == memberId && !x.IsDeleted, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByEventAndMemberAsync");
+            throw;
+        }
+    }
+
+    public async Task<List<Contribution>> GetPendingAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var query = _context.Contributions
+            .Include(x => x.Event)
+            .Include(x => x.Member)
+            .Where(x => !x.IsDeleted && x.PaymentStatus != PaymentStatus.Paid);
+
+        if (month.HasValue)
+        {
+            query = query.Where(x => x.Event != null && x.Event.EventDate.Month == month.Value);
+        }
+
+        if (year.HasValue)
+        {
+            query = query.Where(x => x.Event != null && x.Event.EventDate.Year == year.Value);
+        }
+
+        return await query
+            .OrderBy(x => x.Event!.EventDate)
+            .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetPendingAsync");
+            throw;
+        }
+    }
+
+    public async Task AddRangeAsync(IEnumerable<Contribution> contributions, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _context.Contributions.AddRangeAsync(contributions, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in AddRangeAsync");
+            throw;
+        }
+    }
+
+    public void Update(Contribution contribution)
+    {
+        try
+        {
+            _context.Contributions.Update(contribution);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in Update");
+            throw;
+        }
+    }
+
+    public void DeleteRange(IEnumerable<Contribution> contributions)
+    {
+        try
+        {
+            _context.Contributions.RemoveRange(contributions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteRange");
+            throw;
+        }
+    }
+
+    public async Task<List<Contribution>> GetByMemberEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Contributions
+            .Include(x => x.Event)
+                .ThenInclude(x => x!.EventType)
+            .Include(x => x.Member)
+            .Where(x => !x.IsDeleted && x.Member != null && x.Member.Email == email)
+            .OrderBy(x => x.Event!.EventDate)
+            .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByMemberEmailAsync");
+            throw;
+        }
+    }
+}

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -7,11 +8,13 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class MfaService : IMfaService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<MfaService> _logger;
     private readonly IUserMfaDeviceRepository _mfaDeviceRepository;
     private readonly IUnitOfWork _unitOfWork;
     
-    public MfaService(IUserMfaDeviceRepository mfaDeviceRepository, IUnitOfWork unitOfWork)
+    public MfaService(Microsoft.Extensions.Logging.ILogger<MfaService> logger, IUserMfaDeviceRepository mfaDeviceRepository, IUnitOfWork unitOfWork)
     {
+        _logger = logger;
         _mfaDeviceRepository = mfaDeviceRepository;
         _unitOfWork = unitOfWork;
     }
@@ -28,7 +31,9 @@ public class MfaService : IMfaService
 
     public async Task<bool> VerifyAndSaveMfaDeviceAsync(Guid userId, string secretKey, string deviceLabel, string otp, CancellationToken cancellationToken = default)
     {
-        var base32Bytes = Base32Encoding.ToBytes(secretKey);
+        try
+        {
+            var base32Bytes = Base32Encoding.ToBytes(secretKey);
         var totp = new Totp(base32Bytes);
 
         if (totp.VerifyTotp(otp, out long timeStepMatched, new VerificationWindow(2, 2)))
@@ -47,20 +52,42 @@ public class MfaService : IMfaService
         }
 
         return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in VerifyAndSaveMfaDeviceAsync");
+            throw;
+        }
     }
 
     public async Task<IEnumerable<UserMfaDevice>> GetUserMfaDevicesAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        return await _mfaDeviceRepository.GetByUserIdAsync(userId, cancellationToken);
+        try
+        {
+            return await _mfaDeviceRepository.GetByUserIdAsync(userId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetUserMfaDevicesAsync");
+            throw;
+        }
     }
 
     public async Task RemoveMfaDeviceAsync(Guid userId, Guid deviceId, CancellationToken cancellationToken = default)
     {
-        var device = await _mfaDeviceRepository.GetByIdAsync(userId, deviceId, cancellationToken);
+        try
+        {
+            var device = await _mfaDeviceRepository.GetByIdAsync(userId, deviceId, cancellationToken);
         if (device != null)
         {
             await _mfaDeviceRepository.RemoveAsync(device, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in RemoveMfaDeviceAsync");
+            throw;
         }
     }
 }

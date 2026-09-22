@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -19,52 +20,58 @@ public class SupportTicketsController : ControllerBase
         _ticketService = ticketService;
     }
 
-    [HttpGet]
-    public async Task<ActionResult<IReadOnlyCollection<SupportTicketDto>>> GetAll(
+    [HttpGet("getAllSupportTicketAsync")]
+    [ActionName("GetAllSupportTicketAsync")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<SupportTicketDto>>>> GetAllSupportTicketAsync(
         [FromQuery] string? status,
         [FromQuery] string? ticketType,
         [FromQuery] string? priority,
         CancellationToken cancellationToken)
     {
-        var result = await _ticketService.GetAllAsync(status, ticketType, priority, cancellationToken);
-        return Ok(result);
+        var result = await _ticketService.GetAllSupportTicketAsync(status, ticketType, priority, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<SupportTicketDto>>.SuccessResult(result, CommonMessages.SupportTickets.GetAllSuccess, CommonStatusCodes.Status200OK));
     }
 
-    [HttpGet("{id:guid}")]
-    public async Task<ActionResult<SupportTicketDto>> GetById(Guid id, CancellationToken cancellationToken)
+    [HttpGet("getSupportTicketAsyncById/{id:guid}")]
+    [ActionName("GetSupportTicketAsyncById")]
+    public async Task<ActionResult<ApiResponse<SupportTicketDto>>> GetSupportTicketAsyncById(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _ticketService.GetByIdAsync(id, cancellationToken);
-        return Ok(result);
+        var result = await _ticketService.GetSupportTicketAsyncById(id, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.GetByIdSuccess, CommonStatusCodes.Status200OK));
     }
 
-    [HttpPost]
-    public async Task<ActionResult<SupportTicketDto>> Create([FromBody] CreateSupportTicketRequestDto request, CancellationToken cancellationToken)
+    [HttpPost("saveSupportTicketAsync")]
+    [ActionName("SaveSupportTicketAsync")]
+    public async Task<ActionResult<ApiResponse<SupportTicketDto>>> SaveSupportTicketAsync([FromBody] CreateSupportTicketRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "User";
-        var result = await _ticketService.CreateAsync(request, currentUser, cancellationToken);
-        return CreatedAtAction(nameof(GetById), new { id = result.TicketId }, result);
+        var result = await _ticketService.SaveSupportTicketAsync(request, currentUser, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.SaveSuccess, CommonStatusCodes.Status201Created));
     }
 
-    [HttpPut("{id:guid}")]
-    public async Task<ActionResult<SupportTicketDto>> Update(Guid id, [FromBody] UpdateSupportTicketRequestDto request, CancellationToken cancellationToken)
+    [HttpPut("updateSupportTicketAsyncById/{id:guid}")]
+    [ActionName("UpdateSupportTicketAsyncById")]
+    public async Task<ActionResult<ApiResponse<SupportTicketDto>>> UpdateSupportTicketAsyncById(Guid id, [FromBody] UpdateSupportTicketRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "Admin";
-        var result = await _ticketService.UpdateAsync(id, request, currentUser, cancellationToken);
-        return Ok(result);
+        var result = await _ticketService.UpdateSupportTicketAsyncById(id, request, currentUser, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
 
-    [HttpPost("{id:guid}/reply")]
-    public async Task<ActionResult<SupportTicketDto>> Reply(Guid id, [FromBody] ReplyTicketRequestDto request, CancellationToken cancellationToken)
+    [HttpPost("replySupportTicketAsync/{id:guid}")]
+    [ActionName("ReplySupportTicketAsync")]
+    public async Task<ActionResult<ApiResponse<SupportTicketDto>>> ReplySupportTicketAsync(Guid id, [FromBody] ReplyTicketRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "Admin";
-        var result = await _ticketService.ReplyAsync(id, request, currentUser, cancellationToken);
-        return Ok(result);
+        var result = await _ticketService.ReplySupportTicketAsync(id, request, currentUser, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.ReplySuccess, CommonStatusCodes.Status200OK));
     }
 
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    [HttpDelete("deleteSupportTicketAsyncById/{id:guid}")]
+    [ActionName("DeleteSupportTicketAsyncById")]
+    public async Task<ActionResult<ApiResponse>> DeleteSupportTicketAsyncById(Guid id, CancellationToken cancellationToken)
     {
-        await _ticketService.DeleteAsync(id, cancellationToken);
-        return NoContent();
+        await _ticketService.DeleteSupportTicketAsyncById(id, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.SupportTickets.DeleteSuccess, CommonStatusCodes.Status200OK));
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
 
@@ -25,13 +26,14 @@ public class AuthController : ControllerBase
     /// </summary>
     /// <param name="request">The login credentials.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An AuthResponseDto containing the JWT token, or a requiresTwoFactor flag.</returns>
+    /// <returns>An ApiResponse containing AuthResponseDto.</returns>
     [AllowAnonymous]
-    [HttpPost("login")]
-    public async Task<ActionResult<AuthResponseDto>> Login([FromBody] LoginRequestDto request, CancellationToken cancellationToken)
+    [HttpPost("loginAsync")]
+    [ActionName("LoginAsync")]
+    public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginAsync([FromBody] LoginRequestDto request, CancellationToken cancellationToken)
     {
         var response = await _authService.LoginAsync(request, cancellationToken);
-        return Ok(response);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<AuthResponseDto>.SuccessResult(response, CommonMessages.Auth.LoginSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
@@ -39,13 +41,14 @@ public class AuthController : ControllerBase
     /// </summary>
     /// <param name="request">The email and the 6-digit OTP code.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An AuthResponseDto containing the JWT token upon successful verification.</returns>
+    /// <returns>An ApiResponse containing AuthResponseDto upon successful verification.</returns>
     [AllowAnonymous]
-    [HttpPost("verify-2fa")]
-    public async Task<ActionResult<AuthResponseDto>> VerifyTwoFactor([FromBody] VerifyTwoFactorRequestDto request, CancellationToken cancellationToken)
+    [HttpPost("verify-2faAsync")]
+    [ActionName("VerifyTwoFactorAsync")]
+    public async Task<ActionResult<ApiResponse<AuthResponseDto>>> VerifyTwoFactorAsync([FromBody] VerifyTwoFactorRequestDto request, CancellationToken cancellationToken)
     {
         var response = await _authService.VerifyTwoFactorAsync(request, cancellationToken);
-        return Ok(response);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<AuthResponseDto>.SuccessResult(response, CommonMessages.Auth.VerifyTwoFactorSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
@@ -54,11 +57,12 @@ public class AuthController : ControllerBase
     /// <param name="request">The user's registered email address.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
-    [HttpPost("forgot-password/request")]
-    public async Task<IActionResult> RequestForgotPasswordOtp([FromBody] ForgotPasswordRequestDto request, CancellationToken cancellationToken)
+    [HttpPost("forgot-password/requestAsync")]
+    [ActionName("RequestForgotPasswordOtpAsync")]
+    public async Task<ActionResult<ApiResponse>> RequestForgotPasswordOtpAsync([FromBody] ForgotPasswordRequestDto request, CancellationToken cancellationToken)
     {
         await _authService.RequestPasswordResetOtpAsync(request, cancellationToken);
-        return Ok(new { message = "If the email is registered, a password reset OTP has been sent." });
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Auth.ForgotPasswordOtpSentSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
@@ -67,15 +71,16 @@ public class AuthController : ControllerBase
     /// <param name="request">The email and the OTP received.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
-    [HttpPost("forgot-password/verify")]
-    public async Task<IActionResult> VerifyForgotPasswordOtp([FromBody] VerifyOtpRequestDto request, CancellationToken cancellationToken)
+    [HttpPost("forgot-password/verifyAsync")]
+    [ActionName("VerifyForgotPasswordOtpAsync")]
+    public async Task<ActionResult<ApiResponse>> VerifyForgotPasswordOtpAsync([FromBody] VerifyOtpRequestDto request, CancellationToken cancellationToken)
     {
         var isValid = await _authService.VerifyPasswordResetOtpAsync(request, cancellationToken);
         if (!isValid)
         {
-            return BadRequest(new { message = "Invalid or expired password reset OTP." });
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse.FailureResult("Invalid or expired password reset OTP.", CommonStatusCodes.Status400BadRequest));
         }
-        return Ok(new { message = "OTP verified successfully." });
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Auth.ForgotPasswordOtpVerifiedSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
@@ -84,10 +89,11 @@ public class AuthController : ControllerBase
     /// <param name="request">The email, OTP, and the new password.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
-    [HttpPost("forgot-password/reset")]
-    public async Task<IActionResult> ResetPasswordWithOtp([FromBody] ResetPasswordRequestDto request, CancellationToken cancellationToken)
+    [HttpPost("forgot-password/resetAsync")]
+    [ActionName("ResetPasswordWithOtpAsync")]
+    public async Task<ActionResult<ApiResponse>> ResetPasswordWithOtpAsync([FromBody] ResetPasswordRequestDto request, CancellationToken cancellationToken)
     {
         await _authService.ResetPasswordWithOtpAsync(request, cancellationToken);
-        return Ok(new { message = "Your password has been successfully reset. Please log in with your new credentials." });
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Auth.PasswordResetSuccess, CommonStatusCodes.Status200OK));
     }
 }

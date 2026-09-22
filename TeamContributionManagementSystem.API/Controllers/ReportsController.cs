@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -26,7 +27,12 @@ public class ReportsController : ControllerBase
     /// </summary>
     /// <param name="month">Optional month filter.</param>
     /// <param name="year">Optional year filter.</param>
-    [HttpGet("summary")]
-    public async Task<ActionResult<ReportsSummaryDto>> GetSummary([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
-        => Ok(await _reportService.GetSummaryAsync(month, year, cancellationToken));
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("getSummaryReportAsync")]
+    [ActionName("GetSummaryReportAsync")]
+    public async Task<ActionResult<ApiResponse<ReportsSummaryDto>>> GetSummaryReportAsync([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
+    {
+        var result = await _reportService.GetSummaryReportAsync(month, year, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<ReportsSummaryDto>.SuccessResult(result, CommonMessages.Reports.GetSummarySuccess, CommonStatusCodes.Status200OK));
+    }
 }

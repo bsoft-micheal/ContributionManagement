@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Dashboard;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -24,7 +25,12 @@ public class DashboardController : ControllerBase
     /// </summary>
     /// <param name="month">Optional month filter.</param>
     /// <param name="year">Optional year filter.</param>
-    [HttpGet("summary")]
-    public async Task<ActionResult<DashboardSummaryDto>> GetSummary([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
-        => Ok(await _dashboardService.GetSummaryAsync(month, year, cancellationToken));
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("getSummaryDashboardAsync")]
+    [ActionName("GetSummaryDashboardAsync")]
+    public async Task<ActionResult<ApiResponse<DashboardSummaryDto>>> GetSummaryDashboardAsync([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
+    {
+        var result = await _dashboardService.GetSummaryDashboardAsync(month, year, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<DashboardSummaryDto>.SuccessResult(result, CommonMessages.Dashboard.GetSummarySuccess, CommonStatusCodes.Status200OK));
+    }
 }

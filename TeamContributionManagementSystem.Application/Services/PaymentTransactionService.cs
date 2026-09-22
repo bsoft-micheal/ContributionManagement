@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -8,12 +9,14 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class PaymentTransactionService : IPaymentTransactionService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<PaymentTransactionService> _logger;
     private readonly IPaymentTransactionRepository _transactionRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public PaymentTransactionService(IPaymentTransactionRepository transactionRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public PaymentTransactionService(Microsoft.Extensions.Logging.ILogger<PaymentTransactionService> logger, IPaymentTransactionRepository transactionRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
+        _logger = logger;
         _transactionRepository = transactionRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
@@ -21,20 +24,38 @@ public class PaymentTransactionService : IPaymentTransactionService
 
     public async Task<IReadOnlyCollection<PaymentTransactionDto>> GetAllAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
     {
-        var list = await _transactionRepository.GetAllAsync(eventName, mode, status, startDate, endDate, cancellationToken);
+        try
+        {
+            var list = await _transactionRepository.GetAllAsync(eventName, mode, status, startDate, endDate, cancellationToken);
         return _mapper.Map<IReadOnlyCollection<PaymentTransactionDto>>(list);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetAllAsync");
+            throw;
+        }
     }
 
     public async Task<PaymentTransactionDto> GetByIdAsync(Guid transactionId, CancellationToken cancellationToken = default)
     {
-        var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
+        try
+        {
+            var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
             ?? throw new KeyNotFoundException($"Payment transaction with ID {transactionId} not found.");
         return _mapper.Map<PaymentTransactionDto>(entity);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByIdAsync");
+            throw;
+        }
     }
 
     public async Task<PaymentTransactionDto> CreateAsync(CreatePaymentTransactionRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
-        var all = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
+        try
+        {
+            var all = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
         var nextNum = 1250 + all.Count + 1;
         var txnNumber = $"TXN{nextNum:D6}";
 
@@ -67,11 +88,19 @@ public class PaymentTransactionService : IPaymentTransactionService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<PaymentTransactionDto>(entity);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CreateAsync");
+            throw;
+        }
     }
 
     public async Task<PaymentTransactionDto> VerifyAsync(Guid transactionId, VerifyPaymentRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
-        var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
+        try
+        {
+            var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
             ?? throw new KeyNotFoundException($"Payment transaction with ID {transactionId} not found.");
 
         entity.Status = request.Status.Trim();
@@ -90,14 +119,28 @@ public class PaymentTransactionService : IPaymentTransactionService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<PaymentTransactionDto>(entity);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in VerifyAsync");
+            throw;
+        }
     }
 
     public async Task DeleteAsync(Guid transactionId, CancellationToken cancellationToken = default)
     {
-        var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
+        try
+        {
+            var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
             ?? throw new KeyNotFoundException($"Payment transaction with ID {transactionId} not found.");
 
         _transactionRepository.Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in DeleteAsync");
+            throw;
+        }
     }
 }

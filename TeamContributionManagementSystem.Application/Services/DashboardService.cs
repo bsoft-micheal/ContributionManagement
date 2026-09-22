@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.DTOs.Dashboard;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -7,18 +8,22 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class DashboardService : IDashboardService
 {
+    private readonly Microsoft.Extensions.Logging.ILogger<DashboardService> _logger;
     private readonly IEventRepository _eventRepository;
     private readonly IContributionRepository _contributionRepository;
 
-    public DashboardService(IEventRepository eventRepository, IContributionRepository contributionRepository)
+    public DashboardService(Microsoft.Extensions.Logging.ILogger<DashboardService> logger, IEventRepository eventRepository, IContributionRepository contributionRepository)
     {
+        _logger = logger;
         _eventRepository = eventRepository;
         _contributionRepository = contributionRepository;
     }
 
     public async Task<DashboardSummaryDto> GetSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
     {
-        int? filterMonth = (month == 0 || month == null) ? null : month;
+        try
+        {
+            int? filterMonth = (month == 0 || month == null) ? null : month;
         int? filterYear = (year == 0 || year == null) ? null : year;
 
         var monthlyEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
@@ -48,5 +53,11 @@ public class DashboardService : IDashboardService
                 TotalContributionsCount = x.Contributions.Count(c => !c.IsDeleted)
             }).ToList()
         };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetSummaryAsync");
+            throw;
+        }
     }
 }
