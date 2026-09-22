@@ -171,7 +171,6 @@ public class EventRepository : IEventRepository
         => await _context.Events
             .Include(x => x.EventType)
             .AnyAsync(x =>
-                !x.IsDeleted &&
                 x.EventType != null &&
                 x.EventType.EventTypeName == "Birthday" &&
                 x.EventDate.Month == month &&
@@ -368,5 +367,234 @@ public class RoleRightRepository : IRoleRightRepository
         {
             _context.RoleRights.RemoveRange(toDelete);
         }
+    }
+}
+
+public class ExpenseRepository : IExpenseRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public ExpenseRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<Expense>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
+    {
+        var query = _context.Expenses.Where(x => !x.IsDeleted).AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(eventName) && eventName != "ALL")
+        {
+            query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
+        }
+
+        if (!string.IsNullOrWhiteSpace(category) && category != "ALL")
+        {
+            query = query.Where(x => x.Category.ToLower() == category.ToLower());
+        }
+
+        if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+        {
+            query = query.Where(x => x.Status.ToLower() == status.ToLower());
+        }
+
+        if (startDate.HasValue)
+        {
+            query = query.Where(x => x.ExpenseDate >= startDate.Value);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(x => x.ExpenseDate <= endDate.Value);
+        }
+
+        return await query.OrderByDescending(x => x.ExpenseDate).ToListAsync(cancellationToken);
+    }
+
+    public async Task<Expense?> GetByIdAsync(Guid expenseId, CancellationToken cancellationToken = default)
+        => await _context.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == expenseId && !x.IsDeleted, cancellationToken);
+
+    public async Task AddAsync(Expense expense, CancellationToken cancellationToken = default)
+        => await _context.Expenses.AddAsync(expense, cancellationToken);
+
+    public void Update(Expense expense)
+        => _context.Expenses.Update(expense);
+
+    public void Delete(Expense expense)
+    {
+        expense.IsDeleted = true;
+        expense.ModifiedOn = DateTime.UtcNow;
+        _context.Expenses.Update(expense);
+    }
+}
+
+public class SupportTicketRepository : ISupportTicketRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public SupportTicketRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<SupportTicket>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default)
+    {
+        var query = _context.SupportTickets.Where(x => !x.IsDeleted).AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+        {
+            query = query.Where(x => x.Status.ToLower() == status.ToLower());
+        }
+
+        if (!string.IsNullOrWhiteSpace(ticketType) && ticketType != "ALL")
+        {
+            query = query.Where(x => x.TicketType.ToLower() == ticketType.ToLower());
+        }
+
+        if (!string.IsNullOrWhiteSpace(priority) && priority != "ALL")
+        {
+            query = query.Where(x => x.Priority.ToLower() == priority.ToLower());
+        }
+
+        return await query.OrderByDescending(x => x.CreatedOn).ToListAsync(cancellationToken);
+    }
+
+    public async Task<SupportTicket?> GetByIdAsync(Guid ticketId, CancellationToken cancellationToken = default)
+        => await _context.SupportTickets.FirstOrDefaultAsync(x => x.TicketId == ticketId && !x.IsDeleted, cancellationToken);
+
+    public async Task<SupportTicket?> GetByTicketNoAsync(string ticketNo, CancellationToken cancellationToken = default)
+        => await _context.SupportTickets.FirstOrDefaultAsync(x => x.TicketNo.ToLower() == ticketNo.ToLower() && !x.IsDeleted, cancellationToken);
+
+    public async Task AddAsync(SupportTicket ticket, CancellationToken cancellationToken = default)
+        => await _context.SupportTickets.AddAsync(ticket, cancellationToken);
+
+    public void Update(SupportTicket ticket)
+        => _context.SupportTickets.Update(ticket);
+
+    public void Delete(SupportTicket ticket)
+    {
+        ticket.IsDeleted = true;
+        ticket.ModifiedOn = DateTime.UtcNow;
+        _context.SupportTickets.Update(ticket);
+    }
+}
+
+public class SystemSettingRepository : ISystemSettingRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public SystemSettingRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<SystemSetting>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.SystemSettings.Where(x => !x.IsDeleted).ToListAsync(cancellationToken);
+
+    public async Task<SystemSetting?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
+        => await _context.SystemSettings.FirstOrDefaultAsync(x => x.SettingKey.ToLower() == key.ToLower() && !x.IsDeleted, cancellationToken);
+
+    public async Task AddRangeAsync(IEnumerable<SystemSetting> settings, CancellationToken cancellationToken = default)
+        => await _context.SystemSettings.AddRangeAsync(settings, cancellationToken);
+
+    public void Update(SystemSetting setting)
+        => _context.SystemSettings.Update(setting);
+}
+
+public class PaymentTransactionRepository : IPaymentTransactionRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public PaymentTransactionRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<PaymentTransaction>> GetAllAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
+    {
+        var query = _context.PaymentTransactions.Where(x => !x.IsDeleted).AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(eventName) && eventName != "ALL")
+        {
+            query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
+        }
+
+        if (!string.IsNullOrWhiteSpace(mode) && mode != "ALL")
+        {
+            query = query.Where(x => x.PaymentMode.ToLower() == mode.ToLower());
+        }
+
+        if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+        {
+            query = query.Where(x => x.Status.ToLower() == status.ToLower());
+        }
+
+        if (startDate.HasValue)
+        {
+            query = query.Where(x => x.PaymentDate >= startDate.Value);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(x => x.PaymentDate <= endDate.Value);
+        }
+
+        return await query.OrderByDescending(x => x.PaymentDate).ToListAsync(cancellationToken);
+    }
+
+    public async Task<PaymentTransaction?> GetByIdAsync(Guid transactionId, CancellationToken cancellationToken = default)
+        => await _context.PaymentTransactions.FirstOrDefaultAsync(x => x.TransactionId == transactionId && !x.IsDeleted, cancellationToken);
+
+    public async Task AddAsync(PaymentTransaction transaction, CancellationToken cancellationToken = default)
+        => await _context.PaymentTransactions.AddAsync(transaction, cancellationToken);
+
+    public void Update(PaymentTransaction transaction)
+        => _context.PaymentTransactions.Update(transaction);
+
+    public void Delete(PaymentTransaction transaction)
+    {
+        transaction.IsDeleted = true;
+        transaction.ModifiedOn = DateTime.UtcNow;
+        _context.PaymentTransactions.Update(transaction);
+    }
+}
+
+public class GalleryRepository : IGalleryRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public GalleryRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<GalleryPhoto>> GetAllAsync(string? eventName = null, string? category = null, CancellationToken cancellationToken = default)
+    {
+        var query = _context.GalleryPhotos.Where(x => !x.IsDeleted).AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(eventName) && eventName != "ALL")
+        {
+            query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
+        }
+
+        if (!string.IsNullOrWhiteSpace(category) && category != "ALL")
+        {
+            query = query.Where(x => x.Category.ToLower() == category.ToLower());
+        }
+
+        return await query.OrderByDescending(x => x.TakenDate).ToListAsync(cancellationToken);
+    }
+
+    public async Task<GalleryPhoto?> GetByIdAsync(Guid photoId, CancellationToken cancellationToken = default)
+        => await _context.GalleryPhotos.FirstOrDefaultAsync(x => x.PhotoId == photoId && !x.IsDeleted, cancellationToken);
+
+    public async Task AddAsync(GalleryPhoto photo, CancellationToken cancellationToken = default)
+        => await _context.GalleryPhotos.AddAsync(photo, cancellationToken);
+
+    public void Delete(GalleryPhoto photo)
+    {
+        photo.IsDeleted = true;
+        photo.ModifiedOn = DateTime.UtcNow;
+        _context.GalleryPhotos.Update(photo);
     }
 }

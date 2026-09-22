@@ -125,7 +125,20 @@ public class EmailService : IEmailService
                 var directoryPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "SentEmails");
                 Directory.CreateDirectory(directoryPath);
                 var filePath = Path.Combine(directoryPath, $"{DateTime.UtcNow:yyyyMMddHHmmss}_{toEmail}.html");
-                await File.WriteAllTextAsync(filePath, body, cancellationToken);
+
+                // Replace cid: references with base64 data URIs for local browser preview
+                string localBody = body;
+                foreach (var img in inlineImageList)
+                {
+                    if (File.Exists(img.FilePath))
+                    {
+                        var mType = string.IsNullOrWhiteSpace(img.MediaType) ? "image/png" : img.MediaType;
+                        var b64 = Convert.ToBase64String(File.ReadAllBytes(img.FilePath));
+                        localBody = localBody.Replace($"cid:{img.ContentId}", $"data:{mType};base64,{b64}");
+                    }
+                }
+
+                await File.WriteAllTextAsync(filePath, localBody, cancellationToken);
                 _logger.LogInformation("Email mock saved to local file: {FilePath}", filePath);
             }
             catch (Exception ex)
@@ -141,9 +154,7 @@ public class EmailService : IEmailService
             using var mailMessage = new MailMessage
             {
                 From = new MailAddress(fromAddress, fromName),
-                Subject = subject,
-                Body = body,
-                IsBodyHtml = true
+                Subject = subject
             };
             mailMessage.To.Add(toEmail);
 
@@ -159,17 +170,23 @@ public class EmailService : IEmailService
                         continue;
                     }
 
-                    var mediaType = string.IsNullOrWhiteSpace(image.MediaType) ? MediaTypeNames.Image.Jpeg : image.MediaType;
+                    var mediaType = string.IsNullOrWhiteSpace(image.MediaType) ? "image/png" : image.MediaType;
                     var linkedResource = new LinkedResource(image.FilePath, mediaType)
                     {
                         ContentId = image.ContentId,
                         TransferEncoding = TransferEncoding.Base64
                     };
                     linkedResource.ContentType.Name = Path.GetFileName(image.FilePath);
+                    linkedResource.ContentType.MediaType = mediaType;
                     alternateView.LinkedResources.Add(linkedResource);
                 }
 
                 mailMessage.AlternateViews.Add(alternateView);
+            }
+            else
+            {
+                mailMessage.Body = body;
+                mailMessage.IsBodyHtml = true;
             }
 
             using var smtpClient = new SmtpClient(host, port)
