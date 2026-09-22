@@ -32,8 +32,15 @@ public class AuthController : ControllerBase
     [ActionName("LoginAsync")]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginAsync([FromBody] LoginRequestDto request, CancellationToken cancellationToken)
     {
-        var response = await _authService.LoginAsync(request, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<AuthResponseDto>.SuccessResult(response, CommonMessages.Auth.LoginSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var response = await _authService.LoginAsync(request, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<AuthResponseDto>.SuccessResult(response, CommonMessages.Auth.LoginSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<AuthResponseDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
+        }
     }
 
     /// <summary>
@@ -47,8 +54,15 @@ public class AuthController : ControllerBase
     [ActionName("VerifyTwoFactorAsync")]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> VerifyTwoFactorAsync([FromBody] VerifyTwoFactorRequestDto request, CancellationToken cancellationToken)
     {
-        var response = await _authService.VerifyTwoFactorAsync(request, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<AuthResponseDto>.SuccessResult(response, CommonMessages.Auth.VerifyTwoFactorSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var response = await _authService.VerifyTwoFactorAsync(request, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<AuthResponseDto>.SuccessResult(response, CommonMessages.Auth.VerifyTwoFactorSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<AuthResponseDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
+        }
     }
 
     /// <summary>

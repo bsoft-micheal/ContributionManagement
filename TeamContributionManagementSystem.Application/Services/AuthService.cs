@@ -41,9 +41,14 @@ public class AuthService : IAuthService
         try
         {
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-        if (user is null || !user.IsActive || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+        if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
             throw new InvalidOperationException("Invalid email or password");
+        }
+
+        if (!user.IsActive)
+        {
+            throw new InvalidOperationException("This user account is deactivated. Please contact an administrator.");
         }
 
         if (user.MfaDevices != null && user.MfaDevices.Any())
@@ -69,9 +74,14 @@ public class AuthService : IAuthService
         try
         {
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-        if (user is null || !user.IsActive)
+        if (user is null)
         {
             throw new InvalidOperationException("Invalid user.");
+        }
+
+        if (!user.IsActive)
+        {
+            throw new InvalidOperationException("This user account is deactivated. Please contact an administrator.");
         }
 
         if (user.MfaDevices == null || !user.MfaDevices.Any())

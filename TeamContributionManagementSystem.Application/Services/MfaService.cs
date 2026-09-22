@@ -33,6 +33,12 @@ public class MfaService : IMfaService
     {
         try
         {
+            var existingDevices = await _mfaDeviceRepository.GetByUserIdAsync(userId, cancellationToken);
+            if (existingDevices.Any())
+            {
+                throw new InvalidOperationException("A user can only configure one MFA device. Please remove the existing device first.");
+            }
+
             var base32Bytes = Base32Encoding.ToBytes(secretKey);
         var totp = new Totp(base32Bytes);
 
