@@ -132,7 +132,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddHostedService<BirthdayEventHostedService>();
+// Disabled automatic background birthday event generation so deleted events are not continuously recreated
+// builder.Services.AddHostedService<BirthdayEventHostedService>();
 
 var app = builder.Build();
 

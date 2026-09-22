@@ -29,6 +29,11 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IContributionRepository, ContributionRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRoleRightRepository, RoleRightRepository>();
+        services.AddScoped<IExpenseRepository, ExpenseRepository>();
+        services.AddScoped<ISupportTicketRepository, SupportTicketRepository>();
+        services.AddScoped<ISystemSettingRepository, SystemSettingRepository>();
+        services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddScoped<IGalleryRepository, GalleryRepository>();
         services.AddScoped<IDeviceSessionRepository, DeviceSessionRepository>();
         services.AddScoped<IUserMfaDeviceRepository, UserMfaDeviceRepository>();
 
@@ -45,13 +50,18 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<IRoleRightsService, RoleRightsService>();
+        services.AddScoped<IExpenseService, ExpenseService>();
+        services.AddScoped<ISupportTicketService, SupportTicketService>();
+        services.AddScoped<ISystemSettingService, SystemSettingService>();
+        services.AddScoped<IPaymentTransactionService, PaymentTransactionService>();
+        services.AddScoped<IGalleryService, GalleryService>();
 
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<ApplicationDbContextSeeder>();
 
-        services.AddAutoMapper(cfg => {}, typeof(MappingProfile));
+        services.AddAutoMapper(cfg => { }, typeof(MappingProfile));
 
         return services;
     }

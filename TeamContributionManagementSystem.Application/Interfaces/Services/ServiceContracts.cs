@@ -2,9 +2,14 @@ using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.DTOs.Dashboard;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.EventTypes;
+using TeamContributionManagementSystem.Application.DTOs.Expenses;
+using TeamContributionManagementSystem.Application.DTOs.Gallery;
 using TeamContributionManagementSystem.Application.DTOs.Members;
+using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
+using TeamContributionManagementSystem.Application.DTOs.Settings;
+using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 
 namespace TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -92,3 +97,46 @@ public interface IEmailService
 }
 
 public sealed record InlineEmailImage(string ContentId, string FilePath, string? MediaType = null);
+
+public interface IExpenseService
+{
+    Task<IReadOnlyCollection<ExpenseDto>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default);
+    Task<ExpenseDto> GetByIdAsync(Guid expenseId, CancellationToken cancellationToken = default);
+    Task<ExpenseDto> CreateAsync(CreateExpenseRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+    Task<ExpenseDto> UpdateAsync(Guid expenseId, UpdateExpenseRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid expenseId, CancellationToken cancellationToken = default);
+}
+
+public interface ISupportTicketService
+{
+    Task<IReadOnlyCollection<SupportTicketDto>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default);
+    Task<SupportTicketDto> GetByIdAsync(Guid ticketId, CancellationToken cancellationToken = default);
+    Task<SupportTicketDto> CreateAsync(CreateSupportTicketRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+    Task<SupportTicketDto> UpdateAsync(Guid ticketId, UpdateSupportTicketRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+    Task<SupportTicketDto> ReplyAsync(Guid ticketId, ReplyTicketRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid ticketId, CancellationToken cancellationToken = default);
+}
+
+public interface ISystemSettingService
+{
+    Task<SystemSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default);
+    Task<SystemSettingsDto> UpdateSettingsAsync(SystemSettingsDto settings, string? user = null, CancellationToken cancellationToken = default);
+    Task<SystemSettingsDto> ResetSettingsAsync(CancellationToken cancellationToken = default);
+}
+
+public interface IPaymentTransactionService
+{
+    Task<IReadOnlyCollection<PaymentTransactionDto>> GetAllAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default);
+    Task<PaymentTransactionDto> GetByIdAsync(Guid transactionId, CancellationToken cancellationToken = default);
+    Task<PaymentTransactionDto> CreateAsync(CreatePaymentTransactionRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+    Task<PaymentTransactionDto> VerifyAsync(Guid transactionId, VerifyPaymentRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid transactionId, CancellationToken cancellationToken = default);
+}
+
+public interface IGalleryService
+{
+    Task<IReadOnlyCollection<GalleryPhotoDto>> GetAllAsync(string? eventName = null, string? category = null, CancellationToken cancellationToken = default);
+    Task<GalleryPhotoDto> CreateAsync(CreateGalleryPhotoRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid photoId, CancellationToken cancellationToken = default);
+}
+

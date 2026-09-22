@@ -20,6 +20,11 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<Contribution> Contributions => Set<Contribution>();
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RoleRight> RoleRights => Set<RoleRight>();
+    public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+    public DbSet<GalleryPhoto> GalleryPhotos => Set<GalleryPhoto>();
     public DbSet<DeviceDetail> DeviceDetails => Set<DeviceDetail>();
     public DbSet<DeviceLoginHistory> DeviceLoginHistories => Set<DeviceLoginHistory>();
     public DbSet<UserMfaDevice> UserMfaDevices => Set<UserMfaDevice>();
@@ -42,6 +47,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.Phone).HasMaxLength(20).IsRequired();
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => new { x.RoleId, x.IsActive });
+            entity.Property(x => x.MemberType).HasMaxLength(20).HasDefaultValue("Office");
             entity.HasOne(x => x.Role)
                 .WithMany(x => x.Members)
                 .HasForeignKey(x => x.RoleId)
@@ -132,6 +138,89 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .WithMany(x => x.Contributions)
                 .HasForeignKey(x => x.MemberId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Expense>(entity =>
+        {
+            entity.HasKey(x => x.ExpenseId);
+            entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Category).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(12, 2);
+            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.SubmittedBy).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.ApprovedBy).HasMaxLength(150);
+            entity.Property(x => x.Description).HasMaxLength(1000);
+            entity.Property(x => x.FileName).HasMaxLength(500);
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => new { x.ExpenseDate, x.Status });
+        });
+
+        modelBuilder.Entity<SupportTicket>(entity =>
+        {
+            entity.HasKey(x => x.TicketId);
+            entity.Property(x => x.TicketNo).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.MemberName).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.MemberId).HasMaxLength(100);
+            entity.Property(x => x.RelatedEvent).HasMaxLength(200);
+            entity.Property(x => x.TicketType).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Subject).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Priority).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.AssignedTo).HasMaxLength(150);
+            entity.Property(x => x.RefNo).HasMaxLength(100);
+            entity.Property(x => x.Utr).HasMaxLength(100);
+            entity.Property(x => x.Attachment).HasMaxLength(500);
+            entity.Property(x => x.ResolutionNotes).HasMaxLength(2000);
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.TicketNo).IsUnique();
+            entity.HasIndex(x => new { x.Status, x.Priority });
+        });
+
+        modelBuilder.Entity<SystemSetting>(entity =>
+        {
+            entity.HasKey(x => x.SettingId);
+            entity.Property(x => x.SettingKey).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.SettingValue).IsRequired();
+            entity.Property(x => x.Category).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(500);
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.SettingKey).IsUnique();
+        });
+
+        modelBuilder.Entity<PaymentTransaction>(entity =>
+        {
+            entity.HasKey(x => x.TransactionId);
+            entity.Property(x => x.TxnNumber).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.MemberName).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(12, 2);
+            entity.Property(x => x.PaymentMode).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Utr).HasMaxLength(100);
+            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.VerifiedBy).HasMaxLength(150);
+            entity.Property(x => x.Notes).HasMaxLength(1000);
+            entity.Property(x => x.Screenshot).HasMaxLength(500);
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.TxnNumber).IsUnique();
+            entity.HasIndex(x => new { x.PaymentDate, x.Status });
+        });
+
+        modelBuilder.Entity<GalleryPhoto>(entity =>
+        {
+            entity.HasKey(x => x.PhotoId);
+            entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Category).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.ImageUrl).HasColumnType("text").IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(1000);
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => new { x.EventName, x.Category });
         });
 
         modelBuilder.Entity<DeviceDetail>(entity =>

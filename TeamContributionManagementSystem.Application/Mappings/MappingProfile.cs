@@ -2,8 +2,13 @@ using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.EventTypes;
+using TeamContributionManagementSystem.Application.DTOs.Expenses;
+using TeamContributionManagementSystem.Application.DTOs.Gallery;
 using TeamContributionManagementSystem.Application.DTOs.Members;
+using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
+using TeamContributionManagementSystem.Application.DTOs.Settings;
+using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -38,14 +43,20 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.EventTypeName, opt => opt.MapFrom(src => src.EventType != null ? src.EventType.EventTypeName : string.Empty))
             .ForMember(dest => dest.ParticipantCount, opt => opt.MapFrom(src => src.Participants.Count))
             .ForMember(dest => dest.TotalExpectedAmount, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted).Sum(x => x.Amount)))
-            .ForMember(dest => dest.TotalPaidAmount, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted && x.PaymentStatus == PaymentStatus.Paid).Sum(x => x.Amount)));
+            .ForMember(dest => dest.TotalPaidAmount, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted && x.PaymentStatus == PaymentStatus.Paid).Sum(x => x.Amount)))
+            .ForMember(dest => dest.Participants, opt => opt.MapFrom(src => src.Participants));
 
         CreateMap<Event, EventDetailsDto>()
             .IncludeBase<Event, EventSummaryDto>()
             .ForMember(dest => dest.CreatedByName, opt => opt.MapFrom(src => src.CreatedByUser != null ? src.CreatedByUser.FullName : string.Empty))
-            .ForMember(dest => dest.Participants, opt => opt.MapFrom(src => src.Participants))
             .ForMember(dest => dest.Contributions, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted)));
 
         CreateMap<RoleRight, RoleRightDto>().ReverseMap();
+
+        CreateMap<Expense, ExpenseDto>();
+        CreateMap<SupportTicket, SupportTicketDto>();
+        CreateMap<SystemSetting, SettingItemDto>();
+        CreateMap<PaymentTransaction, PaymentTransactionDto>();
+        CreateMap<GalleryPhoto, GalleryPhotoDto>();
     }
 }
