@@ -409,7 +409,10 @@ public class EventService : IEventService
                                 ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
                                 : $"Rs.{baseAmount:F2}";
 
-                            var hasInlineScanner = !string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath);
+                            var memberContributionAmount = contributor.ContributionAmount;
+                            var upiPaymentUri = $"upi://pay?pa={upiId}&pn={Uri.EscapeDataString(upiReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString("Contribution for " + eventName)}";
+                            var memberQrCodeUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data={Uri.EscapeDataString(upiPaymentUri)}";
+                            var hasInlineScanner = false;
 
                             var emailBody = $@"
 <!DOCTYPE html>
@@ -557,19 +560,23 @@ public class EventService : IEventService
                 </div>
             </div>
 
-            <!-- Scanner & UPI Payment Card -->
-            <div class=""payment-card"" style=""background: #ffffff; border: 1.5px solid #ede9fe; border-radius: 14px; padding: 18px; margin: 20px 0; text-align: center; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08);"">
+            <!-- Dynamic UPI QR Scanner Card -->
+            <div class=""payment-card"" style=""background: #ffffff; border: 1.5px solid #ede9fe; border-radius: 14px; padding: 20px; margin: 22px 0; text-align: center; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08);"">
                 <div style=""font-family: 'Outfit', 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #4338ca; margin-bottom: 12px; letter-spacing: 0.5px; text-transform: uppercase;"">
-                    Scan to Pay Contribution
+                    Scan QR Code to Pay via UPI
                 </div>
                 <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"">
                     <tr>
-                        <td align=""center"" style=""padding: 0 0 12px 0;"">
-                            <img src=""{(hasInlineScanner ? "cid:gpay-banner" : qrImageUrl)}"" alt=""UPI Scanner - {upiReceiverName}"" class=""gpay-image"" style=""display:block;width:100%;max-width:300px;height:auto;margin:0 auto;border-radius:12px;border:1px solid #e0e7ff;"" />
+                        <td align=""center"" style=""padding: 0 0 14px 0;"">
+                            <div style=""display: inline-block; padding: 12px; background: #ffffff; border: 2px solid #7c3aed; border-radius: 12px; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.12);"">
+                                <a href=""{upiPaymentUri}"" style=""text-decoration: none; display: block;"">
+                                    <img src=""{memberQrCodeUrl}"" alt=""UPI Payment QR Code - {upiReceiverName}"" width=""220"" height=""220"" style=""display: block; margin: 0 auto; border-radius: 6px;"" />
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     <tr>
-                        <td align=""center"" style=""padding: 6px 0; font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif;"">
+                        <td align=""center"" style=""padding: 4px 0; font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif;"">
                             <div style=""font-size: 14px; color: #475569; margin-bottom: 6px;"">
                                 Payee: <strong style=""color: #0f172a;"">{upiReceiverName}</strong>
                             </div>
@@ -578,7 +585,10 @@ public class EventService : IEventService
                                 <span style=""color: #312e81; background-color: #eef2ff; font-weight: 700; padding: 4px 12px; border-radius: 6px; font-family: 'Outfit', 'Courier New', monospace; letter-spacing: 0.5px; border: 1px solid #c7d2fe;"">{upiId}</span>
                             </div>
                             <div style=""font-size: 12px; color: #64748b; margin-top: 4px;"">
-                                Scan with Google Pay, PhonePe, Paytm or any UPI App
+                                Scan with Google Pay, PhonePe, Paytm, or Camera to pay automatically.
+                            </div>
+                            <div style=""margin-top: 10px;"">
+                                <a href=""{upiPaymentUri}"" style=""display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; font-size: 12.5px; font-weight: 700; padding: 7px 18px; border-radius: 6px;"">Open UPI App (Rs.{memberContributionAmount:F2})</a>
                             </div>
                         </td>
                     </tr>
