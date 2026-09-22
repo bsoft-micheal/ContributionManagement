@@ -124,5 +124,111 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS base_amount NUMERIC(12,2) NOT NULL D
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp VARCHAR(10) NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_expiry TIMESTAMP WITH TIME ZONE NULL;
 ALTER TABLE event_types ADD COLUMN IF NOT EXISTS base_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE members ADD COLUMN IF NOT EXISTS member_type VARCHAR(20) NOT NULL DEFAULT 'Office';
+
+-- 1. Expenses Table
+CREATE TABLE IF NOT EXISTS expenses (
+    expense_id UUID PRIMARY KEY,
+    event_name VARCHAR(200) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    amount NUMERIC(12,2) NOT NULL,
+    expense_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    submitted_by VARCHAR(150) NOT NULL,
+    approved_by VARCHAR(150) NULL,
+    description VARCHAR(1000) NOT NULL DEFAULT '',
+    file_name VARCHAR(500) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE INDEX IF NOT EXISTS ix_expenses_date_status ON expenses(expense_date, status);
+
+-- 2. Support Tickets Table
+CREATE TABLE IF NOT EXISTS support_tickets (
+    ticket_id UUID PRIMARY KEY,
+    ticket_no VARCHAR(50) NOT NULL UNIQUE,
+    member_name VARCHAR(150) NOT NULL,
+    member_id VARCHAR(100) NULL,
+    related_event VARCHAR(200) NULL,
+    ticket_type VARCHAR(100) NOT NULL,
+    subject VARCHAR(300) NOT NULL,
+    description VARCHAR(2000) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    priority VARCHAR(50) NOT NULL,
+    assigned_to VARCHAR(150) NULL,
+    ref_no VARCHAR(100) NULL,
+    utr VARCHAR(100) NULL,
+    attachment VARCHAR(500) NULL,
+    resolution_notes VARCHAR(2000) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE INDEX IF NOT EXISTS ix_support_tickets_status_priority ON support_tickets(status, priority);
+
+-- 3. System Settings Table
+CREATE TABLE IF NOT EXISTS system_settings (
+    setting_id UUID PRIMARY KEY,
+    setting_key VARCHAR(100) NOT NULL UNIQUE,
+    setting_value TEXT NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    description VARCHAR(500) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMP WITH TIME ZONE NULL
+);
+
+-- 4. Payment Transactions Table
+CREATE TABLE IF NOT EXISTS payment_transactions (
+    transaction_id UUID PRIMARY KEY,
+    txn_number VARCHAR(50) NOT NULL UNIQUE,
+    member_name VARCHAR(150) NOT NULL,
+    event_name VARCHAR(200) NOT NULL,
+    amount NUMERIC(12,2) NOT NULL,
+    payment_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    payment_mode VARCHAR(50) NOT NULL,
+    utr VARCHAR(100) NULL,
+    status VARCHAR(50) NOT NULL,
+    verified_by VARCHAR(150) NULL,
+    verified_on TIMESTAMP WITH TIME ZONE NULL,
+    notes VARCHAR(1000) NULL,
+    screenshot VARCHAR(500) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE INDEX IF NOT EXISTS ix_payment_transactions_date_status ON payment_transactions(payment_date, status);
+
+-- 5. Gallery Photos Table
+CREATE TABLE IF NOT EXISTS gallery_photos (
+    photo_id UUID PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    event_name VARCHAR(200) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    image_url TEXT NOT NULL,
+    taken_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    description VARCHAR(1000) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE INDEX IF NOT EXISTS ix_gallery_photos_event_category ON gallery_photos(event_name, category);
+
 
 

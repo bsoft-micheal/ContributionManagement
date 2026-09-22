@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -18,6 +19,7 @@ public class EventService : IEventService
     private readonly IMapper _mapper;
     private readonly IEmailService _emailService;
     private readonly ILogger<EventService> _logger;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
 
     public EventService(
         IEventRepository eventRepository,
@@ -28,7 +30,8 @@ public class EventService : IEventService
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IEmailService emailService,
-        ILogger<EventService> logger)
+        ILogger<EventService> logger,
+        IServiceScopeFactory serviceScopeFactory)
     {
         _eventRepository = eventRepository;
         _eventTypeRepository = eventTypeRepository;
@@ -39,6 +42,7 @@ public class EventService : IEventService
         _mapper = mapper;
         _emailService = emailService;
         _logger = logger;
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     public async Task<IReadOnlyCollection<EventSummaryDto>> GetAllAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
@@ -175,75 +179,239 @@ public class EventService : IEventService
         await _contributionRepository.AddRangeAsync(contributions, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        try
+        // 1. First fetch the created event so event creation is guaranteed and complete
+        var createdEvent = await GetByIdAsync(eventItem.EventId, cancellationToken);
+
+        // 2. Then only the system sends the email to the particular users (contributors with positive contribution amount)
+        var particularContributors = members
+            .Where(m => !string.IsNullOrWhiteSpace(m.Email))
+            .Select(m => new
+            {
+                m.MemberId,
+                m.Name,
+                m.Email,
+                ContributionAmount = contributions.FirstOrDefault(c => c.MemberId == m.MemberId)?.Amount ?? 0m
+            })
+            .Where(x => x.ContributionAmount > 0)
+            .ToList();
+
+        if (particularContributors.Count > 0)
         {
-            var gpayImagePath = ResolveGpayImagePath();
-            if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+            var eventId = eventItem.EventId;
+            var eventName = eventItem.EventName;
+            var eventDate = eventItem.EventDate;
+            var eventDescription = eventItem.Description;
+            var baseAmount = eventItem.BaseAmount;
+
+            var exemptCelebrantIds = request.ContributionOverrides
+                .Where(x => x.Amount == 0)
+                .Select(x => x.MemberId)
+                .ToHashSet();
+
+            _ = Task.Run(async () =>
             {
                 try
                 {
-                    var targetDir = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-                    var targetFile = Path.Combine(targetDir, "gpay.png");
-                    if (!File.Exists(targetFile))
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var scopedEmailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                    var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<EventService>>();
+                    var scopedMemberRepo = scope.ServiceProvider.GetRequiredService<IMemberRepository>();
+                    var scopedSettingService = scope.ServiceProvider.GetService<ISystemSettingService>();
+
+                    string upiReceiverName = "Daniel A";
+                    string upiId = "danielrobertanto604@okicici";
+                    string qrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=danielrobertanto604@okicici%26pn=Daniel%20A";
+
+                    if (scopedSettingService != null)
                     {
-                        Directory.CreateDirectory(targetDir);
-                        File.Copy(gpayImagePath, targetFile, true);
+                        try
+                        {
+                            var settings = await scopedSettingService.GetSettingsAsync(CancellationToken.None);
+                            if (!string.IsNullOrWhiteSpace(settings.QrReceiverName)) upiReceiverName = settings.QrReceiverName;
+                            if (!string.IsNullOrWhiteSpace(settings.QrUpiId)) upiId = settings.QrUpiId;
+                            if (!string.IsNullOrWhiteSpace(settings.QrImage) && settings.QrImage.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                            {
+                                qrImageUrl = settings.QrImage;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            scopedLogger.LogWarning(ex, "Could not load payment settings for email notification; using default scanner details.");
+                        }
                     }
-                }
-                catch { }
-            }
 
-            var birthdayCelebrants = isBirthdayEvent 
-                ? await _memberRepository.GetActiveBirthdaysInMonthAsync(eventItem.EventDate.Month, cancellationToken)
-                : new List<Member>();
-
-            var celebrantNames = birthdayCelebrants.Select(m => m.Name).Distinct().ToList();
-
-            if (celebrantNames.Count == 0 && isBirthdayEvent)
-            {
-                var nameParts = eventItem.EventName.Split(new[] { '-', ':' }, 2);
-                if (nameParts.Length > 1 && !string.IsNullOrWhiteSpace(nameParts[1]))
-                {
-                    var parsed = nameParts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(p => p.Trim())
-                        .Where(p => !string.IsNullOrWhiteSpace(p))
-                        .ToList();
-                    if (parsed.Count > 0)
+                    var gpayImagePath = ResolveGpayImagePath();
+                    if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
                     {
-                        celebrantNames = parsed;
+                        try
+                        {
+                            var targetDir = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+                            var targetFile = Path.Combine(targetDir, "gpay.png");
+                            Directory.CreateDirectory(targetDir);
+                            File.Copy(gpayImagePath, targetFile, true);
+                        }
+                        catch { }
                     }
-                }
-            }
 
-            string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
+                    List<Member> targetCelebrants = new();
 
-            var emailTasks = members.Select(async member =>
-            {
-                var contributionAmount = contributions.FirstOrDefault(c => c.MemberId == member.MemberId)?.Amount ?? 0m;
+                    if (isBirthdayEvent)
+                    {
+                        var allMonthCelebrants = await scopedMemberRepo.GetActiveBirthdaysInMonthAsync(eventDate.Month, CancellationToken.None);
 
-                string emailSubject = isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
-                    ? $"Birthday Celebration - {celebrantsFormatted}"
-                    : $"Event Detail: {eventItem.EventName}";
+                        // 1. If exempt celebrant IDs were explicitly passed in request (e.g. from Birthday Event Dialog)
+                        if (exemptCelebrantIds.Count > 0)
+                        {
+                            targetCelebrants = allMonthCelebrants.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
+                            if (targetCelebrants.Count == 0)
+                            {
+                                var allMembers = await scopedMemberRepo.GetAllActiveAsync(CancellationToken.None);
+                                targetCelebrants = allMembers.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
+                            }
+                        }
 
-                string emailHeader = isBirthdayEvent ? "Birthday Celebration" : "Event Detail";
+                        // 2. If celebrants not identified yet, check if member names appear in eventName or description
+                        if (targetCelebrants.Count == 0)
+                        {
+                            var textToSearch = $"{eventName} {eventDescription}".ToLowerInvariant();
+                            targetCelebrants = allMonthCelebrants
+                                .Where(m => !string.IsNullOrWhiteSpace(m.Name) && 
+                                            (textToSearch.Contains(m.Name.ToLowerInvariant()) || 
+                                             textToSearch.Contains(m.MemberId.ToString().ToLowerInvariant())))
+                                .ToList();
+                        }
 
-                string introText = isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
-                    ? $"We are celebrating the birthdays of our team members this month: <strong>{celebrantsFormatted}</strong>! Here are the event details and your contribution amount:"
-                    : "You have been added to a new event. Here are the event details and your contribution amount:";
+                        // 3. Fallback: all active celebrants with birthdays in this month
+                        if (targetCelebrants.Count == 0)
+                        {
+                            targetCelebrants = allMonthCelebrants;
+                        }
+                    }
 
-                string celebrantsRow = isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
-                    ? $@"
+                    // Order celebrants by birthday day
+                    targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
+
+                    var celebrantNames = targetCelebrants.Select(m => m.Name).Distinct().ToList();
+
+                    if (celebrantNames.Count == 0 && isBirthdayEvent)
+                    {
+                        var nameParts = eventName.Split(new[] { '-', ':' }, 2);
+                        if (nameParts.Length > 1 && !string.IsNullOrWhiteSpace(nameParts[1]))
+                        {
+                            var parsed = nameParts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                .Select(p => p.Trim())
+                                .Where(p => !string.IsNullOrWhiteSpace(p))
+                                .ToList();
+                            if (parsed.Count > 0)
+                            {
+                                celebrantNames = parsed;
+                            }
+                        }
+                    }
+
+                    string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
+
+                    // Build particular birthday event dates display
+                    string birthdayDatesSummary = string.Empty;
+                    string celebrantsAndDatesHtml = string.Empty;
+
+                    if (isBirthdayEvent)
+                    {
+                        if (targetCelebrants.Count == 1)
+                        {
+                            var c = targetCelebrants[0];
+                            var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
+                            string bdayDateStr = bdayDate.ToString("MMMM dd, yyyy");
+                            birthdayDatesSummary = $"{c.Name} ({bdayDate:MMMM dd})";
+
+                            celebrantsAndDatesHtml = $@"
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Birthday Celebrant:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{c.Name}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Particular Birthday Date:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #c026d3;"">{bdayDateStr}</span>
+                </div>";
+                        }
+                        else if (targetCelebrants.Count > 1)
+                        {
+                            var summaryItems = targetCelebrants.Select(c =>
+                            {
+                                var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
+                                return $"{c.Name} ({bdayDate:MMM dd})";
+                            });
+                            birthdayDatesSummary = string.Join(", ", summaryItems);
+
+                            var tableRows = string.Join("", targetCelebrants.Select(c =>
+                            {
+                                var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
+                                return $@"
+                                    <tr style=""border-bottom: 1px dashed rgba(74, 63, 107, 0.1);"">
+                                        <td style=""padding: 8px 12px; color: #4a3f6b; font-weight: 700; font-size: 13.5px;"">&#x1F382; {c.Name}</td>
+                                        <td align=""right"" style=""padding: 8px 12px; color: #c026d3; font-weight: 700; font-size: 13.5px;"">{bdayDate:MMMM dd, yyyy}</td>
+                                    </tr>";
+                            }));
+
+                            celebrantsAndDatesHtml = $@"
+                <div class=""detail-row"">
+                    <span class=""detail-label"" style=""vertical-align: top; padding-top: 4px;"">Birthday Celebrants &amp; Dates:</span>
+                    <div class=""detail-value"" style=""display: block; margin-top: 6px;"">
+                        <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"" style=""border-collapse: collapse; background-color: #fbfaff; border-radius: 8px; border: 1.5px solid #ece8f8;"">
+                            {tableRows}
+                        </table>
+                    </div>
+                </div>";
+                        }
+                        else if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
+                        {
+                            celebrantsAndDatesHtml = $@"
                 <div class=""detail-row"">
                     <span class=""detail-label"">Birthday Celebrants:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{celebrantsFormatted}</span>
-                </div>"
-                    : string.Empty;
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Particular Birthday Date:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #c026d3;"">{eventDate:MMMM dd, yyyy}</span>
+                </div>";
+                        }
+                    }
 
-                string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
-                    ? $"Rs.{eventItem.BaseAmount:F2} ({celebrantNames.Count} celebrants combined)"
-                    : $"Rs.{eventItem.BaseAmount:F2}";
+                    string singleCelebrantDateStr = string.Empty;
+                    if (targetCelebrants.Count == 1)
+                    {
+                        var c = targetCelebrants[0];
+                        var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
+                        singleCelebrantDateStr = bdayDate.ToString("MMM dd");
+                    }
 
-                var emailBody = $@"
+                    var emailTasks = particularContributors.Select(async contributor =>
+                    {
+                        try
+                        {
+                            string emailSubject = isBirthdayEvent
+                                ? (targetCelebrants.Count == 1 
+                                    ? $"Birthday Celebration - {targetCelebrants[0].Name} ({singleCelebrantDateStr})"
+                                    : (!string.IsNullOrWhiteSpace(celebrantsFormatted) ? $"Birthday Celebration - {celebrantsFormatted}" : $"Event Detail: {eventName}"))
+                                : $"Event Detail: {eventName}";
+
+                            string emailHeader = isBirthdayEvent ? "Birthday Celebration" : "Event Detail";
+
+                            string introText = isBirthdayEvent && !string.IsNullOrWhiteSpace(birthdayDatesSummary)
+                                ? $"We are celebrating the birthdays of our team members this month: <strong>{birthdayDatesSummary}</strong>! Here are the event details and your contribution amount:"
+                                : (isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
+                                    ? $"We are celebrating the birthdays of our team members this month: <strong>{celebrantsFormatted}</strong>! Here are the event details and your contribution amount:"
+                                    : "You have been added to a new event. Here are the event details and your contribution amount:");
+
+                            string eventDateLabel = isBirthdayEvent ? "Celebration Date:" : "Event Date:";
+
+                            string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
+                                ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
+                                : $"Rs.{baseAmount:F2}";
+
+                            var hasInlineScanner = !string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath);
+
+                            var emailBody = $@"
 <!DOCTYPE html>
 <html>
 <head>
@@ -362,18 +530,18 @@ public class EventService : IEventService
             <h1>{emailHeader}</h1>
         </div>
         <div class=""content"">
-            <div class=""greeting"">Hello {member.Name},</div>
+            <div class=""greeting"">Hello {contributor.Name},</div>
             <div class=""intro"">{introText}</div>
             
             <div class=""details-card"">
                 <div class=""detail-row"">
                     <span class=""detail-label"">Event Name:</span>
-                    <span class=""detail-value"" style=""font-weight: 700;"">{eventItem.EventName}</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{eventName}</span>
                 </div>
-                {celebrantsRow}
+                {celebrantsAndDatesHtml}
                 <div class=""detail-row"">
-                    <span class=""detail-label"">Event Date:</span>
-                    <span class=""detail-value"">{eventItem.EventDate:MMMM dd, yyyy}</span>
+                    <span class=""detail-label"">{eventDateLabel}</span>
+                    <span class=""detail-value"">{eventDate:MMMM dd, yyyy}</span>
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Total Amount:</span>
@@ -381,26 +549,37 @@ public class EventService : IEventService
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Description:</span>
-                    <span class=""detail-value"">{eventItem.Description}</span>
+                    <span class=""detail-value"">{eventDescription}</span>
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Contribution Amount:</span>
-                    <span class=""detail-value amount-highlight"">Rs.{contributionAmount:F2}</span>
+                    <span class=""detail-value amount-highlight"">Rs.{contributor.ContributionAmount:F2}</span>
                 </div>
             </div>
 
-            <!-- GPay Payment Card -->
-            <div class=""payment-card"">
+            <!-- Scanner & UPI Payment Card -->
+            <div class=""payment-card"" style=""background: #ffffff; border: 1.5px solid #ede9fe; border-radius: 14px; padding: 18px; margin: 20px 0; text-align: center; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08);"">
+                <div style=""font-family: 'Outfit', 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #4338ca; margin-bottom: 12px; letter-spacing: 0.5px; text-transform: uppercase;"">
+                    Scan to Pay Contribution
+                </div>
                 <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"">
                     <tr>
-                        <td align=""center"" style=""padding: 0 0 14px 0;"">
-                            <img src=""cid:gpay-banner"" alt=""GPay payment details"" class=""gpay-image"" style=""display:block;width:100%;max-width:520px;height:auto;margin:0 auto 14px;border-radius:12px;border:0;outline:none;text-decoration:none;"" />
+                        <td align=""center"" style=""padding: 0 0 12px 0;"">
+                            <img src=""{(hasInlineScanner ? "cid:gpay-banner" : qrImageUrl)}"" alt=""UPI Scanner - {upiReceiverName}"" class=""gpay-image"" style=""display:block;width:100%;max-width:300px;height:auto;margin:0 auto;border-radius:12px;border:1px solid #e0e7ff;"" />
                         </td>
                     </tr>
                     <tr>
-                        <td align=""right"" style=""vertical-align: middle; padding: 0; font-size: 16px; color: #4a3f6b; font-weight: 800; font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif;"">
-                            <span style=""font-weight: 600; color: #5b5280; font-size: 14px; margin-right: 8px;"">GPay Number:</span>
-                            <span style=""color: #2d2550; background-color: #f0ecf9; padding: 4px 10px; border-radius: 6px; font-family: 'Outfit', 'Courier New', monospace; letter-spacing: 0.5px;"">9940839866</span>
+                        <td align=""center"" style=""padding: 6px 0; font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif;"">
+                            <div style=""font-size: 14px; color: #475569; margin-bottom: 6px;"">
+                                Payee: <strong style=""color: #0f172a;"">{upiReceiverName}</strong>
+                            </div>
+                            <div style=""font-size: 14px; color: #334155; margin-bottom: 8px;"">
+                                <span style=""font-weight: 600; color: #64748b; margin-right: 6px;"">UPI ID:</span>
+                                <span style=""color: #312e81; background-color: #eef2ff; font-weight: 700; padding: 4px 12px; border-radius: 6px; font-family: 'Outfit', 'Courier New', monospace; letter-spacing: 0.5px; border: 1px solid #c7d2fe;"">{upiId}</span>
+                            </div>
+                            <div style=""font-size: 12px; color: #64748b; margin-top: 4px;"">
+                                Scan with Google Pay, PhonePe, Paytm or any UPI App
+                            </div>
                         </td>
                     </tr>
                 </table>
@@ -413,31 +592,29 @@ public class EventService : IEventService
 </body>
 </html>";
 
-                try
-                {
-                    if (!string.IsNullOrWhiteSpace(member.Email))
-                    {
-                        var inlineImages = !string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath)
-                            ? new[] { new InlineEmailImage("gpay-banner", gpayImagePath, "image/png") }
-                            : null;
-                        await _emailService.SendEmailAsync(member.Email, emailSubject, emailBody, inlineImages, cancellationToken);
-                        _logger.LogInformation("Successfully sent/logged event creation email to participant: {Email}", member.Email);
-                    }
+                            var inlineImages = hasInlineScanner
+                                ? new[] { new InlineEmailImage("gpay-banner", gpayImagePath!, "image/png") }
+                                : null;
+
+                            await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, inlineImages, CancellationToken.None);
+                            scopedLogger.LogInformation("Successfully sent event creation email to contributor: {Email} for Event: {EventName}", contributor.Email, eventName);
+                        }
+                        catch (Exception ex)
+                        {
+                            scopedLogger.LogError(ex, "Failed to send event creation email to contributor: {Email}", contributor.Email);
+                        }
+                    });
+
+                    await Task.WhenAll(emailTasks);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to send event creation email to participant: {Email}", member.Email);
+                    _logger.LogError(ex, "Failed to run background email tasks for new event: {EventId}", eventId);
                 }
             });
-
-            await Task.WhenAll(emailTasks);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to run email sending tasks for new event: {EventId}", eventItem.EventId);
         }
 
-        return await GetByIdAsync(eventItem.EventId, cancellationToken);
+        return createdEvent;
     }
 
     public async Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default)
@@ -632,14 +809,16 @@ public class EventService : IEventService
     {
         var candidatePaths = new[]
         {
+            @"d:\ContributionManagement\backend\ContributionManagement\TeamContributionManagementSystem.API\wwwroot\gpay.png",
+            @"d:\ContributionManagement\frontend\ContributionManagementUI\src\assets\payment_qr.png",
+            @"C:\Users\clean_accont\.gemini\antigravity-ide\brain\38024a44-87e5-40a2-9b70-3a9c518582c7\.user_uploaded\media_1790009320912.png",
             Path.Combine(AppContext.BaseDirectory, "wwwroot", "gpay.png"),
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot", "gpay.png"),
             Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "gpay.png"),
             Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "wwwroot", "gpay.png")),
             Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "wwwroot", "gpay.png")),
             Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "TeamContributionManagementSystem.API", "wwwroot", "gpay.png")),
-            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "TeamContributionManagementSystem.API", "wwwroot", "gpay.png")),
-            @"d:\ContributionManagement\backend\ContributionManagement\TeamContributionManagementSystem.API\wwwroot\gpay.png"
+            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "TeamContributionManagementSystem.API", "wwwroot", "gpay.png"))
         };
 
         foreach (var path in candidatePaths)

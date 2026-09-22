@@ -2,8 +2,13 @@ using AutoMapper;
 using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.EventTypes;
+using TeamContributionManagementSystem.Application.DTOs.Expenses;
+using TeamContributionManagementSystem.Application.DTOs.Gallery;
 using TeamContributionManagementSystem.Application.DTOs.Members;
+using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
+using TeamContributionManagementSystem.Application.DTOs.Settings;
+using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -47,5 +52,11 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.Contributions, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted)));
 
         CreateMap<RoleRight, RoleRightDto>().ReverseMap();
+
+        CreateMap<Expense, ExpenseDto>();
+        CreateMap<SupportTicket, SupportTicketDto>();
+        CreateMap<SystemSetting, SettingItemDto>();
+        CreateMap<PaymentTransaction, PaymentTransactionDto>();
+        CreateMap<GalleryPhoto, GalleryPhotoDto>();
     }
 }

@@ -49,7 +49,8 @@ public class MemberService : IMemberService
             JoiningDate = request.JoiningDate.Date,
             Gender = request.Gender,
             IsActive = request.IsActive,
-            IsExited = request.IsExited
+            IsExited = request.IsExited,
+            MemberType = string.IsNullOrWhiteSpace(request.MemberType) ? "Office" : request.MemberType
         };
 
         await _memberRepository.AddAsync(member, cancellationToken);
@@ -84,6 +85,7 @@ public class MemberService : IMemberService
         member.Gender = request.Gender;
         member.IsActive = request.IsActive;
         member.IsExited = request.IsExited;
+        member.MemberType = string.IsNullOrWhiteSpace(request.MemberType) ? "Office" : request.MemberType;
 
         _memberRepository.Update(member);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
