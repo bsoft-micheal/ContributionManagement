@@ -109,7 +109,7 @@ public class ApplicationDbContextSeeder
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
                 created_by VARCHAR(150) NOT NULL DEFAULT 'System',
                 created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                modified_by VARCHAR(150) NULL,
+                modified_by VARCHAR(150) NULL,SMTP
                 modified_on TIMESTAMP WITH TIME ZONE NULL
             );
 
