@@ -21,6 +21,7 @@ public class AuthService : IAuthService
     private readonly IMemberRepository _memberRepository;
     private readonly IMemoryCache _memoryCache;
     private readonly IConfiguration _configuration;
+    private readonly ISystemSettingService _systemSettingService;
 
     public AuthService(Microsoft.Extensions.Logging.ILogger<AuthService> logger, 
         IUserRepository userRepository,
@@ -32,7 +33,8 @@ public class AuthService : IAuthService
         IDeviceSessionRepository deviceSessionRepository,
         IMemberRepository memberRepository,
         IMemoryCache memoryCache,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ISystemSettingService systemSettingService)
     {
         _logger = logger;
         _userRepository = userRepository;
@@ -45,6 +47,7 @@ public class AuthService : IAuthService
         _memberRepository = memberRepository;
         _memoryCache = memoryCache;
         _configuration = configuration;
+        _systemSettingService = systemSettingService;
     }
 
     public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
@@ -257,20 +260,31 @@ public class AuthService : IAuthService
         try
         {
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-        if (user is null)
-        {
-            throw new InvalidOperationException("A user with this email address was not found.");
-        }
+            if (user is null)
+            {
+                throw new InvalidOperationException("A user with this email address was not found.");
+            }
 
-        var otp = new Random().Next(100000, 999999).ToString();
-        user.PasswordResetOtp = otp;
-        user.PasswordResetOtpExpiry = DateTime.UtcNow.AddMinutes(15);
+            var settings = await _systemSettingService.GetSettingsAsync(cancellationToken);
+            int expiryMinutes = 10;
+            if (!string.IsNullOrWhiteSpace(settings.OtpExpiry) && int.TryParse(settings.OtpExpiry, out var parsedExpiry) && parsedExpiry > 0)
+            {
+                expiryMinutes = parsedExpiry;
+            }
 
-        _userRepository.Update(user);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            var otp = new Random().Next(100000, 999999).ToString();
+            user.PasswordResetOtp = otp;
+            user.PasswordResetOtpExpiry = DateTime.UtcNow.AddMinutes(expiryMinutes);
 
-        var subject = "Password Reset OTP - Team Contribution Management System";
-        var emailBody = $@"
+            _userRepository.Update(user);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Reset attempt counter for this email
+            var cacheKey = $"pwd_reset_attempts_{request.Email.Trim().ToLowerInvariant()}";
+            _memoryCache.Remove(cacheKey);
+
+            var subject = "Password Reset OTP - Team Contribution Management System";
+            var emailBody = $@"
 <div style=""font-family: 'Outfit', 'Inter', sans-serif; background-color: #f7f6fb; padding: 40px; border-radius: 16px; max-width: 600px; margin: 0 auto; color: #1e1a2e; border: 1px solid rgba(74, 63, 107, 0.08);"">
     <div style=""text-align: center; margin-bottom: 30px;"">
         <h2 style=""margin: 0; color: #7c3aed; font-weight: 900; letter-spacing: 0.05em;"">TEAM CONTRIBUTION</h2>
@@ -283,7 +297,7 @@ public class AuthService : IAuthService
         <div style=""background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #ffffff; text-align: center; font-size: 32px; font-weight: 900; letter-spacing: 6px; padding: 15px; border-radius: 8px; margin: 25px 0; font-family: monospace;"">
             {otp}
         </div>
-        <p style=""color: #ef4444; font-size: 13px; font-weight: 600; margin-bottom: 20px;"">This OTP will expire in 15 minutes.</p>
+        <p style=""color: #ef4444; font-size: 13px; font-weight: 600; margin-bottom: 20px;"">This OTP will expire in {expiryMinutes} minutes.</p>
         <hr style=""border: 0; border-top: 1px solid rgba(74, 63, 107, 0.08); margin: 20px 0;"" />
         <p style=""color: #a78bfa; font-size: 12px; line-height: 1.5; margin: 0;"">If you did not request a password reset, you can safely ignore this email.</p>
     </div>
@@ -292,7 +306,7 @@ public class AuthService : IAuthService
     </div>
 </div>";
 
-        await _emailService.SendEmailAsync(user.Email, subject, emailBody, cancellationToken: cancellationToken);
+            await _emailService.SendEmailAsync(user.Email, subject, emailBody, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -306,22 +320,55 @@ public class AuthService : IAuthService
         try
         {
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-        if (user is null)
-        {
-            throw new InvalidOperationException("A user with this email address was not found.");
-        }
+            if (user is null)
+            {
+                throw new InvalidOperationException("A user with this email address was not found.");
+            }
 
-        if (string.IsNullOrEmpty(user.PasswordResetOtp) || user.PasswordResetOtp != request.Otp.Trim())
-        {
-            return false;
-        }
+            var settings = await _systemSettingService.GetSettingsAsync(cancellationToken);
+            int maxRetry = 3;
+            if (!string.IsNullOrWhiteSpace(settings.MaxRetry) && int.TryParse(settings.MaxRetry, out var parsedMax) && parsedMax > 0)
+            {
+                maxRetry = parsedMax;
+            }
 
-        if (user.PasswordResetOtpExpiry < DateTime.UtcNow)
-        {
-            return false;
-        }
+            var cacheKey = $"pwd_reset_attempts_{request.Email.Trim().ToLowerInvariant()}";
+            int currentAttempts = _memoryCache.TryGetValue(cacheKey, out int val) ? val : 0;
 
-        return true;
+            if (currentAttempts >= maxRetry)
+            {
+                user.PasswordResetOtp = null;
+                user.PasswordResetOtpExpiry = null;
+                _userRepository.Update(user);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                throw new InvalidOperationException("Maximum OTP attempts exceeded. Please request a new OTP.");
+            }
+
+            if (string.IsNullOrEmpty(user.PasswordResetOtp) || user.PasswordResetOtpExpiry < DateTime.UtcNow)
+            {
+                throw new InvalidOperationException("The password reset OTP has expired. Please request a new one.");
+            }
+
+            if (user.PasswordResetOtp != request.Otp.Trim())
+            {
+                currentAttempts++;
+                _memoryCache.Set(cacheKey, currentAttempts, TimeSpan.FromMinutes(30));
+
+                if (currentAttempts >= maxRetry)
+                {
+                    user.PasswordResetOtp = null;
+                    user.PasswordResetOtpExpiry = null;
+                    _userRepository.Update(user);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    throw new InvalidOperationException("Maximum OTP attempts exceeded. Please request a new OTP.");
+                }
+
+                int remaining = maxRetry - currentAttempts;
+                throw new InvalidOperationException($"Invalid OTP code. {remaining} attempt{(remaining == 1 ? "" : "s")} remaining.");
+            }
+
+            _memoryCache.Remove(cacheKey);
+            return true;
         }
         catch (Exception ex)
         {
@@ -335,27 +382,29 @@ public class AuthService : IAuthService
         try
         {
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-        if (user is null)
-        {
-            throw new InvalidOperationException("A user with this email address was not found.");
-        }
+            if (user is null)
+            {
+                throw new InvalidOperationException("A user with this email address was not found.");
+            }
 
-        if (string.IsNullOrEmpty(user.PasswordResetOtp) || user.PasswordResetOtp != request.Otp.Trim())
-        {
-            throw new InvalidOperationException("Invalid or missing password reset OTP.");
-        }
+            if (string.IsNullOrEmpty(user.PasswordResetOtp) || user.PasswordResetOtp != request.Otp.Trim())
+            {
+                throw new InvalidOperationException("Invalid or missing password reset OTP.");
+            }
 
-        if (user.PasswordResetOtpExpiry < DateTime.UtcNow)
-        {
-            throw new InvalidOperationException("The password reset OTP has expired. Please request a new one.");
-        }
+            if (user.PasswordResetOtpExpiry < DateTime.UtcNow)
+            {
+                throw new InvalidOperationException("The password reset OTP has expired. Please request a new one.");
+            }
 
-        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
-        user.PasswordResetOtp = null;
-        user.PasswordResetOtpExpiry = null;
+            user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+            user.PasswordResetOtp = null;
+            user.PasswordResetOtpExpiry = null;
 
-        _userRepository.Update(user);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _userRepository.Update(user);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _memoryCache.Remove($"pwd_reset_attempts_{request.Email.Trim().ToLowerInvariant()}");
         }
         catch (Exception ex)
         {
