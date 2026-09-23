@@ -29,6 +29,7 @@ public class SystemSettingService : ISystemSettingService
         var dto = new SystemSettingsDto();
 
         if (map.TryGetValue("orgName", out var orgName)) dto.OrgName = orgName;
+        if (map.TryGetValue("birthdayMembersExempt", out var birthdayMembersExempt)) dto.BirthdayMembersExempt = bool.TryParse(birthdayMembersExempt, out var bme) ? bme : true;
         if (map.TryGetValue("defaultCurrency", out var defaultCurrency)) dto.DefaultCurrency = defaultCurrency;
         if (map.TryGetValue("timeZone", out var timeZone)) dto.TimeZone = timeZone;
 
@@ -75,6 +76,7 @@ public class SystemSettingService : ISystemSettingService
             var dict = new Dictionary<string, (string Value, string Category)>
         {
             ["orgName"] = (settings.OrgName, "General"),
+            ["birthdayMembersExempt"] = (settings.BirthdayMembersExempt.ToString().ToLowerInvariant(), "General"),
             ["defaultCurrency"] = (settings.DefaultCurrency, "General"),
             ["timeZone"] = (settings.TimeZone, "General"),
             ["fromEmail"] = (settings.FromEmail, "Email"),
