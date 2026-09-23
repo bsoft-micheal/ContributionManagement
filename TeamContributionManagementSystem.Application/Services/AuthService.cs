@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
@@ -16,6 +18,9 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDeviceSessionRepository _deviceSessionRepository;
+    private readonly IMemberRepository _memberRepository;
+    private readonly IMemoryCache _memoryCache;
+    private readonly IConfiguration _configuration;
 
     public AuthService(Microsoft.Extensions.Logging.ILogger<AuthService> logger, 
         IUserRepository userRepository,
@@ -24,7 +29,10 @@ public class AuthService : IAuthService
         IRoleRightsService roleRightsService,
         IEmailService emailService,
         IUnitOfWork unitOfWork,
-        IDeviceSessionRepository deviceSessionRepository)
+        IDeviceSessionRepository deviceSessionRepository,
+        IMemberRepository memberRepository,
+        IMemoryCache memoryCache,
+        IConfiguration configuration)
     {
         _logger = logger;
         _userRepository = userRepository;
@@ -34,6 +42,9 @@ public class AuthService : IAuthService
         _emailService = emailService;
         _unitOfWork = unitOfWork;
         _deviceSessionRepository = deviceSessionRepository;
+        _memberRepository = memberRepository;
+        _memoryCache = memoryCache;
+        _configuration = configuration;
     }
 
     public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
@@ -74,42 +85,87 @@ public class AuthService : IAuthService
         try
         {
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-        if (user is null)
-        {
-            throw new InvalidOperationException("Invalid user.");
-        }
-
-        if (!user.IsActive)
-        {
-            throw new InvalidOperationException("This user account is deactivated. Please contact an administrator.");
-        }
-
-        if (user.MfaDevices == null || !user.MfaDevices.Any())
-        {
-            throw new InvalidOperationException("MFA is not enabled for this user.");
-        }
-
-        bool isValid = false;
-        foreach (var mfaDevice in user.MfaDevices)
-        {
-            var base32Bytes = OtpNet.Base32Encoding.ToBytes(mfaDevice.SecretKey);
-            var totp = new OtpNet.Totp(base32Bytes);
-            if (totp.VerifyTotp(request.Otp.Trim(), out long timeStepMatched, new OtpNet.VerificationWindow(2, 2)))
+            if (user is null)
             {
-                isValid = true;
-                break;
+                throw new InvalidOperationException("Invalid user.");
             }
-        }
 
-        if (!isValid)
-        {
-            throw new InvalidOperationException("Invalid OTP code.");
-        }
+            if (!user.IsActive)
+            {
+                throw new InvalidOperationException("This user account is deactivated. Please contact an administrator.");
+            }
 
-        // Save changes will be called inside GenerateAuthResponseAndLogSessionAsync via _unitOfWork
+            if (user.MfaDevices == null || !user.MfaDevices.Any())
+            {
+                throw new InvalidOperationException("MFA is not enabled for this user.");
+            }
 
+            int maxFailedAttempts = int.TryParse(_configuration["MfaSecurity:MaxFailedAttempts"], out var maxAttempts) ? maxAttempts : 3;
+            int lockoutMinutes = int.TryParse(_configuration["MfaSecurity:LockoutMinutes"], out var lockMins) ? lockMins : 15;
 
-        return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
+            var lockoutKey = $"mfa_lockout_{user.UserId}";
+            var attemptsKey = $"mfa_attempts_{user.UserId}";
+
+            // 1. Check if user is currently locked out
+            if (_memoryCache.TryGetValue(lockoutKey, out DateTime lockoutUntil))
+            {
+                if (DateTime.UtcNow < lockoutUntil)
+                {
+                    var remainingMinutes = Math.Max(1, (int)Math.Ceiling((lockoutUntil - DateTime.UtcNow).TotalMinutes));
+                    throw new InvalidOperationException($"Too many failed attempts. MFA verification is temporarily locked. Please try again in {remainingMinutes} minute(s).");
+                }
+                else
+                {
+                    // Lockout period has elapsed, clean up
+                    _memoryCache.Remove(lockoutKey);
+                    _memoryCache.Remove(attemptsKey);
+                }
+            }
+
+            // 2. Validate OTP
+            bool isValid = false;
+            foreach (var mfaDevice in user.MfaDevices)
+            {
+                var base32Bytes = OtpNet.Base32Encoding.ToBytes(mfaDevice.SecretKey);
+                var totp = new OtpNet.Totp(base32Bytes);
+                if (totp.VerifyTotp(request.Otp.Trim(), out long timeStepMatched, new OtpNet.VerificationWindow(2, 2)))
+                {
+                    isValid = true;
+                    break;
+                }
+            }
+
+            if (!isValid)
+            {
+                int currentAttempts = _memoryCache.GetOrCreate(attemptsKey, entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(lockoutMinutes);
+                    return 0;
+                });
+
+                currentAttempts++;
+                _memoryCache.Set(attemptsKey, currentAttempts, TimeSpan.FromMinutes(lockoutMinutes));
+
+                if (currentAttempts >= maxFailedAttempts)
+                {
+                    var lockoutUntilTime = DateTime.UtcNow.AddMinutes(lockoutMinutes);
+                    _memoryCache.Set(lockoutKey, lockoutUntilTime, TimeSpan.FromMinutes(lockoutMinutes));
+                    _memoryCache.Remove(attemptsKey);
+
+                    throw new InvalidOperationException($"Invalid OTP. You have exceeded maximum attempts. MFA verification is temporarily locked for {lockoutMinutes} minutes.");
+                }
+                else
+                {
+                    int remaining = maxFailedAttempts - currentAttempts;
+                    throw new InvalidOperationException($"Invalid OTP code. {remaining} attempt{(remaining > 1 ? "s" : "")} remaining.");
+                }
+            }
+
+            // 3. OTP is valid: Reset failed attempts & lockout
+            _memoryCache.Remove(attemptsKey);
+            _memoryCache.Remove(lockoutKey);
+
+            return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -178,6 +234,21 @@ public class AuthService : IAuthService
         var response = _jwtTokenGenerator.GenerateToken(user, sessionId);
         response.Rights = await _roleRightsService.GetByRoleAsync(user.Role.ToString(), cancellationToken);
         response.RequiresTwoFactor = false;
+
+        var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
+        if (member != null)
+        {
+            response.Phone = member.Phone;
+            response.DateOfBirth = member.DateOfBirth;
+            response.JoiningDate = member.JoiningDate;
+            response.Gender = member.Gender;
+            response.MemberType = member.MemberType;
+            if (member.Role != null && !string.IsNullOrWhiteSpace(member.Role.RoleName))
+            {
+                response.Role = member.Role.RoleName;
+            }
+        }
+
         return response;
     }
 

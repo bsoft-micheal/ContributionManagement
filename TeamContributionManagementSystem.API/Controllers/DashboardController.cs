@@ -10,6 +10,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// Provides aggregated statistics and summaries for the admin dashboard.
 /// </summary>
 [ApiVersion("1.0")]
+[ApiController]
 [Route("api/v{version:apiVersion}/dashboard")]
 public class DashboardController : ControllerBase
 {

@@ -112,6 +112,7 @@ public interface IUserManagementService
     Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default);
     Task<UserDto> UpdateAsync(Guid userId, UpdateUserRequestDto request, CancellationToken cancellationToken = default);
     Task<UserDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto request, CancellationToken cancellationToken = default);
+    Task<UserDto> GetProfileAsync(Guid userId, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid userId, CancellationToken cancellationToken = default);
 
     // Standardized terminology

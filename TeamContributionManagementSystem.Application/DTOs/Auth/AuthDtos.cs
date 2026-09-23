@@ -25,6 +25,13 @@ public class AuthResponseDto
     public DateTime ExpiresAtUtc { get; set; }
     public IReadOnlyCollection<RoleRightDto> Rights { get; set; } = Array.Empty<RoleRightDto>();
     public bool RequiresTwoFactor { get; set; } = false;
+
+    // Joined from Member profile
+    public string? Phone { get; set; }
+    public DateTime? DateOfBirth { get; set; }
+    public DateTime? JoiningDate { get; set; }
+    public string? Gender { get; set; }
+    public string? MemberType { get; set; }
 }
 
 public class VerifyTwoFactorRequestDto
