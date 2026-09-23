@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.Domain.Entities;
@@ -21,4 +22,18 @@ public class AppUser
     public ICollection<UserMfaDevice> MfaDevices { get; set; } = new List<UserMfaDevice>();
 
     public ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
+
+    /// <summary>
+    /// Linked Member records (matched by Email).
+    /// Kept unmapped to prevent EF Core from issuing ALTER TABLE / DB foreign key constraints.
+    /// </summary>
+    [NotMapped]
+    public ICollection<Member> Members { get; set; } = new List<Member>();
+
+    /// <summary>
+    /// Convenience accessor for the primary linked member profile.
+    /// </summary>
+    [NotMapped]
+    public Member? MemberProfile => Members?.FirstOrDefault();
 }
+

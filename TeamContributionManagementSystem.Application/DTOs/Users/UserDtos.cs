@@ -12,6 +12,13 @@ public class UserDto
     public bool IsActive { get; set; }
     public string? ProfileImage { get; set; }
     public DateTime CreatedOn { get; set; }
+
+    // Joined from Member profile
+    public DateTime? DateOfBirth { get; set; }
+    public DateTime? JoiningDate { get; set; }
+    public string? Gender { get; set; }
+    public string? Phone { get; set; }
+    public string? MemberType { get; set; }
 }
 
 public class CreateUserRequestDto
@@ -73,4 +80,19 @@ public class UpdateProfileRequestDto
 
     [MinLength(6)]
     public string? Password { get; set; }
+
+    public DateTime? DateOfBirth { get; set; }
+    public DateTime? JoiningDate { get; set; }
+
+    [MaxLength(20)]
+    public string Gender { get; set; } = string.Empty;
+
+    [MaxLength(20)]
+    public string Phone { get; set; } = string.Empty;
+
+    [MaxLength(50)]
+    public string RoleName { get; set; } = string.Empty;
+
+    [MaxLength(50)]
+    public string MemberType { get; set; } = "Office";
 }

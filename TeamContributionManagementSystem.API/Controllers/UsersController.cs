@@ -10,6 +10,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// <summary>
 /// Manages system administrators and other authenticated users.
 /// </summary>
+[ApiController]
 [Authorize]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/users")]
@@ -102,6 +103,24 @@ public class UsersController : ControllerBase
     {
         var result = await _userService.UpdateUserAsyncById(id, request, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<UserDto>.SuccessResult(result, CommonMessages.Users.UpdateSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Retrieves the profile of the currently authenticated user.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("getProfileAsync")]
+    [ActionName("GetProfileAsync")]
+    public async Task<ActionResult<ApiResponse<UserDto>>> GetProfileAsync(CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new UnauthorizedAccessException("User identity is not available.");
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
+            return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<UserDto>.FailureResult("Unauthorized", CommonStatusCodes.Status401Unauthorized));
+
+        var user = await _userService.GetProfileAsync(userId, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<UserDto>.SuccessResult(user, CommonMessages.Users.GetProfileSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>

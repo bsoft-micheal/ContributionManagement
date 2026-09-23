@@ -48,6 +48,7 @@ public static class CommonMessages
         public const string SaveBulkSuccess = "Bulk users imported successfully.";
         public const string UpdateSuccess = "User updated successfully.";
         public const string UpdateProfileSuccess = "User profile updated successfully.";
+        public const string GetProfileSuccess = "User profile retrieved successfully.";
         public const string DeleteSuccess = "User deleted successfully.";
     }
 
