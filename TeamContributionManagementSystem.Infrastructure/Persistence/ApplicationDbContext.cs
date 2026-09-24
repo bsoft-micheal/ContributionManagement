@@ -126,6 +126,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.ContributionId);
             entity.Property(x => x.Amount).HasPrecision(12, 2);
+            entity.Property(x => x.CashAmount).HasPrecision(12, 2);
+            entity.Property(x => x.UpiAmount).HasPrecision(12, 2);
             entity.Property(x => x.PaymentStatus).HasConversion<string>().HasMaxLength(20);
             entity.Property(x => x.PaymentMode).HasConversion<string>().HasMaxLength(20);
             entity.HasIndex(x => new { x.EventId, x.MemberId }).IsUnique();

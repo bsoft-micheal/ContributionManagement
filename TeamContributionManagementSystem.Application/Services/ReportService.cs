@@ -150,15 +150,45 @@ public class ReportService : IReportService
             var paidContributions = contributions.Where(c => c.PaymentStatus == PaymentStatus.Paid).ToList();
             var totalPaidFromContributions = paidContributions.Sum(c => c.Amount);
 
-            var paymentModeGroups = paidContributions
-                .GroupBy(c => c.PaymentMode == PaymentMode.None ? "UPI" : c.PaymentMode.ToString())
-                .Select(g => new PaymentModeReportDto
+            var modeTotals = new Dictionary<string, (decimal TotalAmount, int Count)>();
+
+            foreach (var c in paidContributions)
+            {
+                if (c.PaymentMode == PaymentMode.Split && (c.CashAmount.HasValue || c.UpiAmount.HasValue))
                 {
-                    PaymentMode = g.Key,
-                    TransactionCount = g.Count(),
-                    TotalAmount = g.Sum(c => c.Amount),
-                    Percentage = totalPaidFromContributions > 0 ? Math.Round((g.Sum(c => c.Amount) / totalPaidFromContributions) * 100, 1) : 0,
-                    VerifiedCount = g.Count()
+                    var cash = c.CashAmount ?? 0;
+                    var upi = c.UpiAmount ?? 0;
+
+                    if (cash > 0)
+                    {
+                        if (!modeTotals.ContainsKey("Cash")) modeTotals["Cash"] = (0, 0);
+                        var cur = modeTotals["Cash"];
+                        modeTotals["Cash"] = (cur.TotalAmount + cash, cur.Count + 1);
+                    }
+                    if (upi > 0)
+                    {
+                        if (!modeTotals.ContainsKey("UPI")) modeTotals["UPI"] = (0, 0);
+                        var cur = modeTotals["UPI"];
+                        modeTotals["UPI"] = (cur.TotalAmount + upi, cur.Count + 1);
+                    }
+                }
+                else
+                {
+                    var modeName = c.PaymentMode == PaymentMode.None ? "UPI" : (c.PaymentMode == PaymentMode.Upi ? "UPI" : c.PaymentMode.ToString());
+                    if (!modeTotals.ContainsKey(modeName)) modeTotals[modeName] = (0, 0);
+                    var cur = modeTotals[modeName];
+                    modeTotals[modeName] = (cur.TotalAmount + c.Amount, cur.Count + 1);
+                }
+            }
+
+            var paymentModeGroups = modeTotals
+                .Select(kvp => new PaymentModeReportDto
+                {
+                    PaymentMode = kvp.Key,
+                    TransactionCount = kvp.Value.Count,
+                    TotalAmount = kvp.Value.TotalAmount,
+                    Percentage = totalPaidFromContributions > 0 ? Math.Round((kvp.Value.TotalAmount / totalPaidFromContributions) * 100, 1) : 0,
+                    VerifiedCount = kvp.Value.Count
                 })
                 .OrderByDescending(x => x.TotalAmount)
                 .ToList();
