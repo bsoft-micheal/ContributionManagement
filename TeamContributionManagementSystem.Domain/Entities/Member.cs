@@ -18,4 +18,10 @@ public class Member
     public Role? Role { get; set; }
     public ICollection<EventParticipant> EventParticipants { get; set; } = new List<EventParticipant>();
     public ICollection<Contribution> Contributions { get; set; } = new List<Contribution>();
+
+    // Common Audit Properties
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? ModifiedBy { get; set; }
+    public DateTime? ModifiedOn { get; set; }
 }
