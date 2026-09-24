@@ -108,6 +108,8 @@ public class ApplicationDbContextSeeder
             ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
             ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
 
+            ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+            ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
             ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
             ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
             ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
@@ -119,6 +121,26 @@ public class ApplicationDbContextSeeder
             ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
             ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
             ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+            ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
         ");
 
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS base_amount DECIMAL(12, 2) NOT NULL DEFAULT 0;");
@@ -128,6 +150,7 @@ public class ApplicationDbContextSeeder
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE members ADD COLUMN IF NOT EXISTS member_type VARCHAR(20) NOT NULL DEFAULT 'Office';");
         try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE gallery_photos ALTER COLUMN image_url TYPE TEXT;"); } catch { }
         try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE payment_transactions ALTER COLUMN screenshot TYPE TEXT;"); } catch { }
+        try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS attachment TEXT;"); } catch { }
         try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE support_tickets ALTER COLUMN attachment TYPE TEXT;"); } catch { }
         // Self-healing: Ensure new tables exist in PostgreSQL
         await _context.Database.ExecuteSqlRawAsync(@"
@@ -164,7 +187,7 @@ public class ApplicationDbContextSeeder
                 assigned_to VARCHAR(150) NULL,
                 ref_no VARCHAR(100) NULL,
                 utr VARCHAR(100) NULL,
-                attachment VARCHAR(500) NULL,
+                attachment TEXT NULL,
                 resolution_notes VARCHAR(2000) NULL,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
@@ -239,50 +262,233 @@ public class ApplicationDbContextSeeder
                 modified_by VARCHAR(150) NULL,
                 modified_on TIMESTAMP WITH TIME ZONE NULL
             );
+
+            CREATE TABLE IF NOT EXISTS ticket_types (
+                ticket_type_id UUID PRIMARY KEY,
+                type_name VARCHAR(150) NOT NULL UNIQUE,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+                created_by VARCHAR(150) NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                modified_by VARCHAR(150) NULL,
+                modified_on TIMESTAMP WITH TIME ZONE NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS statuses (
+                status_id UUID PRIMARY KEY,
+                status_name VARCHAR(100) NOT NULL UNIQUE,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+                created_by VARCHAR(150) NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                modified_by VARCHAR(150) NULL,
+                modified_on TIMESTAMP WITH TIME ZONE NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS work_types (
+                work_type_id UUID PRIMARY KEY,
+                work_type_name VARCHAR(100) NOT NULL UNIQUE,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+                created_by VARCHAR(150) NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                modified_by VARCHAR(150) NULL,
+                modified_on TIMESTAMP WITH TIME ZONE NULL
+            );
         ");
 
+        try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS ticket_types DROP COLUMN IF EXISTS description;"); } catch { }
+
         // Seed initial Budget Calculations if empty
-        if (!await _context.BudgetCalculations.AnyAsync(cancellationToken))
+        try
         {
-            var defaultBudgetItems = new List<BudgetCalculation>
+            if (!await _context.BudgetCalculations.AnyAsync(cancellationToken))
             {
-                new BudgetCalculation
+                var defaultBudgetItems = new List<BudgetCalculation>
                 {
-                    BudgetCalculationId = Guid.NewGuid(),
-                    ExpenseItem = "½ kg Cake",
-                    Rate = 300,
-                    Category = "Birthday",
-                    IsActive = true,
-                    CreatedBy = "System",
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedOn = DateTime.UtcNow
-                },
-                new BudgetCalculation
-                {
-                    BudgetCalculationId = Guid.NewGuid(),
-                    ExpenseItem = "Chicken Roll / Puffs",
-                    Rate = 20,
-                    Category = "Birthday",
-                    IsActive = true,
-                    CreatedBy = "System",
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedOn = DateTime.UtcNow
-                },
-                new BudgetCalculation
-                {
-                    BudgetCalculationId = Guid.NewGuid(),
-                    ExpenseItem = "Birthday Gift",
-                    Rate = 1000,
-                    Category = "Birthday",
-                    IsActive = true,
-                    CreatedBy = "System",
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedOn = DateTime.UtcNow
-                }
-            };
-            await _context.BudgetCalculations.AddRangeAsync(defaultBudgetItems, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
+                    new BudgetCalculation
+                    {
+                        BudgetCalculationId = Guid.NewGuid(),
+                        ExpenseItem = "½ kg Cake",
+                        Rate = 300,
+                        Category = "Birthday",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new BudgetCalculation
+                    {
+                        BudgetCalculationId = Guid.NewGuid(),
+                        ExpenseItem = "Chicken Roll / Puffs",
+                        Rate = 20,
+                        Category = "Birthday",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new BudgetCalculation
+                    {
+                        BudgetCalculationId = Guid.NewGuid(),
+                        ExpenseItem = "Birthday Gift",
+                        Rate = 1000,
+                        Category = "Birthday",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    }
+                };
+                await _context.BudgetCalculations.AddRangeAsync(defaultBudgetItems, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
         }
+        catch { }
+
+        // Seed initial Ticket Types if empty
+        try
+        {
+            if (!await _context.TicketTypes.AnyAsync(cancellationToken))
+            {
+                var defaultTicketTypes = new List<TicketType>
+                {
+                    new TicketType
+                    {
+                        TicketTypeId = Guid.NewGuid(),
+                        TypeName = "Payment Issue",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new TicketType
+                    {
+                        TicketTypeId = Guid.NewGuid(),
+                        TypeName = "Event Clarification",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new TicketType
+                    {
+                        TicketTypeId = Guid.NewGuid(),
+                        TypeName = "Application Issue",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new TicketType
+                    {
+                        TicketTypeId = Guid.NewGuid(),
+                        TypeName = "Feedback",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new TicketType
+                    {
+                        TicketTypeId = Guid.NewGuid(),
+                        TypeName = "Other",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    }
+                };
+                await _context.TicketTypes.AddRangeAsync(defaultTicketTypes, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+        catch { }
+
+        // Seed initial Statuses if empty
+        try
+        {
+            if (!await _context.Statuses.AnyAsync(cancellationToken))
+            {
+                var defaultStatuses = new List<Status>
+                {
+                    new Status
+                    {
+                        StatusId = Guid.NewGuid(),
+                        StatusName = "Open",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new Status
+                    {
+                        StatusId = Guid.NewGuid(),
+                        StatusName = "In Progress",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new Status
+                    {
+                        StatusId = Guid.NewGuid(),
+                        StatusName = "Resolved",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new Status
+                    {
+                        StatusId = Guid.NewGuid(),
+                        StatusName = "Closed",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    }
+                };
+                await _context.Statuses.AddRangeAsync(defaultStatuses, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+        catch { }
+
+        // Seed initial Work Types if empty
+        try
+        {
+            if (!await _context.WorkTypes.AnyAsync(cancellationToken))
+            {
+                var defaultWorkTypes = new List<WorkType>
+                {
+                    new WorkType
+                    {
+                        WorkTypeId = Guid.NewGuid(),
+                        WorkTypeName = "Office",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    },
+                    new WorkType
+                    {
+                        WorkTypeId = Guid.NewGuid(),
+                        WorkTypeName = "WFH",
+                        IsActive = true,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    }
+                };
+                await _context.WorkTypes.AddRangeAsync(defaultWorkTypes, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+        catch { }
 
         // Clean up previously seeded dummy expenses if any exist
         var dummyExpenses = await _context.Expenses
@@ -437,79 +643,120 @@ public class ApplicationDbContextSeeder
         }
 
         // Seeding default Role Rights
-        var existingRoleRights = await _context.RoleRights.ToListAsync(cancellationToken);
-        var existingKeySet = existingRoleRights
-            .Select(x => $"{x.Role}|{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}")
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var defaultPages = new[]
+        try
         {
-            (Module: "Dashboard", SubModule: "Analytics", Page: "Dashboard"),
-            (Module: "Members", SubModule: "Directory", Page: "Members"),
-            (Module: "Events", SubModule: "Registry", Page: "Events"),
-            (Module: "Events", SubModule: "Calendar", Page: "Calendar"),
-            (Module: "Contributions", SubModule: "Ledger", Page: "Contributions"),
-            (Module: "Contributions", SubModule: "Calculation", Page: "Calculation"),
-            (Module: "Support Data", SubModule: "Categories", Page: "Event Types"),
-            (Module: "Support Data", SubModule: "Clearance", Page: "Exit Process"),
-            (Module: "Support Data", SubModule: "Admin", Page: "User Rights"),
-            (Module: "Support Data", SubModule: "Admin", Page: "Users"),
-            (Module: "Support Data", SubModule: "Admin", Page: "Roles"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Event Audit"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Member Velocity"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Pending Dues"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Member Category Paid"),
-            (Module: "Contributions", SubModule: "Expenses", Page: "Expenses"),
-            (Module: "Contributions", SubModule: "Payments", Page: "Payments"),
-            (Module: "Events", SubModule: "Media", Page: "Gallery"),
-            (Module: "Support Data", SubModule: "Helpdesk", Page: "Support Tickets"),
-            (Module: "Support Data", SubModule: "Calculations", Page: "Budget Calculations"),
-            (Module: "Support Data", SubModule: "Configuration", Page: "Settings")
-        };
+            var existingRoleRights = await _context.RoleRights.AsNoTracking().ToListAsync(cancellationToken);
+            var existingKeySet = existingRoleRights
+                .Select(x => $"{x.Role}|{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var roleRightsList = new List<RoleRight>();
-
-        foreach (var role in Enum.GetValues<UserRole>())
-        {
-            foreach (var page in defaultPages)
+            var defaultPages = new[]
             {
-                var key = $"{role}|{page.Module.Trim()}|{page.SubModule.Trim()}|{page.Page.Trim()}";
-                if (existingKeySet.Contains(key))
-                {
-                    continue;
-                }
+                (Module: "Dashboard", SubModule: "Analytics", Page: "Dashboard"),
+                (Module: "Members", SubModule: "Directory", Page: "Members"),
+                (Module: "Events", SubModule: "Registry", Page: "Events"),
+                (Module: "Events", SubModule: "Calendar", Page: "Calendar"),
+                (Module: "Contributions", SubModule: "Ledger", Page: "Contributions"),
+                (Module: "Contributions", SubModule: "Calculation", Page: "Calculation"),
+                (Module: "Support Data", SubModule: "Categories", Page: "Event Types"),
+                (Module: "Support Data", SubModule: "Clearance", Page: "Exit Process"),
+                (Module: "Support Data", SubModule: "Admin", Page: "User Rights"),
+                (Module: "Support Data", SubModule: "Admin", Page: "Users"),
+                (Module: "Support Data", SubModule: "Admin", Page: "Roles"),
+                (Module: "Reports", SubModule: "Analytics", Page: "Event Audit"),
+                (Module: "Reports", SubModule: "Analytics", Page: "Member Velocity"),
+                (Module: "Reports", SubModule: "Analytics", Page: "Pending Dues"),
+                (Module: "Reports", SubModule: "Analytics", Page: "Member Category Paid"),
+                (Module: "Contributions", SubModule: "Expenses", Page: "Expense"),
+                (Module: "Contributions", SubModule: "Payments", Page: "Payments"),
+                (Module: "Events", SubModule: "Media", Page: "Gallery"),
+                (Module: "Support Data", SubModule: "Helpdesk", Page: "Support Tickets"),
+                (Module: "Support Data", SubModule: "Calculations", Page: "Budget Calculations"),
+                (Module: "Support Data", SubModule: "Helpdesk", Page: "Types"),
+                (Module: "Support Data", SubModule: "Helpdesk", Page: "Ticket Types"),
+                (Module: "Support Data", SubModule: "Helpdesk", Page: "Status"),
+                (Module: "Support Data", SubModule: "Configuration", Page: "Settings")
+            };
 
-                string access = "readWrite"; // default for Admin / Manager
+            var roleRightsList = new List<RoleRight>();
 
-                if (role == UserRole.User || role == UserRole.Member)
+            foreach (var role in Enum.GetValues<UserRole>())
+            {
+                foreach (var page in defaultPages)
                 {
-                    if (page.Page == "Event Types" || page.Page == "Exit Process" || page.Page == "User Rights" || page.Page == "Users" || page.Page == "Settings")
+                    var key = $"{role}|{page.Module.Trim()}|{page.SubModule.Trim()}|{page.Page.Trim()}";
+                    if (existingKeySet.Contains(key))
                     {
-                        access = "deny";
+                        continue;
                     }
-                    else
+
+                    string access = "readWrite"; // default for Admin / Manager
+
+                    if (role == UserRole.User || role == UserRole.Member)
                     {
-                        access = "readWrite";
+                        if (page.Page == "Event Types" || page.Page == "Exit Process" || page.Page == "User Rights" || page.Page == "Users" || page.Page == "Settings")
+                        {
+                            access = "deny";
+                        }
+                        else
+                        {
+                            access = "readWrite";
+                        }
+                    }
+
+                    roleRightsList.Add(new RoleRight
+                    {
+                        RoleRightId = Guid.NewGuid(),
+                        Role = role,
+                        Module = page.Module,
+                        SubModule = page.SubModule,
+                        Page = page.Page,
+                        Access = access,
+                        IsActive = true,
+                        IsDeleted = false,
+                        CreatedBy = "System",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    });
+                    existingKeySet.Add(key);
+                }
+            }
+
+            if (roleRightsList.Count > 0)
+            {
+                try
+                {
+                    await _context.RoleRights.AddRangeAsync(roleRightsList, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+                catch
+                {
+                    _context.ChangeTracker.Clear();
+                    // Fallback: Add items individually to ignore any unique constraint conflicts
+                    foreach (var rr in roleRightsList)
+                    {
+                        try
+                        {
+                            var exists = await _context.RoleRights.AnyAsync(x =>
+                                x.Role == rr.Role &&
+                                x.Module == rr.Module &&
+                                x.SubModule == rr.SubModule &&
+                                x.Page == rr.Page, cancellationToken);
+
+                            if (!exists)
+                            {
+                                await _context.RoleRights.AddAsync(rr, cancellationToken);
+                                await _context.SaveChangesAsync(cancellationToken);
+                            }
+                        }
+                        catch
+                        {
+                            _context.ChangeTracker.Clear();
+                        }
                     }
                 }
-
-                roleRightsList.Add(new RoleRight
-                {
-                    RoleRightId = Guid.NewGuid(),
-                    Role = role,
-                    Module = page.Module,
-                    SubModule = page.SubModule,
-                    Page = page.Page,
-                    Access = access
-                });
-                existingKeySet.Add(key);
             }
         }
-
-        if (roleRightsList.Count > 0)
-        {
-            await _context.RoleRights.AddRangeAsync(roleRightsList, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
-        }
+        catch { }
     }
 }

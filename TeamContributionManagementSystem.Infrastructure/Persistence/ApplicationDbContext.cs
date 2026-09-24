@@ -29,6 +29,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<DeviceLoginHistory> DeviceLoginHistories => Set<DeviceLoginHistory>();
     public DbSet<UserMfaDevice> UserMfaDevices => Set<UserMfaDevice>();
     public DbSet<BudgetCalculation> BudgetCalculations => Set<BudgetCalculation>();
+    public DbSet<TicketType> TicketTypes => Set<TicketType>();
+    public DbSet<Status> Statuses => Set<Status>();
+    public DbSet<WorkType> WorkTypes => Set<WorkType>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -174,7 +177,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.AssignedTo).HasMaxLength(150);
             entity.Property(x => x.RefNo).HasMaxLength(100);
             entity.Property(x => x.Utr).HasMaxLength(100);
-            entity.Property(x => x.Attachment).HasMaxLength(500);
+            entity.Property(x => x.Attachment).HasColumnType("text");
             entity.Property(x => x.ResolutionNotes).HasMaxLength(2000);
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
@@ -261,6 +264,33 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.ExpenseItem);
+        });
+
+        modelBuilder.Entity<TicketType>(entity =>
+        {
+            entity.HasKey(x => x.TicketTypeId);
+            entity.Property(x => x.TypeName).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.TypeName).IsUnique();
+        });
+
+        modelBuilder.Entity<Status>(entity =>
+        {
+            entity.HasKey(x => x.StatusId);
+            entity.Property(x => x.StatusName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.StatusName).IsUnique();
+        });
+
+        modelBuilder.Entity<WorkType>(entity =>
+        {
+            entity.HasKey(x => x.WorkTypeId);
+            entity.Property(x => x.WorkTypeName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.WorkTypeName).IsUnique();
         });
 
         modelBuilder.ApplySnakeCaseNames();

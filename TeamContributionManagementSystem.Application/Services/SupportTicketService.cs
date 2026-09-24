@@ -100,6 +100,36 @@ public class SupportTicketService : ISupportTicketService
             var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
             ?? throw new KeyNotFoundException($"Support ticket with ID {ticketId} not found.");
 
+        if (!string.IsNullOrWhiteSpace(request.MemberName))
+        {
+            ticket.MemberName = request.MemberName.Trim();
+        }
+
+        if (request.MemberId != null)
+        {
+            ticket.MemberId = string.IsNullOrWhiteSpace(request.MemberId) ? null : request.MemberId.Trim();
+        }
+
+        if (request.RelatedEvent != null)
+        {
+            ticket.RelatedEvent = string.IsNullOrWhiteSpace(request.RelatedEvent) ? null : request.RelatedEvent.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.TicketType))
+        {
+            ticket.TicketType = request.TicketType.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Subject))
+        {
+            ticket.Subject = request.Subject.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Description))
+        {
+            ticket.Description = request.Description.Trim();
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Status))
         {
             ticket.Status = request.Status.Trim();
@@ -110,9 +140,24 @@ public class SupportTicketService : ISupportTicketService
             ticket.Priority = request.Priority.Trim();
         }
 
-        if (!string.IsNullOrWhiteSpace(request.AssignedTo))
+        if (request.AssignedTo != null)
         {
-            ticket.AssignedTo = request.AssignedTo.Trim();
+            ticket.AssignedTo = string.IsNullOrWhiteSpace(request.AssignedTo) ? null : request.AssignedTo.Trim();
+        }
+
+        if (request.RefNo != null)
+        {
+            ticket.RefNo = string.IsNullOrWhiteSpace(request.RefNo) ? null : request.RefNo.Trim();
+        }
+
+        if (request.Utr != null)
+        {
+            ticket.Utr = string.IsNullOrWhiteSpace(request.Utr) ? null : request.Utr.Trim();
+        }
+
+        if (request.Attachment != null)
+        {
+            ticket.Attachment = string.IsNullOrWhiteSpace(request.Attachment) ? null : request.Attachment.Trim();
         }
 
         if (!string.IsNullOrWhiteSpace(request.ResolutionNotes))

@@ -161,4 +161,31 @@ public static class CommonMessages
         public const string UpdateSuccess = "Budget calculation item updated successfully.";
         public const string DeleteSuccess = "Budget calculation item deleted successfully.";
     }
+
+    public static class TicketTypes
+    {
+        public const string GetAllSuccess = "Ticket types retrieved successfully.";
+        public const string GetByIdSuccess = "Ticket type details retrieved successfully.";
+        public const string SaveSuccess = "Ticket type created successfully.";
+        public const string UpdateSuccess = "Ticket type updated successfully.";
+        public const string DeleteSuccess = "Ticket type deleted successfully.";
+    }
+
+    public static class Statuses
+    {
+        public const string GetAllSuccess = "Statuses retrieved successfully.";
+        public const string GetByIdSuccess = "Status details retrieved successfully.";
+        public const string SaveSuccess = "Status created successfully.";
+        public const string UpdateSuccess = "Status updated successfully.";
+        public const string DeleteSuccess = "Status deleted successfully.";
+    }
+
+    public static class WorkTypes
+    {
+        public const string GetAllSuccess = "Work types retrieved successfully.";
+        public const string GetByIdSuccess = "Work type details retrieved successfully.";
+        public const string SaveSuccess = "Work type created successfully.";
+        public const string UpdateSuccess = "Work type updated successfully.";
+        public const string DeleteSuccess = "Work type deleted successfully.";
+    }
 }
