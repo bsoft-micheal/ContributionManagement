@@ -14,6 +14,7 @@ public class ExpenseDto
     public string? ApprovedBy { get; set; }
     public string Description { get; set; } = string.Empty;
     public string? FileName { get; set; }
+    public string? FileUrl { get; set; }
     public bool IsActive { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedOn { get; set; }
@@ -54,6 +55,8 @@ public class CreateExpenseRequestDto
 
     [MaxLength(500)]
     public string? FileName { get; set; }
+
+    public string? FileData { get; set; }
 }
 
 public class UpdateExpenseRequestDto : CreateExpenseRequestDto
