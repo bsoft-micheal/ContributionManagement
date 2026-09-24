@@ -152,7 +152,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.SubmittedBy).HasMaxLength(150).IsRequired();
             entity.Property(x => x.ApprovedBy).HasMaxLength(150);
             entity.Property(x => x.Description).HasMaxLength(1000);
-            entity.Property(x => x.FileName).HasMaxLength(500);
+            entity.Property(x => x.FileName).HasColumnType("text");
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => new { x.ExpenseDate, x.Status });

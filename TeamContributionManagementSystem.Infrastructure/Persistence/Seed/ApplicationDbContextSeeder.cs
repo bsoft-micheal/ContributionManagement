@@ -154,19 +154,13 @@ public class ApplicationDbContextSeeder
             );
         ");
 
-        // Seed initial Expenses if empty
-        if (!await _context.Expenses.AnyAsync(cancellationToken))
+        // Clean up previously seeded dummy expenses if any exist
+        var dummyExpenses = await _context.Expenses
+            .Where(x => x.CreatedBy == "System" && (x.EventName == "Team Dinner" || x.EventName == "Michael Farewell" || x.EventName == "Priya Birthday"))
+            .ToListAsync(cancellationToken);
+        if (dummyExpenses.Any())
         {
-            var initialExpenses = new List<Expense>
-            {
-                new() { ExpenseId = Guid.NewGuid(), EventName = "Team Dinner", Category = "Food", Amount = 18000, ExpenseDate = DateTime.UtcNow.AddDays(9), Status = "Approved", SubmittedBy = "Rahul Mehta", ApprovedBy = "Admin", Description = "Team dinner celebration at Royal Dine.", FileName = "receipt_dinner.pdf", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { ExpenseId = Guid.NewGuid(), EventName = "Michael Farewell", Category = "Gift", Amount = 7500, ExpenseDate = DateTime.UtcNow.AddDays(4), Status = "Pending", SubmittedBy = "Priya Shah", ApprovedBy = "-", Description = "Customized keepsake and bouquet for farewell.", FileName = "receipt_gift.pdf", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { ExpenseId = Guid.NewGuid(), EventName = "Priya Birthday", Category = "Decoration", Amount = 4200, ExpenseDate = DateTime.UtcNow.AddDays(12), Status = "Approved", SubmittedBy = "Ankit Verma", ApprovedBy = "Admin", Description = "Balloons, party streamers and birthday banner.", FileName = "receipt_decor.pdf", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { ExpenseId = Guid.NewGuid(), EventName = "Team Dinner", Category = "Venue", Amount = 12000, ExpenseDate = DateTime.UtcNow.AddDays(9), Status = "Rejected", SubmittedBy = "Neha Patel", ApprovedBy = "Admin", Description = "Hall booking advance fee.", FileName = null, CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { ExpenseId = Guid.NewGuid(), EventName = "Michael Farewell", Category = "Transport", Amount = 3500, ExpenseDate = DateTime.UtcNow.AddDays(3), Status = "Approved", SubmittedBy = "Vikram Singh", ApprovedBy = "Admin", Description = "Group cab transport services.", FileName = null, CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { ExpenseId = Guid.NewGuid(), EventName = "Priya Birthday", Category = "Food", Amount = 7200, ExpenseDate = DateTime.UtcNow.AddDays(11), Status = "Pending", SubmittedBy = "Sneha Iyer", ApprovedBy = "-", Description = "Pastries, snacks and juice refreshments.", FileName = "refreshments.jpg", CreatedBy = "System", CreatedOn = DateTime.UtcNow }
-            };
-            await _context.Expenses.AddRangeAsync(initialExpenses, cancellationToken);
+            _context.Expenses.RemoveRange(dummyExpenses);
             await _context.SaveChangesAsync(cancellationToken);
         }
 

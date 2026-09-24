@@ -9,12 +9,12 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class ExpenseService : IExpenseService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<ExpenseService> _logger;
+    private readonly ILogger<ExpenseService> _logger;
     private readonly IExpenseRepository _expenseRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public ExpenseService(Microsoft.Extensions.Logging.ILogger<ExpenseService> logger, IExpenseRepository expenseRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public ExpenseService(ILogger<ExpenseService> logger, IExpenseRepository expenseRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
         _logger = logger;
         _expenseRepository = expenseRepository;
@@ -27,7 +27,7 @@ public class ExpenseService : IExpenseService
         try
         {
             var expenses = await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<ExpenseDto>>(expenses);
+            return _mapper.Map<IReadOnlyCollection<ExpenseDto>>(expenses);
         }
         catch (Exception ex)
         {
@@ -41,8 +41,8 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
-        return _mapper.Map<ExpenseDto>(expense);
+                ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
+            return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
@@ -55,33 +55,35 @@ public class ExpenseService : IExpenseService
     {
         try
         {
+            var savedFilePath = await ProcessAttachmentAsync(request.FileName, request.FileData, null, cancellationToken);
+
             var expense = new Expense
-        {
-            ExpenseId = Guid.NewGuid(),
-            EventName = request.EventName.Trim(),
-            Category = request.Category.Trim(),
-            Amount = request.Amount,
-            ExpenseDate = request.ExpenseDate,
-            Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status.Trim(),
-            SubmittedBy = request.SubmittedBy.Trim(),
-            ApprovedBy = request.ApprovedBy?.Trim(),
-            Description = request.Description.Trim(),
-            FileName = request.FileName?.Trim(),
-            IsActive = true,
-            IsDeleted = false,
-            CreatedBy = string.IsNullOrWhiteSpace(user) ? "System" : user,
-            CreatedOn = DateTime.UtcNow
-        };
+            {
+                ExpenseId = Guid.NewGuid(),
+                EventName = request.EventName.Trim(),
+                Category = request.Category.Trim(),
+                Amount = request.Amount,
+                ExpenseDate = request.ExpenseDate,
+                Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status.Trim(),
+                SubmittedBy = request.SubmittedBy.Trim(),
+                ApprovedBy = request.ApprovedBy?.Trim(),
+                Description = request.Description.Trim(),
+                FileName = savedFilePath,
+                IsActive = true,
+                IsDeleted = false,
+                CreatedBy = string.IsNullOrWhiteSpace(user) ? "System" : user,
+                CreatedOn = DateTime.UtcNow
+            };
 
-        if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
-        {
-            expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
-        }
+            if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
+            {
+                expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
+            }
 
-        await _expenseRepository.AddAsync(expense, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _expenseRepository.AddAsync(expense, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return _mapper.Map<ExpenseDto>(expense);
+            return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
@@ -95,29 +97,31 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
+                ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
 
-        expense.EventName = request.EventName.Trim();
-        expense.Category = request.Category.Trim();
-        expense.Amount = request.Amount;
-        expense.ExpenseDate = request.ExpenseDate;
-        expense.Status = string.IsNullOrWhiteSpace(request.Status) ? expense.Status : request.Status.Trim();
-        expense.SubmittedBy = request.SubmittedBy.Trim();
-        expense.ApprovedBy = request.ApprovedBy?.Trim();
-        expense.Description = request.Description.Trim();
-        expense.FileName = request.FileName?.Trim() ?? expense.FileName;
-        expense.ModifiedBy = string.IsNullOrWhiteSpace(user) ? "System" : user;
-        expense.ModifiedOn = DateTime.UtcNow;
+            var savedFilePath = await ProcessAttachmentAsync(request.FileName, request.FileData, expense.FileName, cancellationToken);
 
-        if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
-        {
-            expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
-        }
+            expense.EventName = request.EventName.Trim();
+            expense.Category = request.Category.Trim();
+            expense.Amount = request.Amount;
+            expense.ExpenseDate = request.ExpenseDate;
+            expense.Status = string.IsNullOrWhiteSpace(request.Status) ? expense.Status : request.Status.Trim();
+            expense.SubmittedBy = request.SubmittedBy.Trim();
+            expense.ApprovedBy = request.ApprovedBy?.Trim();
+            expense.Description = request.Description.Trim();
+            expense.FileName = savedFilePath;
+            expense.ModifiedBy = string.IsNullOrWhiteSpace(user) ? "System" : user;
+            expense.ModifiedOn = DateTime.UtcNow;
 
-        _expenseRepository.Update(expense);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
+            {
+                expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
+            }
 
-        return _mapper.Map<ExpenseDto>(expense);
+            _expenseRepository.Update(expense);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
@@ -131,15 +135,40 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
+                ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
 
-        _expenseRepository.Delete(expense);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _expenseRepository.Delete(expense);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in DeleteAsync");
             throw;
         }
+    }
+
+    private Task<string?> ProcessAttachmentAsync(string? originalFileName, string? fileData, string? existingFilePath, CancellationToken cancellationToken)
+    {
+        // 1. If new fileData provided in base64 format (data:image/...), store base64 string directly in DB
+        if (!string.IsNullOrWhiteSpace(fileData) && (fileData.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || fileData.Length > 100))
+        {
+            return Task.FromResult<string?>(fileData);
+        }
+
+        // 2. If originalFileName is already a base64 string
+        if (!string.IsNullOrWhiteSpace(originalFileName) && (originalFileName.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || originalFileName.Length > 100))
+        {
+            return Task.FromResult<string?>(originalFileName);
+        }
+
+        // 3. If file was cleared (both fileName and fileData null or empty)
+        if (string.IsNullOrWhiteSpace(originalFileName) && string.IsNullOrWhiteSpace(fileData))
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        // 4. Retain previous base64 or file value
+        var result = !string.IsNullOrWhiteSpace(originalFileName) ? originalFileName : existingFilePath;
+        return Task.FromResult<string?>(result);
     }
 }

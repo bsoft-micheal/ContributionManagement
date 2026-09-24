@@ -53,7 +53,8 @@ public class MappingProfile : Profile
 
         CreateMap<RoleRight, RoleRightDto>().ReverseMap();
 
-        CreateMap<Expense, ExpenseDto>();
+        CreateMap<Expense, ExpenseDto>()
+            .ForMember(dest => dest.FileUrl, opt => opt.MapFrom(src => src.FileName));
         CreateMap<SupportTicket, SupportTicketDto>();
         CreateMap<SystemSetting, SettingItemDto>();
         CreateMap<PaymentTransaction, PaymentTransactionDto>();
