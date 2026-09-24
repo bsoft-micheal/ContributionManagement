@@ -62,4 +62,5 @@ public class PayContributionRequestDto
     public DateTime? PaymentDate { get; set; }
     public decimal? CashAmount { get; set; }
     public decimal? UpiAmount { get; set; }
+    public string? PaymentScope { get; set; }
 }
