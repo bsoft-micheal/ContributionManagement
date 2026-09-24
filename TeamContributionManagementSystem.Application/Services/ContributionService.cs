@@ -4,6 +4,7 @@ using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Enums;
+using TeamContributionManagementSystem.Domain.Entities;
 
 namespace TeamContributionManagementSystem.Application.Services;
 
@@ -76,9 +77,90 @@ public class ContributionService : IContributionService
                 {
                     throw new ArgumentException($"Cash (₹{request.CashAmount.Value}) + UPI (₹{request.UpiAmount.Value}) = ₹{splitSum} must equal Total Amount (₹{targetAmount}).");
                 }
+            }
 
-                contribution.CashAmount = request.CashAmount.Value;
-                contribution.UpiAmount = request.UpiAmount.Value;
+            var paymentDate = request.PaymentDate?.ToUniversalTime() ?? DateTime.UtcNow;
+
+            // Handle Multi-Event Settlement (PreviousArrears / AllOutstanding)
+            if (!string.IsNullOrWhiteSpace(request.PaymentScope) &&
+                (request.PaymentScope.Equals("PreviousArrears", StringComparison.OrdinalIgnoreCase) ||
+                 request.PaymentScope.Equals("AllOutstanding", StringComparison.OrdinalIgnoreCase)))
+            {
+                var allContributions = await _contributionRepository.GetAllAsync(cancellationToken);
+                var memberContributions = allContributions
+                    .Where(c => c.MemberId == request.MemberId && !c.IsDeleted)
+                    .ToList();
+
+                List<Contribution> pendingToPay;
+
+                if (request.PaymentScope.Equals("PreviousArrears", StringComparison.OrdinalIgnoreCase))
+                {
+                    pendingToPay = memberContributions
+                        .Where(c => c.EventId != request.EventId && c.PaymentStatus != PaymentStatus.Paid)
+                        .OrderBy(c => c.Event != null ? c.Event.EventDate : DateTime.MinValue)
+                        .ToList();
+                }
+                else
+                {
+                    // AllOutstanding: previous arrears first, then current event
+                    pendingToPay = memberContributions
+                        .Where(c => c.PaymentStatus != PaymentStatus.Paid)
+                        .OrderBy(c => c.EventId == request.EventId ? 1 : 0)
+                        .ThenBy(c => c.Event != null ? c.Event.EventDate : DateTime.MinValue)
+                        .ToList();
+                }
+
+                decimal remainingAllocation = targetAmount;
+
+                foreach (var item in pendingToPay)
+                {
+                    if (remainingAllocation <= 0) break;
+
+                    decimal dueForThis = item.Amount;
+                    decimal paidForThis = Math.Min(remainingAllocation, dueForThis);
+                    remainingAllocation -= paidForThis;
+
+                    item.PaymentStatus = PaymentStatus.Paid;
+                    item.PaymentDate = paymentDate;
+                    item.PaymentMode = request.PaymentMode;
+
+                    if (request.PaymentMode == PaymentMode.Split && targetAmount > 0)
+                    {
+                        decimal ratio = paidForThis / targetAmount;
+                        item.CashAmount = Math.Round((request.CashAmount ?? 0) * ratio, 2);
+                        item.UpiAmount = Math.Round((request.UpiAmount ?? 0) * ratio, 2);
+                    }
+                    else
+                    {
+                        item.CashAmount = null;
+                        item.UpiAmount = null;
+                    }
+
+                    _contributionRepository.Update(item);
+                }
+
+                // If current contribution wasn't in pendingToPay (already paid), update its details
+                if (!pendingToPay.Any(x => x.ContributionId == contribution.ContributionId))
+                {
+                    contribution.PaymentDate = paymentDate;
+                    contribution.PaymentMode = request.PaymentMode;
+                    if (request.PaymentMode == PaymentMode.Split)
+                    {
+                        contribution.CashAmount = request.CashAmount;
+                        contribution.UpiAmount = request.UpiAmount;
+                    }
+                    _contributionRepository.Update(contribution);
+                }
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                return _mapper.Map<ContributionDto>(contribution);
+            }
+
+            // Standard Single Event Payment
+            if (request.PaymentMode == PaymentMode.Split)
+            {
+                contribution.CashAmount = request.CashAmount ?? 0;
+                contribution.UpiAmount = request.UpiAmount ?? 0;
             }
             else
             {
@@ -92,7 +174,7 @@ public class ContributionService : IContributionService
             }
 
             contribution.PaymentStatus = PaymentStatus.Paid;
-            contribution.PaymentDate = request.PaymentDate?.ToUniversalTime() ?? DateTime.UtcNow;
+            contribution.PaymentDate = paymentDate;
             contribution.PaymentMode = request.PaymentMode;
 
             _contributionRepository.Update(contribution);
