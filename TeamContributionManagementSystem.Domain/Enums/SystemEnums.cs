@@ -22,7 +22,8 @@ public enum PaymentMode
     Cash = 1,
     Upi = 2,
     BankTransfer = 3,
-    Card = 4
+    Card = 4,
+    Split = 5
 }
 
 public enum UserRole

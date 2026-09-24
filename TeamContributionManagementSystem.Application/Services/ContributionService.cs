@@ -57,19 +57,48 @@ public class ContributionService : IContributionService
             var contribution = await _contributionRepository.GetByEventAndMemberAsync(request.EventId, request.MemberId, cancellationToken)
             ?? throw new KeyNotFoundException("Contribution record not found.");
 
-        if (request.Amount.HasValue)
-        {
-            contribution.Amount = request.Amount.Value;
-        }
+            var targetAmount = request.Amount ?? contribution.Amount;
 
-        contribution.PaymentStatus = PaymentStatus.Paid;
-        contribution.PaymentDate = request.PaymentDate?.ToUniversalTime() ?? DateTime.UtcNow;
-        contribution.PaymentMode = request.PaymentMode;
+            if (request.PaymentMode == PaymentMode.Split)
+            {
+                if (!request.CashAmount.HasValue || !request.UpiAmount.HasValue)
+                {
+                    throw new ArgumentException("Both Cash Amount and UPI Amount must be provided for Split Payment.");
+                }
 
-        _contributionRepository.Update(contribution);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                if (request.CashAmount.Value < 0 || request.UpiAmount.Value < 0)
+                {
+                    throw new ArgumentException("Split payment amounts cannot be negative.");
+                }
 
-        return _mapper.Map<ContributionDto>(contribution);
+                var splitSum = Math.Round(request.CashAmount.Value + request.UpiAmount.Value, 2);
+                if (splitSum != Math.Round(targetAmount, 2))
+                {
+                    throw new ArgumentException($"Cash (₹{request.CashAmount.Value}) + UPI (₹{request.UpiAmount.Value}) = ₹{splitSum} must equal Total Amount (₹{targetAmount}).");
+                }
+
+                contribution.CashAmount = request.CashAmount.Value;
+                contribution.UpiAmount = request.UpiAmount.Value;
+            }
+            else
+            {
+                contribution.CashAmount = null;
+                contribution.UpiAmount = null;
+            }
+
+            if (request.Amount.HasValue)
+            {
+                contribution.Amount = request.Amount.Value;
+            }
+
+            contribution.PaymentStatus = PaymentStatus.Paid;
+            contribution.PaymentDate = request.PaymentDate?.ToUniversalTime() ?? DateTime.UtcNow;
+            contribution.PaymentMode = request.PaymentMode;
+
+            _contributionRepository.Update(contribution);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return _mapper.Map<ContributionDto>(contribution);
         }
         catch (Exception ex)
         {

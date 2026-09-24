@@ -48,6 +48,8 @@ public class ApplicationDbContextSeeder
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp VARCHAR(10) NULL;");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_expiry TIMESTAMP WITH TIME ZONE NULL;");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS base_amount DECIMAL(12, 2) NOT NULL DEFAULT 0;");
+        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS cash_amount NUMERIC(12, 2) NULL;");
+        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS upi_amount NUMERIC(12, 2) NULL;");
         await _context.Database.ExecuteSqlRawAsync("UPDATE event_types SET base_amount = 500 WHERE LOWER(event_type_name) LIKE '%birthday%' AND (base_amount = 0 OR base_amount IS NULL);");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE members ADD COLUMN IF NOT EXISTS member_type VARCHAR(20) NOT NULL DEFAULT 'Office';");
         try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE gallery_photos ALTER COLUMN image_url TYPE TEXT;"); } catch { }

@@ -15,6 +15,8 @@ public class ContributionDto
     public PaymentStatus PaymentStatus { get; set; }
     public DateTime? PaymentDate { get; set; }
     public PaymentMode PaymentMode { get; set; }
+    public decimal? CashAmount { get; set; }
+    public decimal? UpiAmount { get; set; }
 }
 
 public class MemberContributionSummaryDto
@@ -58,4 +60,6 @@ public class PayContributionRequestDto
     public PaymentMode PaymentMode { get; set; }
 
     public DateTime? PaymentDate { get; set; }
+    public decimal? CashAmount { get; set; }
+    public decimal? UpiAmount { get; set; }
 }

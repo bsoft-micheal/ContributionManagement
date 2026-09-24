@@ -11,6 +11,8 @@ public class Contribution
     public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
     public DateTime? PaymentDate { get; set; }
     public PaymentMode PaymentMode { get; set; } = PaymentMode.None;
+    public decimal? CashAmount { get; set; }
+    public decimal? UpiAmount { get; set; }
     public bool IsDeleted { get; set; }
 
     public Event? Event { get; set; }
