@@ -28,6 +28,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<DeviceDetail> DeviceDetails => Set<DeviceDetail>();
     public DbSet<DeviceLoginHistory> DeviceLoginHistories => Set<DeviceLoginHistory>();
     public DbSet<UserMfaDevice> UserMfaDevices => Set<UserMfaDevice>();
+    public DbSet<BudgetCalculation> BudgetCalculations => Set<BudgetCalculation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -249,6 +250,17 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .WithMany(x => x.LoginHistories)
                 .HasForeignKey(x => x.DeviceDetailId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BudgetCalculation>(entity =>
+        {
+            entity.HasKey(x => x.BudgetCalculationId);
+            entity.Property(x => x.ExpenseItem).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Rate).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
+            entity.Property(x => x.Category).HasMaxLength(100);
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.ExpenseItem);
         });
 
         modelBuilder.ApplySnakeCaseNames();

@@ -39,7 +39,7 @@ public class SupportTicketRepository : ISupportTicketRepository
             query = query.Where(x => x.Priority.ToLower() == priority.ToLower());
         }
 
-        return await query.OrderByDescending(x => x.CreatedOn).ToListAsync(cancellationToken);
+        return await query.OrderByDescending(x => x.CreatedAt).ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {

@@ -43,7 +43,8 @@ public class UsersController : ControllerBase
     [ActionName("SaveUserAsync")]
     public async Task<ActionResult<ApiResponse<UserDto>>> SaveUserAsync([FromBody] CreateUserRequestDto request, CancellationToken cancellationToken)
     {
-        var user = await _userService.SaveUserAsync(request, cancellationToken);
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var user = await _userService.SaveUserAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<UserDto>.SuccessResult(user, CommonMessages.Users.SaveSuccess, CommonStatusCodes.Status201Created));
     }
 
@@ -58,6 +59,7 @@ public class UsersController : ControllerBase
     {
         try
         {
+            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
             var rawJson = jsonElement.GetRawText();
             var options = new System.Text.Json.JsonSerializerOptions
             {
@@ -77,7 +79,7 @@ public class UsersController : ControllerBase
                 {
                     return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult("One of the user request items is null.", CommonStatusCodes.Status400BadRequest));
                 }
-                created.Add(await _userService.SaveUserAsync(req, cancellationToken));
+                created.Add(await _userService.SaveUserAsync(req, currentUser, cancellationToken));
             }
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<UserDto>>.SuccessResult(created, CommonMessages.Users.SaveBulkSuccess, CommonStatusCodes.Status200OK));
         }
@@ -101,7 +103,8 @@ public class UsersController : ControllerBase
     [ActionName("UpdateUserAsyncById")]
     public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUserAsyncById(Guid id, [FromBody] UpdateUserRequestDto request, CancellationToken cancellationToken)
     {
-        var result = await _userService.UpdateUserAsyncById(id, request, cancellationToken);
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var result = await _userService.UpdateUserAsyncById(id, request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<UserDto>.SuccessResult(result, CommonMessages.Users.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
 

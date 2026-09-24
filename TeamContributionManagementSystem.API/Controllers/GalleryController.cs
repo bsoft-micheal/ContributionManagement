@@ -35,7 +35,7 @@ public class GalleryController : ControllerBase
     [ActionName("SaveGalleryAsync")]
     public async Task<ActionResult<ApiResponse<GalleryPhotoDto>>> SaveGalleryAsync([FromBody] CreateGalleryPhotoRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "User";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _galleryService.SaveGalleryAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<GalleryPhotoDto>.SuccessResult(result, CommonMessages.Gallery.SaveSuccess, CommonStatusCodes.Status201Created));
     }

@@ -114,7 +114,7 @@ public class SystemSettingService : ISystemSettingService
             {
                 entity.SettingValue = val;
                 entity.Category = cat;
-                entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
+                entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
                 entity.ModifiedOn = DateTime.UtcNow;
                 _settingRepository.Update(entity);
             }
@@ -126,8 +126,8 @@ public class SystemSettingService : ISystemSettingService
                     SettingKey = key,
                     SettingValue = val,
                     Category = cat,
-                    CreatedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user,
-                    CreatedOn = DateTime.UtcNow
+                    CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                    CreatedAt = DateTime.UtcNow
                 });
             }
         }
@@ -148,12 +148,12 @@ public class SystemSettingService : ISystemSettingService
         }
     }
 
-    public async Task<SystemSettingsDto> ResetSettingsAsync(CancellationToken cancellationToken = default)
+    public async Task<SystemSettingsDto> ResetSettingsAsync(string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var defaults = new SystemSettingsDto();
-        return await UpdateSettingsAsync(defaults, "System", cancellationToken);
+            return await UpdateSettingsAsync(defaults, user, cancellationToken);
         }
         catch (Exception ex)
         {

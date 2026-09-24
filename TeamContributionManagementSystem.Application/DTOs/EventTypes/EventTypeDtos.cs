@@ -8,6 +8,9 @@ public class EventTypeDto
     public string EventTypeName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public decimal BaseAmount { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn { get; set; }
 }
 
 public class CreateEventTypeRequestDto

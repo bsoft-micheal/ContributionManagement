@@ -46,7 +46,7 @@ public class PaymentsController : ControllerBase
     [ActionName("SavePaymentAsync")]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> SavePaymentAsync([FromBody] CreatePaymentTransactionRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "User";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _transactionService.SavePaymentAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.SaveSuccess, CommonStatusCodes.Status201Created));
     }
@@ -56,7 +56,7 @@ public class PaymentsController : ControllerBase
     [ActionName("VerifyPaymentAsync")]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> VerifyPaymentAsync(Guid id, [FromBody] VerifyPaymentRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "Admin";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _transactionService.VerifyPaymentAsync(id, request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.VerifySuccess, CommonStatusCodes.Status200OK));
     }

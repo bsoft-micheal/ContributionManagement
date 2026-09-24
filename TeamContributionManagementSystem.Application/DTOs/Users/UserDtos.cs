@@ -12,6 +12,8 @@ public class UserDto
     public bool IsActive { get; set; }
     public string? ProfileImage { get; set; }
     public DateTime CreatedOn { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
 
     // Joined from Member profile
     public DateTime? DateOfBirth { get; set; }

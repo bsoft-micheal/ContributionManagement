@@ -59,7 +59,7 @@ public class RoleRightsService : IRoleRightsService
         }
     }
 
-    public async Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, CancellationToken cancellationToken = default)
+    public async Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -75,7 +75,9 @@ public class RoleRightsService : IRoleRightsService
             Module = r.Module,
             SubModule = r.SubModule,
             Page = r.Page,
-            Access = r.Access
+            Access = r.Access,
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+            CreatedAt = DateTime.UtcNow
         }).ToList();
 
         await _roleRightRepository.SaveRoleRightsAsync(role, entities, cancellationToken);

@@ -210,11 +210,17 @@ public class ContributionService : IContributionService
 
         var categoryBreakdown = paidContributions
             .GroupBy(c => c.Event?.EventType?.EventTypeName ?? "Uncategorized")
-            .Select(g => new ContributionCategoryBreakdownDto
+            .Select(g =>
             {
-                CategoryName = g.Key,
-                TotalPaid = g.Sum(c => c.Amount),
-                EventCount = g.Select(c => c.EventId).Distinct().Count()
+                var first = g.FirstOrDefault();
+                return new ContributionCategoryBreakdownDto
+                {
+                    CategoryName = g.Key,
+                    TotalPaid = g.Sum(c => c.Amount),
+                    EventCount = g.Select(c => c.EventId).Distinct().Count(),
+                    CreatedBy = first?.CreatedBy ?? member.CreatedBy,
+                    CreatedAt = first?.CreatedAt ?? member.CreatedAt
+                };
             })
             .OrderByDescending(x => x.TotalPaid)
             .ToList();
@@ -226,7 +232,9 @@ public class ContributionService : IContributionService
                 CategoryName = c.Event?.EventType?.EventTypeName ?? "Uncategorized",
                 Amount = c.Amount,
                 PaymentStatus = c.PaymentStatus.ToString(),
-                PaymentDate = c.PaymentDate
+                PaymentDate = c.PaymentDate,
+                CreatedBy = c.CreatedBy ?? (c.Event?.CreatedByUser != null ? c.Event.CreatedByUser.FullName : null),
+                CreatedAt = c.CreatedAt
             })
             .ToList();
 

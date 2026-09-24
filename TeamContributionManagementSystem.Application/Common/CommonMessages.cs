@@ -152,4 +152,13 @@ public static class CommonMessages
         public const string ReplySuccess = "Support ticket reply added successfully.";
         public const string DeleteSuccess = "Support ticket deleted successfully.";
     }
+
+    public static class BudgetCalculations
+    {
+        public const string GetAllSuccess = "Budget calculation items retrieved successfully.";
+        public const string GetByIdSuccess = "Budget calculation item details retrieved successfully.";
+        public const string SaveSuccess = "Budget calculation item created successfully.";
+        public const string UpdateSuccess = "Budget calculation item updated successfully.";
+        public const string DeleteSuccess = "Budget calculation item deleted successfully.";
+    }
 }

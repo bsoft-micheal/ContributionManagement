@@ -71,13 +71,13 @@ public class ExpenseService : IExpenseService
                 FileName = savedFilePath,
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? "System" : user,
-                CreatedOn = DateTime.UtcNow
+                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedAt = DateTime.UtcNow
             };
 
             if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
             {
-                expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
+                expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             }
 
             await _expenseRepository.AddAsync(expense, cancellationToken);
@@ -110,12 +110,12 @@ public class ExpenseService : IExpenseService
             expense.ApprovedBy = request.ApprovedBy?.Trim();
             expense.Description = request.Description.Trim();
             expense.FileName = savedFilePath;
-            expense.ModifiedBy = string.IsNullOrWhiteSpace(user) ? "System" : user;
+            expense.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             expense.ModifiedOn = DateTime.UtcNow;
 
             if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
             {
-                expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
+                expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             }
 
             _expenseRepository.Update(expense);

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeamContributionManagementSystem.Application.Common;
@@ -42,7 +43,8 @@ public class RolesController : ControllerBase
     [ActionName("SaveRoleAsync")]
     public async Task<ActionResult<ApiResponse<RoleDto>>> SaveRoleAsync([FromBody] CreateRoleRequestDto request, CancellationToken cancellationToken)
     {
-        var result = await _roleService.SaveRoleAsync(request, cancellationToken);
+        var currentUser = User.FindFirstValue(System.Security.Claims.ClaimTypes.Name) ?? User.Identity?.Name;
+        var result = await _roleService.SaveRoleAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<RoleDto>.SuccessResult(result, CommonMessages.Roles.SaveSuccess, CommonStatusCodes.Status201Created));
     }
 
@@ -56,7 +58,8 @@ public class RolesController : ControllerBase
     [ActionName("UpdateRoleAsyncById")]
     public async Task<ActionResult<ApiResponse<RoleDto>>> UpdateRoleAsyncById(Guid id, [FromBody] UpdateRoleRequestDto request, CancellationToken cancellationToken)
     {
-        var result = await _roleService.UpdateRoleAsyncById(id, request, cancellationToken);
+        var currentUser = User.FindFirstValue(System.Security.Claims.ClaimTypes.Name) ?? User.Identity?.Name;
+        var result = await _roleService.UpdateRoleAsyncById(id, request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<RoleDto>.SuccessResult(result, CommonMessages.Roles.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
 

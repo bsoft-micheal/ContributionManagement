@@ -71,14 +71,14 @@ public class SupportTicketService : ISupportTicketService
             Description = request.Description.Trim(),
             Status = "Open",
             Priority = string.IsNullOrWhiteSpace(request.Priority) ? "Medium" : request.Priority.Trim(),
-            AssignedTo = "Admin",
+            AssignedTo = request.AssignedTo?.Trim(),
             RefNo = request.RefNo?.Trim() ?? $"REF-{DateTime.UtcNow:yyyyMMdd}-{nextNumber:D3}",
             Utr = request.Utr?.Trim(),
             Attachment = request.Attachment?.Trim(),
             IsActive = true,
             IsDeleted = false,
-            CreatedBy = string.IsNullOrWhiteSpace(user) ? "System" : user,
-            CreatedOn = DateTime.UtcNow
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+            CreatedAt = DateTime.UtcNow
         };
 
         await _ticketRepository.AddAsync(ticket, cancellationToken);
@@ -120,7 +120,7 @@ public class SupportTicketService : ISupportTicketService
             ticket.ResolutionNotes = request.ResolutionNotes.Trim();
         }
 
-        ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? "System" : user;
+        ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
         ticket.ModifiedOn = DateTime.UtcNow;
 
         _ticketRepository.Update(ticket);
@@ -143,7 +143,7 @@ public class SupportTicketService : ISupportTicketService
             ?? throw new KeyNotFoundException($"Support ticket with ID {ticketId} not found.");
 
         var timestamp = DateTime.UtcNow.ToString("dd MMM yyyy, hh:mm tt");
-        var sender = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
+        var sender = string.IsNullOrWhiteSpace(user) ? (string.IsNullOrWhiteSpace(ticket.MemberName) ? "User" : ticket.MemberName) : user.Trim();
         var newNote = $"[{timestamp}] {sender}: {request.Message.Trim()}";
 
         if (string.IsNullOrWhiteSpace(ticket.ResolutionNotes))
@@ -160,7 +160,7 @@ public class SupportTicketService : ISupportTicketService
             ticket.Status = request.Status.Trim();
         }
 
-        ticket.ModifiedBy = sender;
+        ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
         ticket.ModifiedOn = DateTime.UtcNow;
 
         _ticketRepository.Update(ticket);

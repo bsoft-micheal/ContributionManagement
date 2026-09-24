@@ -112,7 +112,7 @@ public class UserManagementService : IUserManagementService
     }
 
     // ── CREATE ───────────────────────────────────────────────────────────────
-    public async Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<UserDto> CreateAsync(CreateUserRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -129,7 +129,7 @@ public class UserManagementService : IUserManagementService
             if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
                 throw new InvalidOperationException($"Invalid role: '{request.RoleName}'. Valid values: Admin, Manager, User.");
 
-            var user = new AppUser
+            var appUser = new AppUser
             {
                 UserId       = Guid.NewGuid(),
                 Username     = request.Username.Trim(),
@@ -138,13 +138,15 @@ public class UserManagementService : IUserManagementService
                 Role         = role,
                 FullName     = request.Username.Trim(), // default FullName to username; can be changed later
                 IsActive     = request.IsActive,
+                CreatedBy    = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedAt    = DateTime.UtcNow,
                 CreatedOn    = DateTime.UtcNow
             };
 
-            await _userRepository.AddAsync(user, cancellationToken);
+            await _userRepository.AddAsync(appUser, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            var created = await _userRepository.GetByIdAsync(user.UserId, cancellationToken)
+            var created = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
                 ?? throw new KeyNotFoundException("Created user could not be loaded.");
 
             return await EnrichUserDtoWithMemberProfileAsync(created, cancellationToken);
@@ -157,11 +159,11 @@ public class UserManagementService : IUserManagementService
     }
 
     // ── UPDATE ───────────────────────────────────────────────────────────────
-    public async Task<UserDto> UpdateAsync(Guid userId, UpdateUserRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<UserDto> UpdateAsync(Guid userId, UpdateUserRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+            var appUser = await _userRepository.GetByIdAsync(userId, cancellationToken)
                 ?? throw new KeyNotFoundException("User not found.");
 
             // Email uniqueness (excluding self)
@@ -177,19 +179,21 @@ public class UserManagementService : IUserManagementService
             if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
                 throw new InvalidOperationException($"Invalid role: '{request.RoleName}'. Valid values: Admin, Manager, User.");
 
-            var oldEmail = user.Email;
+            var oldEmail = appUser.Email;
             var newEmail = request.Email.Trim().ToLowerInvariant();
 
-            user.Username = request.Username.Trim();
-            user.Email    = newEmail;
-            user.Role     = role;
-            user.IsActive = request.IsActive;
+            appUser.Username = request.Username.Trim();
+            appUser.Email    = newEmail;
+            appUser.Role     = role;
+            appUser.IsActive = request.IsActive;
+            appUser.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            appUser.ModifiedOn = DateTime.UtcNow;
 
             // Update password only when a new one is supplied
             if (!string.IsNullOrWhiteSpace(request.Password))
-                user.PasswordHash = _passwordHasher.HashPassword(request.Password);
+                appUser.PasswordHash = _passwordHasher.HashPassword(request.Password);
 
-            _userRepository.Update(user);
+            _userRepository.Update(appUser);
 
             // Also keep linked Member email in sync if it changed
             if (!string.Equals(oldEmail, newEmail, StringComparison.OrdinalIgnoreCase))
@@ -204,7 +208,7 @@ public class UserManagementService : IUserManagementService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            var updated = await _userRepository.GetByIdAsync(user.UserId, cancellationToken)
+            var updated = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
                 ?? throw new KeyNotFoundException("Updated user could not be loaded.");
 
             return await EnrichUserDtoWithMemberProfileAsync(updated, cancellationToken);

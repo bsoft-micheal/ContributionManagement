@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeamContributionManagementSystem.Application.Common;
@@ -55,7 +56,8 @@ public class UserRightsController : ControllerBase
     [ActionName("SaveUserRightAsync")]
     public async Task<ActionResult<ApiResponse>> SaveUserRightAsync([FromBody] UpdateRoleRightsRequestDto request, CancellationToken cancellationToken)
     {
-        await _roleRightsService.SaveRoleRightsAsync(request, cancellationToken);
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        await _roleRightsService.SaveRoleRightsAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.UserRights.SaveSuccess, CommonStatusCodes.Status200OK));
     }
 }

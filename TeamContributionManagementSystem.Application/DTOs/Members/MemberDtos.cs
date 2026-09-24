@@ -17,6 +17,9 @@ public class MemberDto
     public bool IsActive { get; set; }
     public bool IsExited { get; set; }
     public string MemberType { get; set; } = "Office";
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn { get; set; }
 }
 
 public class CreateMemberRequestDto

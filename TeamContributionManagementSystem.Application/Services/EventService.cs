@@ -113,6 +113,7 @@ public class EventService : IEventService
             EventTypeId = eventType.EventTypeId,
             EventDate = request.EventDate.Date,
             CreatedBy = user.UserId,
+            CreatedAt = DateTime.UtcNow,
             Description = request.Description.Trim(),
             Status = request.Status,
             BaseAmount = request.BaseAmount
@@ -189,7 +190,9 @@ public class EventService : IEventService
                 ContributionId = Guid.NewGuid(),
                 EventId = eventItem.EventId,
                 MemberId = member.MemberId,
-                Amount = amount
+                Amount = amount,
+                CreatedBy = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName,
+                CreatedAt = DateTime.UtcNow
             };
         }).ToList();
 
@@ -814,7 +817,8 @@ public class EventService : IEventService
                     EventId = eventItem.EventId,
                     MemberId = memberId,
                     Amount = amount,
-                    PaymentStatus = Domain.Enums.PaymentStatus.Pending
+                    PaymentStatus = Domain.Enums.PaymentStatus.Pending,
+                    CreatedAt = DateTime.UtcNow
                 });
             }
         }
