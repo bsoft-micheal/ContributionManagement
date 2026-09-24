@@ -51,8 +51,8 @@ public class GalleryService : IGalleryService
             Description = request.Description?.Trim(),
             IsActive = true,
             IsDeleted = false,
-            CreatedBy = string.IsNullOrWhiteSpace(user) ? "System" : user,
-            CreatedOn = DateTime.UtcNow
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+            CreatedAt = DateTime.UtcNow
         };
 
         await _galleryRepository.AddAsync(photo, cancellationToken);

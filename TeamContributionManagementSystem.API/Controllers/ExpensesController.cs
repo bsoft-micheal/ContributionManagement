@@ -46,7 +46,7 @@ public class ExpensesController : ControllerBase
     [ActionName("SaveExpenseAsync")]
     public async Task<ActionResult<ApiResponse<ExpenseDto>>> SaveExpenseAsync([FromBody] CreateExpenseRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "User";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _expenseService.SaveExpenseAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<ExpenseDto>.SuccessResult(result, CommonMessages.Expenses.SaveSuccess, CommonStatusCodes.Status201Created));
     }
@@ -55,7 +55,7 @@ public class ExpensesController : ControllerBase
     [ActionName("UpdateExpenseAsyncById")]
     public async Task<ActionResult<ApiResponse<ExpenseDto>>> UpdateExpenseAsyncById(Guid id, [FromBody] UpdateExpenseRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "User";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _expenseService.UpdateExpenseAsyncById(id, request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<ExpenseDto>.SuccessResult(result, CommonMessages.Expenses.UpdateSuccess, CommonStatusCodes.Status200OK));
     }

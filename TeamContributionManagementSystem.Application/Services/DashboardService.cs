@@ -50,7 +50,9 @@ public class DashboardService : IDashboardService
                 CollectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
                 PendingAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid).Sum(c => c.Amount),
                 PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
-                TotalContributionsCount = x.Contributions.Count(c => !c.IsDeleted)
+                TotalContributionsCount = x.Contributions.Count(c => !c.IsDeleted),
+                CreatedBy = x.CreatedByUser != null ? x.CreatedByUser.FullName : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
+                CreatedAt = x.CreatedAt
             }).ToList()
         };
         }

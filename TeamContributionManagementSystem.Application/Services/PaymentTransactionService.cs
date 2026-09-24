@@ -74,13 +74,13 @@ public class PaymentTransactionService : IPaymentTransactionService
             Screenshot = request.Screenshot?.Trim(),
             IsActive = true,
             IsDeleted = false,
-            CreatedBy = string.IsNullOrWhiteSpace(user) ? "System" : user,
-            CreatedOn = DateTime.UtcNow
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+            CreatedAt = DateTime.UtcNow
         };
 
         if (entity.Status == "Verified")
         {
-            entity.VerifiedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
+            entity.VerifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             entity.VerifiedOn = DateTime.UtcNow;
         }
 
@@ -104,7 +104,7 @@ public class PaymentTransactionService : IPaymentTransactionService
             ?? throw new KeyNotFoundException($"Payment transaction with ID {transactionId} not found.");
 
         entity.Status = request.Status.Trim();
-        entity.VerifiedBy = string.IsNullOrWhiteSpace(request.VerifiedBy) ? (string.IsNullOrWhiteSpace(user) ? "Admin" : user) : request.VerifiedBy.Trim();
+        entity.VerifiedBy = string.IsNullOrWhiteSpace(request.VerifiedBy) ? (string.IsNullOrWhiteSpace(user) ? null : user.Trim()) : request.VerifiedBy.Trim();
         entity.VerifiedOn = DateTime.UtcNow;
 
         if (!string.IsNullOrWhiteSpace(request.Notes))

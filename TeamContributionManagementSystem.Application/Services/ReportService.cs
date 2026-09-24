@@ -73,7 +73,9 @@ public class ReportService : IReportService
                     ExpectedAmount = expected,
                     PaidAmount = paid,
                     PendingAmount = pending,
-                    CollectionRate = rate
+                    CollectionRate = rate,
+                    CreatedBy = x.CreatedByUser != null ? x.CreatedByUser.FullName : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
+                    CreatedAt = x.CreatedAt
                 };
             }).OrderByDescending(x => x.EventDate).ToList();
 
@@ -85,6 +87,7 @@ public class ReportService : IReportService
                     var expected = group.Sum(x => x.Amount);
                     var paid = group.Where(x => x.PaymentStatus == PaymentStatus.Paid).Sum(x => x.Amount);
                     var completion = expected > 0 ? Math.Round((paid / expected) * 100, 1) : 0;
+                    var firstItem = group.FirstOrDefault();
 
                     return new MemberContributionHistoryDto
                     {
@@ -94,7 +97,9 @@ public class ReportService : IReportService
                         TotalPaidAmount = paid,
                         PaidEventsCount = group.Count(x => x.PaymentStatus == PaymentStatus.Paid),
                         PendingEventsCount = group.Count(x => x.PaymentStatus != PaymentStatus.Paid),
-                        CompletionRate = completion
+                        CompletionRate = completion,
+                        CreatedBy = firstItem?.Member?.CreatedBy ?? firstItem?.CreatedBy,
+                        CreatedAt = firstItem?.Member?.CreatedAt ?? firstItem?.CreatedAt
                     };
                 })
                 .OrderBy(x => x.MemberName)
@@ -118,7 +123,9 @@ public class ReportService : IReportService
                     EventDate = x.Event?.EventDate ?? DateTime.MinValue,
                     Amount = x.Amount,
                     DaysOverdue = days,
-                    AgingCategory = aging
+                    AgingCategory = aging,
+                    CreatedBy = x.CreatedBy ?? (x.Event?.CreatedByUser != null ? x.Event.CreatedByUser.FullName : (x.Event?.CreatedBy != Guid.Empty ? x.Event?.CreatedBy.ToString() : null)),
+                    CreatedAt = x.CreatedAt ?? x.Event?.CreatedAt
                 };
             }).OrderByDescending(x => x.DaysOverdue).ToList();
 
@@ -142,7 +149,9 @@ public class ReportService : IReportService
                     TotalExpenses = expenses,
                     NetBalance = net,
                     Status = net >= 0 ? "Surplus" : "Deficit",
-                    SavingsRatePercent = savingsRate
+                    SavingsRatePercent = savingsRate,
+                    CreatedBy = x.CreatedByUser != null ? x.CreatedByUser.FullName : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
+                    CreatedAt = x.CreatedAt
                 };
             }).OrderByDescending(x => x.EventDate).ToList();
 

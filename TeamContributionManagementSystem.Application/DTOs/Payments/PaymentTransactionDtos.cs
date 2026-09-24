@@ -18,8 +18,9 @@ public class PaymentTransactionDto
     public string? Notes { get; set; }
     public string? Screenshot { get; set; }
     public bool IsActive { get; set; }
-    public string CreatedBy { get; set; } = string.Empty;
-    public DateTime CreatedOn { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn { get; set; }
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }

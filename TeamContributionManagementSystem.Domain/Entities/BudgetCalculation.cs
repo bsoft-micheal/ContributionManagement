@@ -1,18 +1,18 @@
 namespace TeamContributionManagementSystem.Domain.Entities;
 
-public class SystemSetting
+public class BudgetCalculation
 {
-    public Guid SettingId { get; set; }
-    public string SettingKey { get; set; } = string.Empty;
-    public string SettingValue { get; set; } = string.Empty;
-    public string Category { get; set; } = "General";
-    public string? Description { get; set; }
-
-    // Default Audit Fields
+    public Guid BudgetCalculationId { get; set; }
+    public string ExpenseItem { get; set; } = string.Empty;
+    public decimal Rate { get; set; }
+    public string? Category { get; set; } = "Birthday";
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
+
+    // Common Audit Properties
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CreatedOn { get; set; } = DateTime.UtcNow;
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }

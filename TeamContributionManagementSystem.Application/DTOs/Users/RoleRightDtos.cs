@@ -19,6 +19,10 @@ public class RoleRightDto
     [Required]
     [MaxLength(20)]
     public string Access { get; set; } = string.Empty; // "readOnly", "readWrite", "deny"
+
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn { get; set; }
 }
 
 public class UpdateRoleRightsRequestDto

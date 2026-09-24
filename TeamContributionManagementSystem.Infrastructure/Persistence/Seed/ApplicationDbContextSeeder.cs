@@ -47,6 +47,80 @@ public class ApplicationDbContextSeeder
         // Self-healing DB update for password reset OTP columns in Postgres
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp VARCHAR(10) NULL;");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_expiry TIMESTAMP WITH TIME ZONE NULL;");
+        await _context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+
+            ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+            ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+            ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+        ");
+
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS base_amount DECIMAL(12, 2) NOT NULL DEFAULT 0;");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS cash_amount NUMERIC(12, 2) NULL;");
         await _context.Database.ExecuteSqlRawAsync("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS upi_amount NUMERIC(12, 2) NULL;");
@@ -55,7 +129,6 @@ public class ApplicationDbContextSeeder
         try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE gallery_photos ALTER COLUMN image_url TYPE TEXT;"); } catch { }
         try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE payment_transactions ALTER COLUMN screenshot TYPE TEXT;"); } catch { }
         try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE support_tickets ALTER COLUMN attachment TYPE TEXT;"); } catch { }
-
         // Self-healing: Ensure new tables exist in PostgreSQL
         await _context.Database.ExecuteSqlRawAsync(@"
             CREATE TABLE IF NOT EXISTS expenses (
@@ -71,7 +144,7 @@ public class ApplicationDbContextSeeder
                 file_name VARCHAR(500) NULL,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+                created_by VARCHAR(150) NULL,
                 created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 modified_by VARCHAR(150) NULL,
                 modified_on TIMESTAMP WITH TIME ZONE NULL
@@ -95,7 +168,7 @@ public class ApplicationDbContextSeeder
                 resolution_notes VARCHAR(2000) NULL,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+                created_by VARCHAR(150) NULL,
                 created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 modified_by VARCHAR(150) NULL,
                 modified_on TIMESTAMP WITH TIME ZONE NULL
@@ -109,7 +182,7 @@ public class ApplicationDbContextSeeder
                 description VARCHAR(500) NULL,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+                created_by VARCHAR(150) NULL,
                 created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 modified_by VARCHAR(150) NULL,
                 modified_on TIMESTAMP WITH TIME ZONE NULL
@@ -131,7 +204,7 @@ public class ApplicationDbContextSeeder
                 screenshot VARCHAR(500) NULL,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+                created_by VARCHAR(150) NULL,
                 created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 modified_by VARCHAR(150) NULL,
                 modified_on TIMESTAMP WITH TIME ZONE NULL
@@ -147,16 +220,73 @@ public class ApplicationDbContextSeeder
                 description VARCHAR(1000) NULL,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
+                created_by VARCHAR(150) NULL,
+                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                modified_by VARCHAR(150) NULL,
+                modified_on TIMESTAMP WITH TIME ZONE NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS budget_calculations (
+                budget_calculation_id UUID PRIMARY KEY,
+                expense_item VARCHAR(150) NOT NULL,
+                rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+                category VARCHAR(100) NULL DEFAULT 'Birthday',
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+                created_by VARCHAR(150) NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 modified_by VARCHAR(150) NULL,
                 modified_on TIMESTAMP WITH TIME ZONE NULL
             );
         ");
 
+        // Seed initial Budget Calculations if empty
+        if (!await _context.BudgetCalculations.AnyAsync(cancellationToken))
+        {
+            var defaultBudgetItems = new List<BudgetCalculation>
+            {
+                new BudgetCalculation
+                {
+                    BudgetCalculationId = Guid.NewGuid(),
+                    ExpenseItem = "½ kg Cake",
+                    Rate = 300,
+                    Category = "Birthday",
+                    IsActive = true,
+                    CreatedBy = "System",
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedOn = DateTime.UtcNow
+                },
+                new BudgetCalculation
+                {
+                    BudgetCalculationId = Guid.NewGuid(),
+                    ExpenseItem = "Chicken Roll / Puffs",
+                    Rate = 20,
+                    Category = "Birthday",
+                    IsActive = true,
+                    CreatedBy = "System",
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedOn = DateTime.UtcNow
+                },
+                new BudgetCalculation
+                {
+                    BudgetCalculationId = Guid.NewGuid(),
+                    ExpenseItem = "Birthday Gift",
+                    Rate = 1000,
+                    Category = "Birthday",
+                    IsActive = true,
+                    CreatedBy = "System",
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedOn = DateTime.UtcNow
+                }
+            };
+            await _context.BudgetCalculations.AddRangeAsync(defaultBudgetItems, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
         // Clean up previously seeded dummy expenses if any exist
         var dummyExpenses = await _context.Expenses
-            .Where(x => x.CreatedBy == "System" && (x.EventName == "Team Dinner" || x.EventName == "Michael Farewell" || x.EventName == "Priya Birthday"))
+            .Where(x => (x.CreatedBy == "System" || x.CreatedBy == null) && (x.EventName == "Team Dinner" || x.EventName == "Michael Farewell" || x.EventName == "Priya Birthday"))
             .ToListAsync(cancellationToken);
         if (dummyExpenses.Any())
         {
@@ -169,10 +299,10 @@ public class ApplicationDbContextSeeder
         {
             var initialTickets = new List<SupportTicket>
             {
-                new() { TicketId = Guid.NewGuid(), TicketNo = "TKT-2026-001", MemberName = "Rahul Sharma", MemberId = "MEM-001", RelatedEvent = "Team Dinner", TicketType = "Payment Issue", Subject = "Payment not reflected in my account", Description = "I have made the payment for Team Dinner on 24 Sep 2026, but it is not yet reflected in my account. Please check and confirm.", Status = "Open", Priority = "High", AssignedTo = "Admin", RefNo = "REF-20260924-001", Utr = "HDFC1234567890", Attachment = "payment_screenshot.jpg (245 KB)", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { TicketId = Guid.NewGuid(), TicketNo = "TKT-2026-002", MemberName = "Sneha Iyer", MemberId = "MEM-002", RelatedEvent = "Michael Farewell", TicketType = "Event Clarification", Subject = "Event venue details", Description = "Could you please share the exact hall location and parking instructions for the farewell event?", Status = "In Progress", Priority = "Medium", AssignedTo = "Priya N.", RefNo = "REF-20260923-002", CreatedBy = "System", CreatedOn = DateTime.UtcNow.AddDays(-1) },
-                new() { TicketId = Guid.NewGuid(), TicketNo = "TKT-2026-003", MemberName = "Amit Patel", MemberId = "MEM-003", RelatedEvent = "Priya Birthday", TicketType = "Application Issue", Subject = "Cannot access event page", Description = "Getting an error when attempting to access the birthday event registry tab.", Status = "Resolved", Priority = "Low", AssignedTo = "Rohit S.", RefNo = "REF-20260922-003", ResolutionNotes = "Cache cleared and user right refreshed.", CreatedBy = "System", CreatedOn = DateTime.UtcNow.AddDays(-2) },
-                new() { TicketId = Guid.NewGuid(), TicketNo = "TKT-2026-004", MemberName = "Divya Nair", MemberId = "MEM-004", RelatedEvent = "Team Dinner", TicketType = "Payment Issue", Subject = "Wrong amount deducted", Description = "Two payments were initiated by mistake for the same dinner event contribution.", Status = "In Progress", Priority = "High", AssignedTo = "Admin", RefNo = "REF-20260921-004", Utr = "ICIC9876543210", Attachment = "bank_statement.pdf (512 KB)", CreatedBy = "System", CreatedOn = DateTime.UtcNow.AddDays(-3) }
+                new() { TicketId = Guid.NewGuid(), TicketNo = "TKT-2026-001", MemberName = "Rahul Sharma", MemberId = "MEM-001", RelatedEvent = "Team Dinner", TicketType = "Payment Issue", Subject = "Payment not reflected in my account", Description = "I have made the payment for Team Dinner on 24 Sep 2026, but it is not yet reflected in my account. Please check and confirm.", Status = "Open", Priority = "High", AssignedTo = null, RefNo = "REF-20260924-001", Utr = "HDFC1234567890", Attachment = "payment_screenshot.jpg (245 KB)", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { TicketId = Guid.NewGuid(), TicketNo = "TKT-2026-002", MemberName = "Sneha Iyer", MemberId = "MEM-002", RelatedEvent = "Michael Farewell", TicketType = "Event Clarification", Subject = "Event venue details", Description = "Could you please share the exact hall location and parking instructions for the farewell event?", Status = "In Progress", Priority = "Medium", AssignedTo = "Priya N.", RefNo = "REF-20260923-002", CreatedBy = null, CreatedAt = DateTime.UtcNow.AddDays(-1) },
+                new() { TicketId = Guid.NewGuid(), TicketNo = "TKT-2026-003", MemberName = "Amit Patel", MemberId = "MEM-003", RelatedEvent = "Priya Birthday", TicketType = "Application Issue", Subject = "Cannot access event page", Description = "Getting an error when attempting to access the birthday event registry tab.", Status = "Resolved", Priority = "Low", AssignedTo = "Rohit S.", RefNo = "REF-20260922-003", ResolutionNotes = "Cache cleared and user right refreshed.", CreatedBy = null, CreatedAt = DateTime.UtcNow.AddDays(-2) },
+                new() { TicketId = Guid.NewGuid(), TicketNo = "TKT-2026-004", MemberName = "Divya Nair", MemberId = "MEM-004", RelatedEvent = "Team Dinner", TicketType = "Payment Issue", Subject = "Wrong amount deducted", Description = "Two payments were initiated by mistake for the same dinner event contribution.", Status = "In Progress", Priority = "High", AssignedTo = null, RefNo = "REF-20260921-004", Utr = "ICIC9876543210", Attachment = "bank_statement.pdf (512 KB)", CreatedBy = null, CreatedAt = DateTime.UtcNow.AddDays(-3) }
             };
             await _context.SupportTickets.AddRangeAsync(initialTickets, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
@@ -218,11 +348,11 @@ public class ApplicationDbContextSeeder
         {
             var initialTransactions = new List<PaymentTransaction>
             {
-                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001256", MemberName = "Rahul Sharma", EventName = "Team Dinner", Amount = 1000, PaymentDate = DateTime.UtcNow.AddDays(-9), PaymentMode = "GPay", Utr = "UPI1234567890", Status = "Verified", VerifiedBy = "Admin", VerifiedOn = DateTime.UtcNow.AddDays(-9), Notes = "Payment verified. Amount received in bank account.", Screenshot = "payment_screenshot.jpg (320 KB)", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001255", MemberName = "Priya Mehta", EventName = "Diwali Celebration", Amount = 2500, PaymentDate = DateTime.UtcNow.AddDays(-11), PaymentMode = "PhonePe", Utr = "PPE9876543210", Status = "Pending", VerifiedBy = "-", Notes = "Awaiting statement reconciliation.", Screenshot = "priya_phonepe_receipt.png (280 KB)", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001254", MemberName = "Amit Patel", EventName = "Annual Sports", Amount = 1200, PaymentDate = DateTime.UtcNow.AddDays(-13), PaymentMode = "Paytm", Utr = "PAYTM56473829", Status = "Verified", VerifiedBy = "Neha S.", VerifiedOn = DateTime.UtcNow.AddDays(-13), Notes = "Verified against Paytm merchant dashboard.", Screenshot = "paytm_txn_receipt.jpg (190 KB)", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001253", MemberName = "Sneha Iyer", EventName = "Team Dinner", Amount = 500, PaymentDate = DateTime.UtcNow.AddDays(-15), PaymentMode = "UPI", Utr = "UPI9988776655", Status = "Failed", VerifiedBy = "-", Notes = "Transaction failed at member's bank end.", Screenshot = "failed_txn.png (210 KB)", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001252", MemberName = "Vikram Rao", EventName = "Michael Farewell", Amount = 3000, PaymentDate = DateTime.UtcNow.AddDays(-17), PaymentMode = "GPay", Utr = "UPI7766554433", Status = "Verified", VerifiedBy = "Admin", VerifiedOn = DateTime.UtcNow.AddDays(-17), Notes = "Full contribution received.", Screenshot = "gpay_proof.jpg (420 KB)", CreatedBy = "System", CreatedOn = DateTime.UtcNow }
+                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001256", MemberName = "Rahul Sharma", EventName = "Team Dinner", Amount = 1000, PaymentDate = DateTime.UtcNow.AddDays(-9), PaymentMode = "GPay", Utr = "UPI1234567890", Status = "Verified", VerifiedBy = null, VerifiedOn = DateTime.UtcNow.AddDays(-9), Notes = "Payment verified. Amount received in bank account.", Screenshot = "payment_screenshot.jpg (320 KB)", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001255", MemberName = "Priya Mehta", EventName = "Diwali Celebration", Amount = 2500, PaymentDate = DateTime.UtcNow.AddDays(-11), PaymentMode = "PhonePe", Utr = "PPE9876543210", Status = "Pending", VerifiedBy = null, Notes = "Awaiting statement reconciliation.", Screenshot = "priya_phonepe_receipt.png (280 KB)", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001254", MemberName = "Amit Patel", EventName = "Annual Sports", Amount = 1200, PaymentDate = DateTime.UtcNow.AddDays(-13), PaymentMode = "Paytm", Utr = "PAYTM56473829", Status = "Verified", VerifiedBy = "Neha S.", VerifiedOn = DateTime.UtcNow.AddDays(-13), Notes = "Verified against Paytm merchant dashboard.", Screenshot = "paytm_txn_receipt.jpg (190 KB)", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001253", MemberName = "Sneha Iyer", EventName = "Team Dinner", Amount = 500, PaymentDate = DateTime.UtcNow.AddDays(-15), PaymentMode = "UPI", Utr = "UPI9988776655", Status = "Failed", VerifiedBy = null, Notes = "Transaction failed at member's bank end.", Screenshot = "failed_txn.png (210 KB)", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { TransactionId = Guid.NewGuid(), TxnNumber = "TXN001252", MemberName = "Vikram Rao", EventName = "Michael Farewell", Amount = 3000, PaymentDate = DateTime.UtcNow.AddDays(-17), PaymentMode = "GPay", Utr = "UPI7766554433", Status = "Verified", VerifiedBy = null, VerifiedOn = DateTime.UtcNow.AddDays(-17), Notes = "Full contribution received.", Screenshot = "gpay_proof.jpg (420 KB)", CreatedBy = null, CreatedAt = DateTime.UtcNow }
             };
             await _context.PaymentTransactions.AddRangeAsync(initialTransactions, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
@@ -233,13 +363,13 @@ public class ApplicationDbContextSeeder
         {
             var initialPhotos = new List<GalleryPhoto>
             {
-                new() { PhotoId = Guid.NewGuid(), Title = "Birthday Cake", EventName = "Birthday - Albin Antony", Category = "Cake", ImageUrl = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Birthday celebration cake", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { PhotoId = Guid.NewGuid(), Title = "Gifts & Wishes", EventName = "Birthday - Albin Antony", Category = "Gifts", ImageUrl = "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Team gifts and wishes", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { PhotoId = Guid.NewGuid(), Title = "Snacks & Puffs", EventName = "Birthday - Albin Antony", Category = "Food", ImageUrl = "https://images.unsplash.com/photo-1621996346565-e3d5d6281005?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Evening refreshment snacks", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { PhotoId = Guid.NewGuid(), Title = "Decoration", EventName = "Birthday - Albin Antony", Category = "Decoration", ImageUrl = "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Room balloons and ribbons", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { PhotoId = Guid.NewGuid(), Title = "Team Photo", EventName = "Birthday - Albin Antony", Category = "Team", ImageUrl = "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Group celebration picture", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { PhotoId = Guid.NewGuid(), Title = "Celebration Moment", EventName = "Birthday - Albin Antony", Category = "Moments", ImageUrl = "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Cake cutting ceremony", CreatedBy = "System", CreatedOn = DateTime.UtcNow },
-                new() { PhotoId = Guid.NewGuid(), Title = "Event Card", EventName = "Birthday - Albin Antony", Category = "Decoration", ImageUrl = "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Customized invitation greeting", CreatedBy = "System", CreatedOn = DateTime.UtcNow }
+                new() { PhotoId = Guid.NewGuid(), Title = "Birthday Cake", EventName = "Birthday - Albin Antony", Category = "Cake", ImageUrl = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Birthday celebration cake", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { PhotoId = Guid.NewGuid(), Title = "Gifts & Wishes", EventName = "Birthday - Albin Antony", Category = "Gifts", ImageUrl = "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Team gifts and wishes", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { PhotoId = Guid.NewGuid(), Title = "Snacks & Puffs", EventName = "Birthday - Albin Antony", Category = "Food", ImageUrl = "https://images.unsplash.com/photo-1621996346565-e3d5d6281005?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Evening refreshment snacks", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { PhotoId = Guid.NewGuid(), Title = "Decoration", EventName = "Birthday - Albin Antony", Category = "Decoration", ImageUrl = "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Room balloons and ribbons", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { PhotoId = Guid.NewGuid(), Title = "Team Photo", EventName = "Birthday - Albin Antony", Category = "Team", ImageUrl = "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Group celebration picture", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { PhotoId = Guid.NewGuid(), Title = "Celebration Moment", EventName = "Birthday - Albin Antony", Category = "Moments", ImageUrl = "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Cake cutting ceremony", CreatedBy = null, CreatedAt = DateTime.UtcNow },
+                new() { PhotoId = Guid.NewGuid(), Title = "Event Card", EventName = "Birthday - Albin Antony", Category = "Decoration", ImageUrl = "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=600&auto=format&fit=crop&q=80", TakenDate = DateTime.UtcNow.AddDays(24), Description = "Customized invitation greeting", CreatedBy = null, CreatedAt = DateTime.UtcNow }
             };
             await _context.GalleryPhotos.AddRangeAsync(initialPhotos, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
@@ -333,6 +463,7 @@ public class ApplicationDbContextSeeder
             (Module: "Contributions", SubModule: "Payments", Page: "Payments"),
             (Module: "Events", SubModule: "Media", Page: "Gallery"),
             (Module: "Support Data", SubModule: "Helpdesk", Page: "Support Tickets"),
+            (Module: "Support Data", SubModule: "Calculations", Page: "Budget Calculations"),
             (Module: "Support Data", SubModule: "Configuration", Page: "Settings")
         };
 

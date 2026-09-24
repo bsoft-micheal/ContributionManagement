@@ -18,4 +18,9 @@ public class Event
     public AppUser? CreatedByUser { get; set; }
     public ICollection<EventParticipant> Participants { get; set; } = new List<EventParticipant>();
     public ICollection<Contribution> Contributions { get; set; } = new List<Contribution>();
+
+    // Common Audit Properties
+    public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? ModifiedBy { get; set; }
+    public DateTime? ModifiedOn { get; set; }
 }

@@ -33,7 +33,7 @@ public class SettingsController : ControllerBase
     [ActionName("UpdateSettingAsync")]
     public async Task<ActionResult<ApiResponse<SystemSettingsDto>>> UpdateSettingAsync([FromBody] SystemSettingsDto settings, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "Admin";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _settingService.UpdateSettingAsync(settings, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(result, CommonMessages.Settings.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
@@ -43,7 +43,8 @@ public class SettingsController : ControllerBase
     [ActionName("ResetSettingAsync")]
     public async Task<ActionResult<ApiResponse<SystemSettingsDto>>> ResetSettingAsync(CancellationToken cancellationToken)
     {
-        var result = await _settingService.ResetSettingAsync(cancellationToken);
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var result = await _settingService.ResetSettingAsync(currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(result, CommonMessages.Settings.ResetSuccess, CommonStatusCodes.Status200OK));
     }
 }
