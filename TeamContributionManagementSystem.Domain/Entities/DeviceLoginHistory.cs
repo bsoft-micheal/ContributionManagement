@@ -12,11 +12,11 @@ public class DeviceLoginHistory
 
     [Column("user_id")]
     public Guid UserId { get; set; }
-    public AppUser User { get; set; }
+    public AppUser? User { get; set; }
 
     [Column("device_detail_id")]
     public Guid DeviceDetailId { get; set; }
-    public DeviceDetail DeviceDetail { get; set; }
+    public DeviceDetail? DeviceDetail { get; set; }
 
     [Column("login_time")]
     public DateTime LoginTime { get; set; } = DateTime.UtcNow;
@@ -26,4 +26,11 @@ public class DeviceLoginHistory
 
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
+    public bool IsDeleted { get; set; } = false;
+
+    // Common Audit Properties
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? ModifiedBy { get; set; }
+    public DateTime? ModifiedOn { get; set; }
 }
