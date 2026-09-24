@@ -12,7 +12,7 @@ public class UserMfaDevice
 
     [Column("user_id")]
     public Guid UserId { get; set; }
-    public AppUser User { get; set; }
+    public AppUser? User { get; set; }
 
     [Column("device_label")]
     [MaxLength(100)]
@@ -24,4 +24,12 @@ public class UserMfaDevice
 
     [Column("date_added")]
     public DateTime DateAdded { get; set; } = DateTime.UtcNow;
+    public bool IsActive { get; set; } = true;
+    public bool IsDeleted { get; set; } = false;
+
+    // Common Audit Properties
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? ModifiedBy { get; set; }
+    public DateTime? ModifiedOn { get; set; }
 }
