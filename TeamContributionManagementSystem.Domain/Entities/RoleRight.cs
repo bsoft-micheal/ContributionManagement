@@ -6,6 +6,8 @@ public class RoleRight
 {
     public Guid RoleRightId { get; set; }
     public UserRole Role { get; set; }
+    public int FeatureID { get; set; }
+    public NavigationMenu? NavigationMenu { get; set; }
     public string Module { get; set; } = string.Empty;
     public string SubModule { get; set; } = string.Empty;
     public string Page { get; set; } = string.Empty;

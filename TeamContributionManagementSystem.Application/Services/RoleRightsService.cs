@@ -72,6 +72,7 @@ public class RoleRightsService : IRoleRightsService
         {
             RoleRightId = Guid.NewGuid(),
             Role = role,
+            FeatureID = r.FeatureID,
             Module = r.Module,
             SubModule = r.SubModule,
             Page = r.Page,

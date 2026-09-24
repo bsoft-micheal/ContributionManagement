@@ -41,119 +41,6 @@ public class ApplicationDbContextSeeder
         }
         catch { }
 
-        // Database will be created if it does not already exist
-        await _context.Database.EnsureCreatedAsync(cancellationToken);
-
-        // Self-healing DB update for password reset OTP columns in Postgres
-        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp VARCHAR(10) NULL;");
-        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_expiry TIMESTAMP WITH TIME ZONE NULL;");
-        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS base_amount DECIMAL(12, 2) NOT NULL DEFAULT 0;");
-        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS cash_amount NUMERIC(12, 2) NULL;");
-        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS upi_amount NUMERIC(12, 2) NULL;");
-        await _context.Database.ExecuteSqlRawAsync("UPDATE event_types SET base_amount = 500 WHERE LOWER(event_type_name) LIKE '%birthday%' AND (base_amount = 0 OR base_amount IS NULL);");
-        await _context.Database.ExecuteSqlRawAsync("ALTER TABLE members ADD COLUMN IF NOT EXISTS member_type VARCHAR(20) NOT NULL DEFAULT 'Office';");
-        try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE gallery_photos ALTER COLUMN image_url TYPE TEXT;"); } catch { }
-        try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE payment_transactions ALTER COLUMN screenshot TYPE TEXT;"); } catch { }
-        try { await _context.Database.ExecuteSqlRawAsync("ALTER TABLE support_tickets ALTER COLUMN attachment TYPE TEXT;"); } catch { }
-
-        // Self-healing: Ensure new tables exist in PostgreSQL
-        await _context.Database.ExecuteSqlRawAsync(@"
-            CREATE TABLE IF NOT EXISTS expenses (
-                expense_id UUID PRIMARY KEY,
-                event_name VARCHAR(200) NOT NULL,
-                category VARCHAR(100) NOT NULL,
-                amount NUMERIC(12,2) NOT NULL,
-                expense_date TIMESTAMP WITH TIME ZONE NOT NULL,
-                status VARCHAR(50) NOT NULL,
-                submitted_by VARCHAR(150) NOT NULL,
-                approved_by VARCHAR(150) NULL,
-                description VARCHAR(1000) NOT NULL DEFAULT '',
-                file_name VARCHAR(500) NULL,
-                is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                modified_by VARCHAR(150) NULL,
-                modified_on TIMESTAMP WITH TIME ZONE NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS support_tickets (
-                ticket_id UUID PRIMARY KEY,
-                ticket_no VARCHAR(50) NOT NULL UNIQUE,
-                member_name VARCHAR(150) NOT NULL,
-                member_id VARCHAR(100) NULL,
-                related_event VARCHAR(200) NULL,
-                ticket_type VARCHAR(100) NOT NULL,
-                subject VARCHAR(300) NOT NULL,
-                description VARCHAR(2000) NOT NULL,
-                status VARCHAR(50) NOT NULL,
-                priority VARCHAR(50) NOT NULL,
-                assigned_to VARCHAR(150) NULL,
-                ref_no VARCHAR(100) NULL,
-                utr VARCHAR(100) NULL,
-                attachment VARCHAR(500) NULL,
-                resolution_notes VARCHAR(2000) NULL,
-                is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                modified_by VARCHAR(150) NULL,
-                modified_on TIMESTAMP WITH TIME ZONE NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS system_settings (
-                setting_id UUID PRIMARY KEY,
-                setting_key VARCHAR(100) NOT NULL UNIQUE,
-                setting_value TEXT NOT NULL,
-                category VARCHAR(100) NOT NULL,
-                description VARCHAR(500) NULL,
-                is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                modified_by VARCHAR(150) NULL,
-                modified_on TIMESTAMP WITH TIME ZONE NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS payment_transactions (
-                transaction_id UUID PRIMARY KEY,
-                txn_number VARCHAR(50) NOT NULL UNIQUE,
-                member_name VARCHAR(150) NOT NULL,
-                event_name VARCHAR(200) NOT NULL,
-                amount NUMERIC(12,2) NOT NULL,
-                payment_date TIMESTAMP WITH TIME ZONE NOT NULL,
-                payment_mode VARCHAR(50) NOT NULL,
-                utr VARCHAR(100) NULL,
-                status VARCHAR(50) NOT NULL,
-                verified_by VARCHAR(150) NULL,
-                verified_on TIMESTAMP WITH TIME ZONE NULL,
-                notes VARCHAR(1000) NULL,
-                screenshot VARCHAR(500) NULL,
-                is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                modified_by VARCHAR(150) NULL,
-                modified_on TIMESTAMP WITH TIME ZONE NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS gallery_photos (
-                photo_id UUID PRIMARY KEY,
-                title VARCHAR(200) NOT NULL,
-                event_name VARCHAR(200) NOT NULL,
-                category VARCHAR(100) NOT NULL,
-                image_url TEXT NOT NULL,
-                taken_date TIMESTAMP WITH TIME ZONE NOT NULL,
-                description VARCHAR(1000) NULL,
-                is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-                created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                modified_by VARCHAR(150) NULL,
-                modified_on TIMESTAMP WITH TIME ZONE NULL
-            );
-        ");
-
         // Clean up previously seeded dummy expenses if any exist
         var dummyExpenses = await _context.Expenses
             .Where(x => x.CreatedBy == "System" && (x.EventName == "Team Dinner" || x.EventName == "Michael Farewell" || x.EventName == "Priya Birthday"))
@@ -306,6 +193,45 @@ public class ApplicationDbContextSeeder
             await _context.SaveChangesAsync(cancellationToken);
         }
 
+        // Seed navigation menus — exact copy of original menu sheet
+        if (!await _context.NavigationMenus.AnyAsync(cancellationToken))
+        {
+            var menus = new List<NavigationMenu>
+            {
+                // Top-level modules: Module filled, SubModule=null, Activity=null
+                new() { FeatureID = 1,  MainModuleID = 1, Module = "Dashboard",      ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 1, DisplayOrder = 1,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 2,  MainModuleID = 2, Module = "Members",        ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 2, DisplayOrder = 2,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 3,  MainModuleID = 3, Module = "Events",         ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 3, DisplayOrder = 3,  HasSubModule = true,  ShowingUserRight = true },
+                new() { FeatureID = 7,  MainModuleID = 4, Module = "Finance",        ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 4, DisplayOrder = 7,  HasSubModule = true,  ShowingUserRight = true },
+                new() { FeatureID = 12, MainModuleID = 5, Module = "Support Ticket", ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 5, DisplayOrder = 12, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 13, MainModuleID = 6, Module = "Tools",          ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 6, DisplayOrder = 14, HasSubModule = true,  ShowingUserRight = true },
+                new() { FeatureID = 20, MainModuleID = 7, Module = "Reports",        ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 7, DisplayOrder = 21, HasSubModule = false, ShowingUserRight = true },
+
+                // Events children: Module=null, SubModule=display label, Activity=null
+                new() { FeatureID = 4,  MainModuleID = 3, Module = null,             ParentID = 3,  SubModule = "Event",          Activity = null, RoutingUrl = "/events",                  ModuleNO = 3, DisplayOrder = 4,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 5,  MainModuleID = 3, Module = null,             ParentID = 3,  SubModule = "Calendar",       Activity = null, RoutingUrl = "/calendar",                ModuleNO = 3, DisplayOrder = 5,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 6,  MainModuleID = 3, Module = null,             ParentID = 3,  SubModule = "Gallery",        Activity = null, RoutingUrl = "/gallery",                 ModuleNO = 3, DisplayOrder = 6,  HasSubModule = false, ShowingUserRight = true },
+
+                // Finance children: Module=null, SubModule=display label, Activity=null
+                new() { FeatureID = 8,  MainModuleID = 4, Module = null,             ParentID = 7,  SubModule = "Contribution",   Activity = null, RoutingUrl = "/contributions",           ModuleNO = 4, DisplayOrder = 8,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 9,  MainModuleID = 4, Module = null,             ParentID = 7,  SubModule = "Payment History",Activity = null, RoutingUrl = "/payments",                ModuleNO = 4, DisplayOrder = 9,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 10, MainModuleID = 4, Module = null,             ParentID = 7,  SubModule = "Calculation",    Activity = null, RoutingUrl = "/contribution-calculation", ModuleNO = 4, DisplayOrder = 10, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 11, MainModuleID = 4, Module = null,             ParentID = 7,  SubModule = "Expense",        Activity = null, RoutingUrl = "/expense",                 ModuleNO = 4, DisplayOrder = 11, HasSubModule = false, ShowingUserRight = true },
+
+                // Tools children: Module=null, SubModule=display label, Activity=null
+                new() { FeatureID = 14, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Roles",          Activity = null, RoutingUrl = "/roles",                   ModuleNO = 6, DisplayOrder = 15, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 15, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Event Types",    Activity = null, RoutingUrl = "/event-types",             ModuleNO = 6, DisplayOrder = 16, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 16, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Exit Process",   Activity = null, RoutingUrl = "/exit-process",            ModuleNO = 6, DisplayOrder = 17, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 17, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "User Rights",    Activity = null, RoutingUrl = "/user-rights",             ModuleNO = 6, DisplayOrder = 18, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 18, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Users",          Activity = null, RoutingUrl = "/users",                   ModuleNO = 6, DisplayOrder = 19, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 19, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Settings",       Activity = null, RoutingUrl = "/settings",                ModuleNO = 6, DisplayOrder = 20, HasSubModule = false, ShowingUserRight = true },
+            };
+            await _context.NavigationMenus.AddRangeAsync(menus, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+
+
         // Seeding default Role Rights
         var existingRoleRights = await _context.RoleRights.ToListAsync(cancellationToken);
         var existingKeySet = existingRoleRights
@@ -314,26 +240,26 @@ public class ApplicationDbContextSeeder
 
         var defaultPages = new[]
         {
-            (Module: "Dashboard", SubModule: "Analytics", Page: "Dashboard"),
-            (Module: "Members", SubModule: "Directory", Page: "Members"),
-            (Module: "Events", SubModule: "Registry", Page: "Events"),
-            (Module: "Events", SubModule: "Calendar", Page: "Calendar"),
-            (Module: "Contributions", SubModule: "Ledger", Page: "Contributions"),
-            (Module: "Contributions", SubModule: "Calculation", Page: "Calculation"),
-            (Module: "Support Data", SubModule: "Categories", Page: "Event Types"),
-            (Module: "Support Data", SubModule: "Clearance", Page: "Exit Process"),
-            (Module: "Support Data", SubModule: "Admin", Page: "User Rights"),
-            (Module: "Support Data", SubModule: "Admin", Page: "Users"),
-            (Module: "Support Data", SubModule: "Admin", Page: "Roles"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Event Audit"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Member Velocity"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Pending Dues"),
-            (Module: "Reports", SubModule: "Analytics", Page: "Member Category Paid"),
-            (Module: "Contributions", SubModule: "Expenses", Page: "Expenses"),
-            (Module: "Contributions", SubModule: "Payments", Page: "Payments"),
-            (Module: "Events", SubModule: "Media", Page: "Gallery"),
-            (Module: "Support Data", SubModule: "Helpdesk", Page: "Support Tickets"),
-            (Module: "Support Data", SubModule: "Configuration", Page: "Settings")
+            (Module: "Dashboard",      SubModule: "Analytics",  Page: "Dashboard"),
+            (Module: "Members",        SubModule: "Directory",  Page: "Members"),
+            (Module: "Events",         SubModule: "Registry",   Page: "Event"),
+            (Module: "Events",         SubModule: "Calendar",   Page: "Calendar"),
+            (Module: "Events",         SubModule: "Media",      Page: "Gallery"),
+            (Module: "Finance",        SubModule: "Ledger",     Page: "Contribution"),
+            (Module: "Finance",        SubModule: "Payments",   Page: "Payment History"),
+            (Module: "Finance",        SubModule: "Calculation",Page: "Calculation"),
+            (Module: "Finance",        SubModule: "Expenses",   Page: "Expense"),
+            (Module: "Support Ticket", SubModule: "Helpdesk",   Page: "Support Ticket"),
+            (Module: "Tools",          SubModule: "Admin",      Page: "Roles"),
+            (Module: "Tools",          SubModule: "Categories", Page: "Event Types"),
+            (Module: "Tools",          SubModule: "Clearance",  Page: "Exit Process"),
+            (Module: "Tools",          SubModule: "Admin",      Page: "User Rights"),
+            (Module: "Tools",          SubModule: "Admin",      Page: "Users"),
+            (Module: "Tools",          SubModule: "Config",     Page: "Settings"),
+            (Module: "Reports",        SubModule: "Analytics",  Page: "Event Audit"),
+            (Module: "Reports",        SubModule: "Analytics",  Page: "Member Velocity"),
+            (Module: "Reports",        SubModule: "Analytics",  Page: "Pending Dues"),
+            (Module: "Reports",        SubModule: "Analytics",  Page: "Member Category Paid"),
         };
 
         var roleRightsList = new List<RoleRight>();
@@ -352,7 +278,10 @@ public class ApplicationDbContextSeeder
 
                 if (role == UserRole.User || role == UserRole.Member)
                 {
-                    if (page.Page == "Event Types" || page.Page == "Exit Process" || page.Page == "User Rights" || page.Page == "Users" || page.Page == "Settings")
+                    // Deny sensitive Tools pages for non-admin roles
+                    if (page.Module == "Tools" &&
+                        (page.Page == "Event Types" || page.Page == "Exit Process" ||
+                         page.Page == "User Rights" || page.Page == "Users" || page.Page == "Settings"))
                     {
                         access = "deny";
                     }
