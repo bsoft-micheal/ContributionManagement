@@ -9,6 +9,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// <summary>
 /// Manages granular access rights assigned to specific roles.
 /// </summary>
+[ApiController]
 [Authorize]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/user-rights")]
