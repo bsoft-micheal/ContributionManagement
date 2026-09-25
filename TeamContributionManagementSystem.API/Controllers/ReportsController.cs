@@ -10,9 +10,9 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// Provides reporting functionalities for exporting and summarizing contribution data.
 /// </summary>
 [ApiController]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = CommonRoles.Admin)]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/reports")]
+[Route(CommonRoutes.Reports.Base)]
 public class ReportsController : ControllerBase
 {
     private readonly IReportService _reportService;
@@ -28,8 +28,8 @@ public class ReportsController : ControllerBase
     /// <param name="month">Optional month filter.</param>
     /// <param name="year">Optional year filter.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getSummaryReportAsync")]
-    [ActionName("GetSummaryReportAsync")]
+    [HttpGet(CommonRoutes.Reports.GetSummary)]
+    [ActionName(nameof(GetSummaryReportAsync))]
     public async Task<ActionResult<ApiResponse<ReportsSummaryDto>>> GetSummaryReportAsync([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
     {
         var result = await _reportService.GetSummaryReportAsync(month, year, cancellationToken);

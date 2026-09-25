@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 
 namespace TeamContributionManagementSystem.Application.DTOs.Auth;
@@ -76,6 +77,6 @@ public class ResetPasswordRequestDto
     public string Otp { get; set; } = string.Empty;
 
     [Required]
-    [MinLength(6, ErrorMessage = "Password must be at least 6 characters long.")]
+    [MinLength(6, ErrorMessage = CommonValidationMessages.PasswordMinLength)]
     public string NewPassword { get; set; } = string.Empty;
 }

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.Application.DTOs.Events;
@@ -62,7 +63,7 @@ public class CreateEventRequestDto
 
     public EventStatus Status { get; set; } = EventStatus.Planned;
 
-    [Range(1, 1000000, ErrorMessage = "Base amount must be greater than 0.")]
+    [Range(1, 1000000, ErrorMessage = CommonValidationMessages.BaseAmountGreaterThanZero)]
     public decimal BaseAmount { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();

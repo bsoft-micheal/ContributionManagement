@@ -35,11 +35,13 @@ public class BirthdayAutomationService : IBirthdayAutomationService
         try
         {
             var today = DateTime.UtcNow.Date;
-        var birthdayEventType = await _eventTypeRepository.GetByNameAsync("Birthday", cancellationToken)
-            ?? throw new KeyNotFoundException("Birthday event type is not configured.");
+            var allEventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
+            var birthdayEventType = allEventTypes.FirstOrDefault(x => x.EventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase))
+                ?? allEventTypes.FirstOrDefault()
+                ?? throw new KeyNotFoundException("No active event type is configured in the database.");
 
-        var adminUser = await _userRepository.GetFirstAdminAsync(cancellationToken)
-            ?? throw new KeyNotFoundException("No admin user available for scheduled event creation.");
+            var adminUser = await _userRepository.GetFirstAdminAsync(cancellationToken)
+                ?? throw new KeyNotFoundException("No admin user available for scheduled event creation.");
 
         var birthdayMembers = await _memberRepository.GetActiveBirthdaysInMonthAsync(today.Month, cancellationToken);
         var activeMembers = await _memberRepository.GetAllActiveAsync(cancellationToken);

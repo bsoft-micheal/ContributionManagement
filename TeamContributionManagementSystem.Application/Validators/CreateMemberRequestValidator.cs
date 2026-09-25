@@ -1,4 +1,5 @@
 using FluentValidation;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Members;
 
 namespace TeamContributionManagementSystem.Application.Validators;
@@ -8,26 +9,26 @@ public class CreateMemberRequestValidator : AbstractValidator<CreateMemberReques
     public CreateMemberRequestValidator()
     {
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Name is required.")
-            .MaximumLength(150).WithMessage("Name must not exceed 150 characters.");
+            .NotEmpty().WithMessage(CommonValidationMessages.NameRequired)
+            .MaximumLength(150).WithMessage(CommonValidationMessages.NameMaxLength);
 
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required.")
-            .EmailAddress().WithMessage("A valid email address is required.")
-            .MaximumLength(150).WithMessage("Email must not exceed 150 characters.");
+            .NotEmpty().WithMessage(CommonValidationMessages.EmailRequired)
+            .EmailAddress().WithMessage(CommonValidationMessages.EmailValid)
+            .MaximumLength(150).WithMessage(CommonValidationMessages.EmailMaxLength);
 
         RuleFor(x => x.Phone)
-            .NotEmpty().WithMessage("Phone number is required.")
-            .MaximumLength(20).WithMessage("Phone number must not exceed 20 characters.");
+            .NotEmpty().WithMessage(CommonValidationMessages.PhoneRequired)
+            .MaximumLength(20).WithMessage(CommonValidationMessages.PhoneMaxLength);
 
         RuleFor(x => x.RoleId)
-            .NotEmpty().WithMessage("Role is required.");
+            .NotEmpty().WithMessage(CommonValidationMessages.RoleRequired);
 
         RuleFor(x => x.DateOfBirth)
-            .NotEmpty().WithMessage("Date of birth is required.")
-            .LessThan(DateTime.UtcNow).WithMessage("Date of birth cannot be in the future.");
+            .NotEmpty().WithMessage(CommonValidationMessages.DateOfBirthRequired)
+            .LessThan(DateTime.UtcNow).WithMessage(CommonValidationMessages.DateOfBirthPast);
 
         RuleFor(x => x.JoiningDate)
-            .NotEmpty().WithMessage("Joining date is required.");
+            .NotEmpty().WithMessage(CommonValidationMessages.JoiningDateRequired);
     }
 }

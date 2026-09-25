@@ -63,7 +63,7 @@ public class MemberService : IMemberService
             Gender = request.Gender,
             IsActive = request.IsActive,
             IsExited = request.IsExited,
-            MemberType = string.IsNullOrWhiteSpace(request.MemberType) ? "Office" : request.MemberType,
+            MemberType = request.MemberType?.Trim() ?? string.Empty,
             CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user,
             CreatedAt = DateTime.UtcNow
         };
@@ -108,7 +108,7 @@ public class MemberService : IMemberService
         member.Gender = request.Gender;
         member.IsActive = request.IsActive;
         member.IsExited = request.IsExited;
-        member.MemberType = string.IsNullOrWhiteSpace(request.MemberType) ? "Office" : request.MemberType;
+        member.MemberType = !string.IsNullOrWhiteSpace(request.MemberType) ? request.MemberType.Trim() : member.MemberType;
         member.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user;
         member.ModifiedOn = DateTime.UtcNow;
 

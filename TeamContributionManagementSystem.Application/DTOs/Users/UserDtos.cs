@@ -96,5 +96,5 @@ public class UpdateProfileRequestDto
     public string RoleName { get; set; } = string.Empty;
 
     [MaxLength(50)]
-    public string MemberType { get; set; } = "Office";
+    public string MemberType { get; set; } = string.Empty;
 }

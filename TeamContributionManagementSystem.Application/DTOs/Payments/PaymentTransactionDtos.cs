@@ -12,7 +12,7 @@ public class PaymentTransactionDto
     public DateTime PaymentDate { get; set; }
     public string PaymentMode { get; set; } = string.Empty;
     public string? Utr { get; set; }
-    public string Status { get; set; } = "Pending";
+    public string Status { get; set; } = string.Empty;
     public string? VerifiedBy { get; set; }
     public DateTime? VerifiedOn { get; set; }
     public string? Notes { get; set; }
@@ -44,13 +44,13 @@ public class CreatePaymentTransactionRequestDto
 
     [Required]
     [MaxLength(50)]
-    public string PaymentMode { get; set; } = "UPI";
+    public string PaymentMode { get; set; } = string.Empty;
 
     [MaxLength(100)]
     public string? Utr { get; set; }
 
     [MaxLength(50)]
-    public string Status { get; set; } = "Pending";
+    public string Status { get; set; } = string.Empty;
 
     [MaxLength(1000)]
     public string? Notes { get; set; }
@@ -63,7 +63,7 @@ public class VerifyPaymentRequestDto
 {
     [Required]
     [MaxLength(50)]
-    public string Status { get; set; } = "Verified"; // Verified, Rejected
+    public string Status { get; set; } = string.Empty; // Verified, Rejected
 
     [MaxLength(150)]
     public string? VerifiedBy { get; set; }
