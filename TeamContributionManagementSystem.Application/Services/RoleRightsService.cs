@@ -77,6 +77,7 @@ public class RoleRightsService : IRoleRightsService
             SubModule = r.SubModule,
             Page = r.Page,
             Access = r.Access,
+            AccessType = r.AccessType > 0 ? (AccessType)r.AccessType : (r.Access == "deny" ? AccessType.Deny : (r.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite)),
             CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
             CreatedAt = DateTime.UtcNow
         }).ToList();

@@ -12,6 +12,7 @@ public class RoleRight
     public string SubModule { get; set; } = string.Empty;
     public string Page { get; set; } = string.Empty;
     public string Access { get; set; } = string.Empty; // "readOnly", "readWrite", "deny"
+    public AccessType AccessType { get; set; } = AccessType.ReadWrite;
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
 
