@@ -26,35 +26,35 @@ public class RoleRightsService : IRoleRightsService
         _mapper = mapper;
     }
 
-    public async Task<IReadOnlyCollection<RoleRightDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<RoleRightDto>> GetAllRoleRightAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             var rights = await _roleRightRepository.GetAllAsync(cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
+            return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, "Error in GetAllRoleRightAsync");
             throw;
         }
     }
 
-    public async Task<IReadOnlyCollection<RoleRightDto>> GetByRoleAsync(string roleName, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<RoleRightDto>> GetRoleRightAsyncByRole(string roleName, CancellationToken cancellationToken = default)
     {
         try
         {
             if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var role))
-        {
-            throw new ArgumentException($"Invalid role: '{roleName}'");
-        }
+            {
+                throw new ArgumentException($"Invalid role: '{roleName}'");
+            }
 
-        var rights = await _roleRightRepository.GetByRoleAsync(role, cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
+            var rights = await _roleRightRepository.GetByRoleAsync(role, cancellationToken);
+            return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByRoleAsync");
+            _logger.LogError(ex, "Error in GetRoleRightAsyncByRole");
             throw;
         }
     }

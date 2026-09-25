@@ -15,11 +15,9 @@ public class RoleRightDto
     [MaxLength(100)]
     public string Module { get; set; } = string.Empty;
 
-    [Required]
     [MaxLength(100)]
     public string SubModule { get; set; } = string.Empty;
 
-    [Required]
     [MaxLength(100)]
     public string Page { get; set; } = string.Empty;
 

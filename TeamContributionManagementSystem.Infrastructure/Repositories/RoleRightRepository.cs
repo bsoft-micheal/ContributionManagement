@@ -80,9 +80,8 @@ public class RoleRightRepository : IRoleRightRepository
 
             if (menu.ParentID == 0)
             {
-                // Top level header row
                 moduleName = menu.Module ?? "";
-                subModuleName = menu.Module ?? "";
+                subModuleName = "";
                 pageName = menu.Module ?? "";
             }
             else
@@ -90,7 +89,7 @@ public class RoleRightRepository : IRoleRightRepository
                 // Child row
                 parentMap.TryGetValue(menu.ParentID, out var parent);
                 moduleName = parent?.Module ?? "";
-                subModuleName = menu.SubModule ?? parent?.Module ?? "";
+                subModuleName = menu.SubModule ?? "";
                 pageName = menu.SubModule ?? menu.Activity ?? "";
             }
 
@@ -143,18 +142,29 @@ public class RoleRightRepository : IRoleRightRepository
                 .Select(g => g.First())
                 .ToList();
 
+            var rightsByFeature = existing.Where(x => x.FeatureID > 0).ToDictionary(x => x.FeatureID);
             var existingMap = existing.ToDictionary(
                 x => $"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}",
                 StringComparer.OrdinalIgnoreCase);
 
             var incomingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var incomingFeatureIds = new HashSet<int>();
 
             foreach (var right in rightsList)
             {
                 var key = $"{right.Module.Trim()}|{right.SubModule.Trim()}|{right.Page.Trim()}";
                 incomingKeys.Add(key);
+                if (right.FeatureID > 0) incomingFeatureIds.Add(right.FeatureID);
 
-                if (existingMap.TryGetValue(key, out var existingRight))
+                RoleRight? existingRight = null;
+                if (right.FeatureID > 0 && rightsByFeature.TryGetValue(right.FeatureID, out existingRight))
+                {
+                    existingRight.Access = right.Access;
+                    existingRight.Module = right.Module.Trim();
+                    existingRight.SubModule = right.SubModule.Trim();
+                    existingRight.Page = right.Page.Trim();
+                }
+                else if (existingMap.TryGetValue(key, out existingRight))
                 {
                     existingRight.Access = right.Access;
                     existingRight.FeatureID = right.FeatureID;
@@ -175,7 +185,8 @@ public class RoleRightRepository : IRoleRightRepository
             }
 
             var toDelete = existing
-                .Where(x => !incomingKeys.Contains($"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}"))
+                .Where(x => (x.FeatureID > 0 && !incomingFeatureIds.Contains(x.FeatureID)) &&
+                            !incomingKeys.Contains($"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}"))
                 .ToList();
 
             if (toDelete.Count > 0)

@@ -235,7 +235,7 @@ public class AuthService : IAuthService
         }
 
         var response = _jwtTokenGenerator.GenerateToken(user, sessionId);
-        response.Rights = await _roleRightsService.GetByRoleAsync(user.Role.ToString(), cancellationToken);
+        response.Rights = await _roleRightsService.GetRoleRightAsyncByRole(user.Role.ToString(), cancellationToken);
         response.RequiresTwoFactor = false;
 
         var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
