@@ -12,7 +12,7 @@ public class LoginRequestDto
     [Required]
     public string Password { get; set; } = string.Empty;
 
-    public DeviceDetailPayloadDto DeviceInfo { get; set; }
+    public DeviceDetailPayloadDto? DeviceInfo { get; set; }
 }
 
 public class AuthResponseDto
