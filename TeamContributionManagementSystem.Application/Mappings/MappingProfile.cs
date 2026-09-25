@@ -64,8 +64,10 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.Contributions, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted)));
 
         CreateMap<RoleRight, RoleRightDto>()
-            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt))
-            .ReverseMap();
+            .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role.ToString()))
+            .ReverseMap()
+            .ForMember(dest => dest.Role, opt => opt.Ignore()); // Role set explicitly in service
+
 
         CreateMap<Expense, ExpenseDto>()
             .ForMember(dest => dest.FileUrl, opt => opt.MapFrom(src => src.FileName))

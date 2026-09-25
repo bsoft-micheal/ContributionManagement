@@ -22,7 +22,19 @@ public class RoleRightRepository : IRoleRightRepository
     {
         try
         {
-            return await _context.RoleRights.OrderBy(x => x.Role).ThenBy(x => x.Module).ThenBy(x => x.Page).ToListAsync(cancellationToken);
+            var navMenus = await _context.NavigationMenus.OrderBy(m => m.DisplayOrder).ToListAsync(cancellationToken);
+            var rights = await _context.RoleRights.ToListAsync(cancellationToken);
+            var rightsMap = rights.ToDictionary(x => $"{x.Role}|{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}", StringComparer.OrdinalIgnoreCase);
+
+            var parentMap = navMenus.Where(m => m.ParentID == 0).ToDictionary(m => m.FeatureID);
+
+            var result = new List<RoleRight>();
+            foreach (var role in Enum.GetValues<UserRole>())
+            {
+                result.AddRange(BuildRightsFromNavigation(role, navMenus, parentMap, rightsMap));
+            }
+
+            return result;
         }
         catch (Exception ex)
         {
@@ -35,7 +47,13 @@ public class RoleRightRepository : IRoleRightRepository
     {
         try
         {
-            return await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+            var navMenus = await _context.NavigationMenus.OrderBy(m => m.DisplayOrder).ToListAsync(cancellationToken);
+            var rights = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+            var rightsMap = rights.ToDictionary(x => $"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}", StringComparer.OrdinalIgnoreCase);
+
+            var parentMap = navMenus.Where(m => m.ParentID == 0).ToDictionary(m => m.FeatureID);
+
+            return BuildRightsFromNavigation(role, navMenus, parentMap, rightsMap);
         }
         catch (Exception ex)
         {
@@ -44,53 +62,126 @@ public class RoleRightRepository : IRoleRightRepository
         }
     }
 
+    private static List<RoleRight> BuildRightsFromNavigation(
+        UserRole role,
+        List<NavigationMenu> navMenus,
+        Dictionary<int, NavigationMenu> parentMap,
+        Dictionary<string, RoleRight> rightsMap)
+    {
+        var result = new List<RoleRight>();
+
+        foreach (var menu in navMenus)
+        {
+            if (!menu.ShowingUserRight) continue;
+
+            string moduleName;
+            string subModuleName;
+            string pageName;
+
+            if (menu.ParentID == 0)
+            {
+                // Top level header row
+                moduleName = menu.Module ?? "";
+                subModuleName = menu.Module ?? "";
+                pageName = menu.Module ?? "";
+            }
+            else
+            {
+                // Child row
+                parentMap.TryGetValue(menu.ParentID, out var parent);
+                moduleName = parent?.Module ?? "";
+                subModuleName = menu.SubModule ?? parent?.Module ?? "";
+                pageName = menu.SubModule ?? menu.Activity ?? "";
+            }
+
+            var key = $"{moduleName.Trim()}|{subModuleName.Trim()}|{pageName.Trim()}";
+            var mapKey = rightsMap.ContainsKey(key) ? key : $"{role}|{key}";
+
+            RoleRight? existing = null;
+            if (rightsMap.TryGetValue(mapKey, out existing) || rightsMap.TryGetValue(key, out existing))
+            {
+                result.Add(new RoleRight
+                {
+                    RoleRightId = existing.RoleRightId,
+                    Role = role,
+                    FeatureID = menu.FeatureID,
+                    Module = moduleName,
+                    SubModule = subModuleName,
+                    Page = pageName,
+                    Access = existing.Access,
+                    CreatedBy = existing.CreatedBy,
+                    CreatedAt = existing.CreatedAt
+                });
+            }
+            else
+            {
+                // Default access fallback if not yet stored in DB
+                string defaultAccess = (role == UserRole.Admin || role == UserRole.Manager) ? "readWrite" : "readOnly";
+                result.Add(new RoleRight
+                {
+                    RoleRightId = Guid.NewGuid(),
+                    Role = role,
+                    FeatureID = menu.FeatureID,
+                    Module = moduleName,
+                    SubModule = subModuleName,
+                    Page = pageName,
+                    Access = defaultAccess
+                });
+            }
+        }
+
+        return result;
+    }
+
     public async Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default)
     {
         try
         {
             var existing = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
-        var rightsList = rights
-            .GroupBy(r => new { Module = r.Module.Trim(), SubModule = r.SubModule.Trim(), Page = r.Page.Trim() })
-            .Select(g => g.First())
-            .ToList();
+            var rightsList = rights
+                .GroupBy(r => new { Module = r.Module.Trim(), SubModule = r.SubModule.Trim(), Page = r.Page.Trim() })
+                .Select(g => g.First())
+                .ToList();
 
-        var existingMap = existing.ToDictionary(
-            x => $"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}",
-            StringComparer.OrdinalIgnoreCase);
+            var existingMap = existing.ToDictionary(
+                x => $"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}",
+                StringComparer.OrdinalIgnoreCase);
 
-        var incomingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var incomingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var right in rightsList)
-        {
-            var key = $"{right.Module.Trim()}|{right.SubModule.Trim()}|{right.Page.Trim()}";
-            incomingKeys.Add(key);
-
-            if (existingMap.TryGetValue(key, out var existingRight))
+            foreach (var right in rightsList)
             {
-                existingRight.Access = right.Access;
-            }
-            else
-            {
-                await _context.RoleRights.AddAsync(new RoleRight
+                var key = $"{right.Module.Trim()}|{right.SubModule.Trim()}|{right.Page.Trim()}";
+                incomingKeys.Add(key);
+
+                if (existingMap.TryGetValue(key, out var existingRight))
                 {
-                    RoleRightId = Guid.NewGuid(),
-                    Role = role,
-                    Module = right.Module.Trim(),
-                    SubModule = right.SubModule.Trim(),
-                    Page = right.Page.Trim(),
-                    Access = right.Access
-                }, cancellationToken);
+                    existingRight.Access = right.Access;
+                    existingRight.FeatureID = right.FeatureID;
+                }
+                else
+                {
+                    await _context.RoleRights.AddAsync(new RoleRight
+                    {
+                        RoleRightId = Guid.NewGuid(),
+                        Role = role,
+                        FeatureID = right.FeatureID,
+                        Module = right.Module.Trim(),
+                        SubModule = right.SubModule.Trim(),
+                        Page = right.Page.Trim(),
+                        Access = right.Access
+                    }, cancellationToken);
+                }
             }
-        }
 
-        var toDelete = existing
-            .Where(x => !incomingKeys.Contains($"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}"))
-            .ToList();
+            var toDelete = existing
+                .Where(x => !incomingKeys.Contains($"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}"))
+                .ToList();
 
-        if (toDelete.Count > 0)
-        {
-            _context.RoleRights.RemoveRange(toDelete);
-        }
+            if (toDelete.Count > 0)
+            {
+                _context.RoleRights.RemoveRange(toDelete);
+            }
         }
         catch (Exception ex)
         {

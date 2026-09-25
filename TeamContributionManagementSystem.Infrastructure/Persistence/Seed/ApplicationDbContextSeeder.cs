@@ -642,6 +642,45 @@ public class ApplicationDbContextSeeder
             await _context.SaveChangesAsync(cancellationToken);
         }
 
+        // Seed navigation menus — exact copy of original menu sheet
+        if (!await _context.NavigationMenus.AnyAsync(cancellationToken))
+        {
+            var menus = new List<NavigationMenu>
+            {
+                // Top-level modules: Module filled, SubModule=null, Activity=null
+                new() { FeatureID = 1,  MainModuleID = 1, Module = "Dashboard",      ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 1, DisplayOrder = 1,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 2,  MainModuleID = 2, Module = "Members",        ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 2, DisplayOrder = 2,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 3,  MainModuleID = 3, Module = "Events",         ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 3, DisplayOrder = 3,  HasSubModule = true,  ShowingUserRight = true },
+                new() { FeatureID = 7,  MainModuleID = 4, Module = "Finance",        ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 4, DisplayOrder = 7,  HasSubModule = true,  ShowingUserRight = true },
+                new() { FeatureID = 12, MainModuleID = 5, Module = "Support Ticket", ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 5, DisplayOrder = 12, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 13, MainModuleID = 6, Module = "Tools",          ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 6, DisplayOrder = 14, HasSubModule = true,  ShowingUserRight = true },
+                new() { FeatureID = 20, MainModuleID = 7, Module = "Reports",        ParentID = 0,  SubModule = null,             Activity = null, RoutingUrl = "#",                        ModuleNO = 7, DisplayOrder = 21, HasSubModule = false, ShowingUserRight = true },
+
+                // Events children: Module=null, SubModule=display label, Activity=null
+                new() { FeatureID = 4,  MainModuleID = 3, Module = null,             ParentID = 3,  SubModule = "Event",          Activity = null, RoutingUrl = "/events",                  ModuleNO = 3, DisplayOrder = 4,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 5,  MainModuleID = 3, Module = null,             ParentID = 3,  SubModule = "Calendar",       Activity = null, RoutingUrl = "/calendar",                ModuleNO = 3, DisplayOrder = 5,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 6,  MainModuleID = 3, Module = null,             ParentID = 3,  SubModule = "Gallery",        Activity = null, RoutingUrl = "/gallery",                 ModuleNO = 3, DisplayOrder = 6,  HasSubModule = false, ShowingUserRight = true },
+
+                // Finance children: Module=null, SubModule=display label, Activity=null
+                new() { FeatureID = 8,  MainModuleID = 4, Module = null,             ParentID = 7,  SubModule = "Contribution",   Activity = null, RoutingUrl = "/contributions",           ModuleNO = 4, DisplayOrder = 8,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 9,  MainModuleID = 4, Module = null,             ParentID = 7,  SubModule = "Payment History",Activity = null, RoutingUrl = "/payments",                ModuleNO = 4, DisplayOrder = 9,  HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 10, MainModuleID = 4, Module = null,             ParentID = 7,  SubModule = "Calculation",    Activity = null, RoutingUrl = "/contribution-calculation", ModuleNO = 4, DisplayOrder = 10, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 11, MainModuleID = 4, Module = null,             ParentID = 7,  SubModule = "Expense",        Activity = null, RoutingUrl = "/expense",                 ModuleNO = 4, DisplayOrder = 11, HasSubModule = false, ShowingUserRight = true },
+
+                // Tools children: Module=null, SubModule=display label, Activity=null
+                new() { FeatureID = 14, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Roles",          Activity = null, RoutingUrl = "/roles",                   ModuleNO = 6, DisplayOrder = 15, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 15, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Event Types",    Activity = null, RoutingUrl = "/event-types",             ModuleNO = 6, DisplayOrder = 16, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 16, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Exit Process",   Activity = null, RoutingUrl = "/exit-process",            ModuleNO = 6, DisplayOrder = 17, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 17, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "User Rights",    Activity = null, RoutingUrl = "/user-rights",             ModuleNO = 6, DisplayOrder = 18, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 18, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Users",          Activity = null, RoutingUrl = "/users",                   ModuleNO = 6, DisplayOrder = 19, HasSubModule = false, ShowingUserRight = true },
+                new() { FeatureID = 19, MainModuleID = 6, Module = null,             ParentID = 13, SubModule = "Settings",       Activity = null, RoutingUrl = "/settings",                ModuleNO = 6, DisplayOrder = 20, HasSubModule = false, ShowingUserRight = true },
+            };
+            await _context.NavigationMenus.AddRangeAsync(menus, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+
+
         // Seeding default Role Rights
         try
         {
@@ -650,33 +689,29 @@ public class ApplicationDbContextSeeder
                 .Select(x => $"{x.Role}|{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}")
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var defaultPages = new[]
-            {
-                (Module: "Dashboard", SubModule: "Analytics", Page: "Dashboard"),
-                (Module: "Members", SubModule: "Directory", Page: "Members"),
-                (Module: "Events", SubModule: "Registry", Page: "Events"),
-                (Module: "Events", SubModule: "Calendar", Page: "Calendar"),
-                (Module: "Contributions", SubModule: "Ledger", Page: "Contributions"),
-                (Module: "Contributions", SubModule: "Calculation", Page: "Calculation"),
-                (Module: "Support Data", SubModule: "Categories", Page: "Event Types"),
-                (Module: "Support Data", SubModule: "Clearance", Page: "Exit Process"),
-                (Module: "Support Data", SubModule: "Admin", Page: "User Rights"),
-                (Module: "Support Data", SubModule: "Admin", Page: "Users"),
-                (Module: "Support Data", SubModule: "Admin", Page: "Roles"),
-                (Module: "Reports", SubModule: "Analytics", Page: "Event Audit"),
-                (Module: "Reports", SubModule: "Analytics", Page: "Member Velocity"),
-                (Module: "Reports", SubModule: "Analytics", Page: "Pending Dues"),
-                (Module: "Reports", SubModule: "Analytics", Page: "Member Category Paid"),
-                (Module: "Contributions", SubModule: "Expenses", Page: "Expense"),
-                (Module: "Contributions", SubModule: "Payments", Page: "Payments"),
-                (Module: "Events", SubModule: "Media", Page: "Gallery"),
-                (Module: "Support Data", SubModule: "Helpdesk", Page: "Support Tickets"),
-                (Module: "Support Data", SubModule: "Calculations", Page: "Budget Calculations"),
-                (Module: "Support Data", SubModule: "Helpdesk", Page: "Types"),
-                (Module: "Support Data", SubModule: "Helpdesk", Page: "Ticket Types"),
-                (Module: "Support Data", SubModule: "Helpdesk", Page: "Status"),
-                (Module: "Support Data", SubModule: "Configuration", Page: "Settings")
-            };
+        var defaultPages = new[]
+        {
+            (Module: "Dashboard",      SubModule: "Analytics",  Page: "Dashboard"),
+            (Module: "Members",        SubModule: "Directory",  Page: "Members"),
+            (Module: "Events",         SubModule: "Registry",   Page: "Event"),
+            (Module: "Events",         SubModule: "Calendar",   Page: "Calendar"),
+            (Module: "Events",         SubModule: "Media",      Page: "Gallery"),
+            (Module: "Finance",        SubModule: "Ledger",     Page: "Contribution"),
+            (Module: "Finance",        SubModule: "Payments",   Page: "Payment History"),
+            (Module: "Finance",        SubModule: "Calculation",Page: "Calculation"),
+            (Module: "Finance",        SubModule: "Expenses",   Page: "Expense"),
+            (Module: "Support Ticket", SubModule: "Helpdesk",   Page: "Support Ticket"),
+            (Module: "Tools",          SubModule: "Admin",      Page: "Roles"),
+            (Module: "Tools",          SubModule: "Categories", Page: "Event Types"),
+            (Module: "Tools",          SubModule: "Clearance",  Page: "Exit Process"),
+            (Module: "Tools",          SubModule: "Admin",      Page: "User Rights"),
+            (Module: "Tools",          SubModule: "Admin",      Page: "Users"),
+            (Module: "Tools",          SubModule: "Config",     Page: "Settings"),
+            (Module: "Reports",        SubModule: "Analytics",  Page: "Event Audit"),
+            (Module: "Reports",        SubModule: "Analytics",  Page: "Member Velocity"),
+            (Module: "Reports",        SubModule: "Analytics",  Page: "Pending Dues"),
+            (Module: "Reports",        SubModule: "Analytics",  Page: "Member Category Paid"),
+        };
 
             var roleRightsList = new List<RoleRight>();
 
@@ -692,35 +727,34 @@ public class ApplicationDbContextSeeder
 
                     string access = "readWrite"; // default for Admin / Manager
 
-                    if (role == UserRole.User || role == UserRole.Member)
+                if (role == UserRole.User || role == UserRole.Member)
+                {
+                    // Deny sensitive Tools pages for non-admin roles
+                    if (page.Module == "Tools" &&
+                        (page.Page == "Event Types" || page.Page == "Exit Process" ||
+                         page.Page == "User Rights" || page.Page == "Users" || page.Page == "Settings"))
                     {
-                        if (page.Page == "Event Types" || page.Page == "Exit Process" || page.Page == "User Rights" || page.Page == "Users" || page.Page == "Settings")
-                        {
-                            access = "deny";
-                        }
-                        else
-                        {
-                            access = "readWrite";
-                        }
+                        access = "deny";
                     }
-
-                    roleRightsList.Add(new RoleRight
+                    else
                     {
-                        RoleRightId = Guid.NewGuid(),
-                        Role = role,
-                        Module = page.Module,
-                        SubModule = page.SubModule,
-                        Page = page.Page,
-                        Access = access,
-                        IsActive = true,
-                        IsDeleted = false,
-                        CreatedBy = "System",
-                        CreatedAt = DateTime.UtcNow,
-                        CreatedOn = DateTime.UtcNow
-                    });
-                    existingKeySet.Add(key);
+                        access = "readWrite";
+                    }
                 }
+
+                roleRightsList.Add(new RoleRight
+                {
+                    RoleRightId = Guid.NewGuid(),
+                    Role = role,
+                    FeatureID = 1,
+                    Module = page.Module,
+                    SubModule = page.SubModule,
+                    Page = page.Page,
+                    Access = access
+                });
+                existingKeySet.Add(key);
             }
+        }
 
             if (roleRightsList.Count > 0)
             {
