@@ -15,7 +15,7 @@ public class DeviceLoginHistory
     public AppUser? User { get; set; }
 
     [Column("device_detail_id")]
-    public Guid DeviceDetailId { get; set; }
+    public Guid? DeviceDetailId { get; set; }
     public DeviceDetail? DeviceDetail { get; set; }
 
     [Column("login_time")]

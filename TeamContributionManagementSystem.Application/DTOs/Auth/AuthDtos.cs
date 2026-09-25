@@ -13,6 +13,7 @@ public class LoginRequestDto
     [Required]
     public string Password { get; set; } = string.Empty;
 
+    public bool IsFromMobile { get; set; } = false;
     public DeviceDetailPayloadDto? DeviceInfo { get; set; }
 }
 
