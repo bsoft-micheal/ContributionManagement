@@ -295,6 +295,7 @@ public class ApplicationDbContextSeeder
                 {
                     RoleRightId = Guid.NewGuid(),
                     Role = role,
+                    FeatureID = 1,
                     Module = page.Module,
                     SubModule = page.SubModule,
                     Page = page.Page,
