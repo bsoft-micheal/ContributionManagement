@@ -46,6 +46,7 @@ public static class CommonMessages
         public const string InvalidCredentials = "Invalid email or password.";
         public const string UserNotFound = "User not found.";
         public const string AccountDeactivated = "This user account is deactivated. Please contact an administrator.";
+        public const string MobileAdminLoginNotAllowed = "Admin users are not permitted to log in via the Mobile Application.";
         public const string MaxOtpAttemptsExceeded = "Maximum OTP attempts exceeded. Please request a new OTP.";
         public const string OtpExpired = "The password reset OTP has expired. Please request a new one.";
         public const string InvalidOtpRemainingFormat = "Invalid OTP code. {0} attempt{1} remaining.";
@@ -103,7 +104,7 @@ public static class CommonMessages
         public const string NotFound = "Role not found.";
         public const string AlreadyExists = "Role already exists.";
         public const string CannotDeleteWithMembers = "Cannot delete role because members are assigned to this role.";
-        public const string InvalidRoleFormat = "Invalid role: '{0}'. Valid values: Admin, Manager, User.";
+        public const string InvalidRoleFormat = "Invalid role: '{0}'. Valid values: Admin, Organizer, Member.";
     }
 
     public static class UserRights

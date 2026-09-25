@@ -6,9 +6,8 @@ namespace TeamContributionManagementSystem.Application.Common;
 public static class CommonRoles
 {
     public const string Admin = "Admin";
-    public const string Manager = "Manager";
-    public const string User = "User";
+    public const string Organizer = "Organizer";
     public const string Member = "Member";
 
-    public const string AdminOrManager = $"{Admin},{Manager}";
+    public const string AdminOrOrganizer = $"{Admin},{Organizer}";
 }

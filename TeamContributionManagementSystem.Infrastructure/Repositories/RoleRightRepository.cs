@@ -116,7 +116,7 @@ public class RoleRightRepository : IRoleRightRepository
             else
             {
                 // Default access fallback if not yet stored in DB
-                AccessType defaultAccessType = (role == UserRole.Admin || role == UserRole.Manager) ? AccessType.ReadWrite : AccessType.ReadOnly;
+                AccessType defaultAccessType = (role == UserRole.Admin || role == UserRole.Organizer) ? AccessType.ReadWrite : AccessType.ReadOnly;
                 string defaultAccess = defaultAccessType == AccessType.ReadWrite ? "readWrite" : "readOnly";
                 result.Add(new RoleRight
                 {
