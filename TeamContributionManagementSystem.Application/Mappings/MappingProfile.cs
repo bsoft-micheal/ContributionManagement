@@ -10,6 +10,9 @@ using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
 using TeamContributionManagementSystem.Application.DTOs.Settings;
 using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
+using TeamContributionManagementSystem.Application.DTOs.Statuses;
+using TeamContributionManagementSystem.Application.DTOs.TicketTypes;
+using TeamContributionManagementSystem.Application.DTOs.WorkTypes;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -81,6 +84,15 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
 
         CreateMap<BudgetCalculation, BudgetCalculationDto>()
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+
+        CreateMap<TicketType, TicketTypeDto>()
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+
+        CreateMap<Status, StatusDto>()
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+
+        CreateMap<WorkType, WorkTypeDto>()
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
     }
 }
