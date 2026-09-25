@@ -71,14 +71,14 @@ public class SupportTicketService : ISupportTicketService
             Description = request.Description.Trim(),
             Status = "Open",
             Priority = string.IsNullOrWhiteSpace(request.Priority) ? "Medium" : request.Priority.Trim(),
-            AssignedTo = "Admin",
+            AssignedTo = request.AssignedTo?.Trim(),
             RefNo = request.RefNo?.Trim() ?? $"REF-{DateTime.UtcNow:yyyyMMdd}-{nextNumber:D3}",
             Utr = request.Utr?.Trim(),
             Attachment = request.Attachment?.Trim(),
             IsActive = true,
             IsDeleted = false,
-            CreatedBy = string.IsNullOrWhiteSpace(user) ? "System" : user,
-            CreatedOn = DateTime.UtcNow
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+            CreatedAt = DateTime.UtcNow
         };
 
         await _ticketRepository.AddAsync(ticket, cancellationToken);
@@ -100,6 +100,36 @@ public class SupportTicketService : ISupportTicketService
             var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
             ?? throw new KeyNotFoundException($"Support ticket with ID {ticketId} not found.");
 
+        if (!string.IsNullOrWhiteSpace(request.MemberName))
+        {
+            ticket.MemberName = request.MemberName.Trim();
+        }
+
+        if (request.MemberId != null)
+        {
+            ticket.MemberId = string.IsNullOrWhiteSpace(request.MemberId) ? null : request.MemberId.Trim();
+        }
+
+        if (request.RelatedEvent != null)
+        {
+            ticket.RelatedEvent = string.IsNullOrWhiteSpace(request.RelatedEvent) ? null : request.RelatedEvent.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.TicketType))
+        {
+            ticket.TicketType = request.TicketType.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Subject))
+        {
+            ticket.Subject = request.Subject.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Description))
+        {
+            ticket.Description = request.Description.Trim();
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Status))
         {
             ticket.Status = request.Status.Trim();
@@ -110,9 +140,24 @@ public class SupportTicketService : ISupportTicketService
             ticket.Priority = request.Priority.Trim();
         }
 
-        if (!string.IsNullOrWhiteSpace(request.AssignedTo))
+        if (request.AssignedTo != null)
         {
-            ticket.AssignedTo = request.AssignedTo.Trim();
+            ticket.AssignedTo = string.IsNullOrWhiteSpace(request.AssignedTo) ? null : request.AssignedTo.Trim();
+        }
+
+        if (request.RefNo != null)
+        {
+            ticket.RefNo = string.IsNullOrWhiteSpace(request.RefNo) ? null : request.RefNo.Trim();
+        }
+
+        if (request.Utr != null)
+        {
+            ticket.Utr = string.IsNullOrWhiteSpace(request.Utr) ? null : request.Utr.Trim();
+        }
+
+        if (request.Attachment != null)
+        {
+            ticket.Attachment = string.IsNullOrWhiteSpace(request.Attachment) ? null : request.Attachment.Trim();
         }
 
         if (!string.IsNullOrWhiteSpace(request.ResolutionNotes))
@@ -120,7 +165,7 @@ public class SupportTicketService : ISupportTicketService
             ticket.ResolutionNotes = request.ResolutionNotes.Trim();
         }
 
-        ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? "System" : user;
+        ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
         ticket.ModifiedOn = DateTime.UtcNow;
 
         _ticketRepository.Update(ticket);
@@ -143,7 +188,7 @@ public class SupportTicketService : ISupportTicketService
             ?? throw new KeyNotFoundException($"Support ticket with ID {ticketId} not found.");
 
         var timestamp = DateTime.UtcNow.ToString("dd MMM yyyy, hh:mm tt");
-        var sender = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
+        var sender = string.IsNullOrWhiteSpace(user) ? (string.IsNullOrWhiteSpace(ticket.MemberName) ? "User" : ticket.MemberName) : user.Trim();
         var newNote = $"[{timestamp}] {sender}: {request.Message.Trim()}";
 
         if (string.IsNullOrWhiteSpace(ticket.ResolutionNotes))
@@ -160,7 +205,7 @@ public class SupportTicketService : ISupportTicketService
             ticket.Status = request.Status.Trim();
         }
 
-        ticket.ModifiedBy = sender;
+        ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
         ticket.ModifiedOn = DateTime.UtcNow;
 
         _ticketRepository.Update(ticket);

@@ -20,4 +20,7 @@ public class UpcomingEventDto
     public decimal PendingAmount { get; set; }
     public int PendingContributionsCount { get; set; }
     public int TotalContributionsCount { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn => CreatedAt;
 }

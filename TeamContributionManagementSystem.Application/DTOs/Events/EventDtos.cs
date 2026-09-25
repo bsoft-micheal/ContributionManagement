@@ -16,6 +16,10 @@ public class EventSummaryDto
     public int ParticipantCount { get; set; }
     public decimal TotalExpectedAmount { get; set; }
     public decimal TotalPaidAmount { get; set; }
+    public string? CreatedByName { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn { get; set; }
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }
 
@@ -29,8 +33,6 @@ public class EventParticipantDto
 
 public class EventDetailsDto : EventSummaryDto
 {
-    public Guid CreatedBy { get; set; }
-    public string CreatedByName { get; set; } = string.Empty;
     public IReadOnlyCollection<Contributions.ContributionDto> Contributions { get; set; } = Array.Empty<Contributions.ContributionDto>();
 }
 

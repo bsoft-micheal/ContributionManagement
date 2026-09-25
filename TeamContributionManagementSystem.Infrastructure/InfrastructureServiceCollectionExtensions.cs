@@ -36,6 +36,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IGalleryRepository, GalleryRepository>();
         services.AddScoped<IDeviceSessionRepository, DeviceSessionRepository>();
         services.AddScoped<IUserMfaDeviceRepository, UserMfaDeviceRepository>();
+        services.AddScoped<IBudgetCalculationRepository, BudgetCalculationRepository>();
+        services.AddScoped<ITicketTypeRepository, TicketTypeRepository>();
+        services.AddScoped<IStatusRepository, StatusRepository>();
+        services.AddScoped<IWorkTypeRepository, WorkTypeRepository>();
 
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IRoleService, RoleService>();
@@ -55,6 +59,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ISystemSettingService, SystemSettingService>();
         services.AddScoped<IPaymentTransactionService, PaymentTransactionService>();
         services.AddScoped<IGalleryService, GalleryService>();
+        services.AddScoped<IBudgetCalculationService, BudgetCalculationService>();
+        services.AddScoped<ITicketTypeService, TicketTypeService>();
+        services.AddScoped<IStatusService, StatusService>();
+        services.AddScoped<IWorkTypeService, WorkTypeService>();
 
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();

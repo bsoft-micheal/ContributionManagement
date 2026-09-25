@@ -36,7 +36,7 @@ public class EventTypeService : IEventTypeService
         }
     }
 
-    public async Task<EventTypeDto> CreateAsync(CreateEventTypeRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<EventTypeDto> CreateAsync(CreateEventTypeRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -51,7 +51,9 @@ public class EventTypeService : IEventTypeService
             EventTypeId = Guid.NewGuid(),
             EventTypeName = request.EventTypeName.Trim(),
             IsActive = request.IsActive,
-            BaseAmount = request.BaseAmount
+            BaseAmount = request.BaseAmount,
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user,
+            CreatedAt = DateTime.UtcNow
         };
 
         await _eventTypeRepository.AddAsync(eventType, cancellationToken);
@@ -66,7 +68,7 @@ public class EventTypeService : IEventTypeService
         }
     }
 
-    public async Task<EventTypeDto> UpdateAsync(Guid eventTypeId, UpdateEventTypeRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<EventTypeDto> UpdateAsync(Guid eventTypeId, UpdateEventTypeRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -82,6 +84,8 @@ public class EventTypeService : IEventTypeService
         eventType.EventTypeName = request.EventTypeName.Trim();
         eventType.IsActive = request.IsActive;
         eventType.BaseAmount = request.BaseAmount;
+        eventType.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user;
+        eventType.ModifiedOn = DateTime.UtcNow;
 
         _eventTypeRepository.Update(eventType);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

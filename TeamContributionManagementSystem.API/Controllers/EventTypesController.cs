@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeamContributionManagementSystem.Application.Common;
@@ -43,7 +44,8 @@ public class EventTypesController : ControllerBase
     [ActionName("SaveEventTypeAsync")]
     public async Task<ActionResult<ApiResponse<EventTypeDto>>> SaveEventTypeAsync([FromBody] CreateEventTypeRequestDto request, CancellationToken cancellationToken)
     {
-        var result = await _eventTypeService.SaveEventTypeAsync(request, cancellationToken);
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var result = await _eventTypeService.SaveEventTypeAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<EventTypeDto>.SuccessResult(result, CommonMessages.EventTypes.SaveSuccess, CommonStatusCodes.Status201Created));
     }
 
@@ -58,7 +60,8 @@ public class EventTypesController : ControllerBase
     [ActionName("UpdateEventTypeAsyncById")]
     public async Task<ActionResult<ApiResponse<EventTypeDto>>> UpdateEventTypeAsyncById(Guid id, [FromBody] UpdateEventTypeRequestDto request, CancellationToken cancellationToken)
     {
-        var result = await _eventTypeService.UpdateEventTypeAsyncById(id, request, cancellationToken);
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var result = await _eventTypeService.UpdateEventTypeAsyncById(id, request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<EventTypeDto>.SuccessResult(result, CommonMessages.EventTypes.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
 

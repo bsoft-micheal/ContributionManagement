@@ -38,7 +38,7 @@ public class MemberService : IMemberService
         }
     }
 
-    public async Task<MemberDto> CreateAsync(CreateMemberRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<MemberDto> CreateAsync(CreateMemberRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -63,7 +63,9 @@ public class MemberService : IMemberService
             Gender = request.Gender,
             IsActive = request.IsActive,
             IsExited = request.IsExited,
-            MemberType = string.IsNullOrWhiteSpace(request.MemberType) ? "Office" : request.MemberType
+            MemberType = string.IsNullOrWhiteSpace(request.MemberType) ? "Office" : request.MemberType,
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user,
+            CreatedAt = DateTime.UtcNow
         };
 
         await _memberRepository.AddAsync(member, cancellationToken);
@@ -81,7 +83,7 @@ public class MemberService : IMemberService
         }
     }
 
-    public async Task<MemberDto> UpdateAsync(Guid memberId, UpdateMemberRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<MemberDto> UpdateAsync(Guid memberId, UpdateMemberRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -89,7 +91,7 @@ public class MemberService : IMemberService
             ?? throw new KeyNotFoundException("Member not found.");
 
         var duplicate = await _memberRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-        if (duplicate is not null && duplicate.MemberId != memberId)
+    if (duplicate is not null && duplicate.MemberId != memberId)
         {
             throw new InvalidOperationException("A member with the same email already exists.");
         }
@@ -107,6 +109,8 @@ public class MemberService : IMemberService
         member.IsActive = request.IsActive;
         member.IsExited = request.IsExited;
         member.MemberType = string.IsNullOrWhiteSpace(request.MemberType) ? "Office" : request.MemberType;
+        member.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user;
+        member.ModifiedOn = DateTime.UtcNow;
 
         _memberRepository.Update(member);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

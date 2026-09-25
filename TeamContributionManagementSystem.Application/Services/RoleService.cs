@@ -36,7 +36,7 @@ public class RoleService : IRoleService
         }
     }
 
-    public async Task<RoleDto> CreateAsync(CreateRoleRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<RoleDto> CreateAsync(CreateRoleRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -50,7 +50,9 @@ public class RoleService : IRoleService
         {
             RoleId = Guid.NewGuid(),
             RoleName = request.RoleName.Trim(),
-            DefaultContributionAmount = request.DefaultContributionAmount
+            DefaultContributionAmount = request.DefaultContributionAmount,
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user,
+            CreatedAt = DateTime.UtcNow
         };
 
         await _roleRepository.AddAsync(role, cancellationToken);
@@ -65,7 +67,7 @@ public class RoleService : IRoleService
         }
     }
 
-    public async Task<RoleDto> UpdateAsync(Guid roleId, UpdateRoleRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<RoleDto> UpdateAsync(Guid roleId, UpdateRoleRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -80,6 +82,8 @@ public class RoleService : IRoleService
 
         role.RoleName = request.RoleName.Trim();
         role.DefaultContributionAmount = request.DefaultContributionAmount;
+        role.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user;
+        role.ModifiedOn = DateTime.UtcNow;
 
         _roleRepository.Update(role);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
