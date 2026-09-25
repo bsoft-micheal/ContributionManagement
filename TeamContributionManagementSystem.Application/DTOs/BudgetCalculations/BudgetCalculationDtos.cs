@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.Common;
 
 namespace TeamContributionManagementSystem.Application.DTOs.BudgetCalculations;
 
@@ -18,11 +19,11 @@ public class BudgetCalculationDto
 
 public class CreateBudgetCalculationRequestDto
 {
-    [Required(ErrorMessage = "Expense Item is required.")]
+    [Required(ErrorMessage = CommonValidationMessages.ExpenseItemRequired)]
     [MaxLength(150)]
     public string ExpenseItem { get; set; } = string.Empty;
 
-    [Range(0, 1000000, ErrorMessage = "Rate must be between 0 and 1,000,000.")]
+    [Range(0, 1000000, ErrorMessage = CommonValidationMessages.RateRange)]
     public decimal Rate { get; set; }
 
     [MaxLength(100)]

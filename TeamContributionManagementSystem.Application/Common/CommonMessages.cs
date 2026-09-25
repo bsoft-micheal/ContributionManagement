@@ -18,6 +18,20 @@ public static class CommonMessages
         public const string UserIdentityNotAvailable = "User identity is not available.";
     }
 
+    public static class Validation
+    {
+        public const string PasswordMinLength = CommonValidationMessages.PasswordMinLength;
+        public const string BaseAmountGreaterThanZero = CommonValidationMessages.BaseAmountGreaterThanZero;
+        public const string WorkTypeNameRequired = CommonValidationMessages.WorkTypeNameRequired;
+        public const string WorkTypeNameMaxLength = CommonValidationMessages.WorkTypeNameMaxLength;
+        public const string TicketTypeNameRequired = CommonValidationMessages.TicketTypeNameRequired;
+        public const string TicketTypeNameMaxLength = CommonValidationMessages.TicketTypeNameMaxLength;
+        public const string StatusNameRequired = CommonValidationMessages.StatusNameRequired;
+        public const string StatusNameMaxLength = CommonValidationMessages.StatusNameMaxLength;
+        public const string ExpenseItemRequired = CommonValidationMessages.ExpenseItemRequired;
+        public const string RateRange = CommonValidationMessages.RateRange;
+    }
+
     public static class Auth
     {
         public const string LoginSuccess = "User authenticated successfully.";

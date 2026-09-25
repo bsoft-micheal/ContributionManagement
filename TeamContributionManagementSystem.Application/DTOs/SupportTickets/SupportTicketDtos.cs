@@ -52,6 +52,9 @@ public class CreateSupportTicketRequestDto
     public string Description { get; set; } = string.Empty;
 
     [MaxLength(50)]
+    public string? Status { get; set; }
+
+    [MaxLength(50)]
     public string Priority { get; set; } = string.Empty;
 
     [MaxLength(150)]

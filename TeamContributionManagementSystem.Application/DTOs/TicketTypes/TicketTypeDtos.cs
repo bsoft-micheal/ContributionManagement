@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.Common;
 
 namespace TeamContributionManagementSystem.Application.DTOs.TicketTypes;
 
@@ -16,8 +17,8 @@ public class TicketTypeDto
 
 public class CreateTicketTypeRequestDto
 {
-    [Required(ErrorMessage = "Ticket Type name is required.")]
-    [MaxLength(150, ErrorMessage = "Ticket Type name cannot exceed 150 characters.")]
+    [Required(ErrorMessage = CommonValidationMessages.TicketTypeNameRequired)]
+    [MaxLength(150, ErrorMessage = CommonValidationMessages.TicketTypeNameMaxLength)]
     public string TypeName { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
