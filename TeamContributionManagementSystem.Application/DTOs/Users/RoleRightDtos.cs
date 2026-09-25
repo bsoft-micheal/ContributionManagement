@@ -4,6 +4,13 @@ namespace TeamContributionManagementSystem.Application.DTOs.Users;
 
 public class RoleRightDto
 {
+    public Guid RoleRightId { get; set; }
+    public int FeatureID { get; set; }
+
+    [Required]
+    [MaxLength(20)]
+    public string Role { get; set; } = string.Empty;
+
     [Required]
     [MaxLength(100)]
     public string Module { get; set; } = string.Empty;
@@ -24,6 +31,7 @@ public class RoleRightDto
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
 }
+
 
 public class UpdateRoleRightsRequestDto
 {

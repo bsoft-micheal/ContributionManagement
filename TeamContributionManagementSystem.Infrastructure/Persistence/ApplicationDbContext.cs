@@ -32,6 +32,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<TicketType> TicketTypes => Set<TicketType>();
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<WorkType> WorkTypes => Set<WorkType>();
+    public DbSet<NavigationMenu> NavigationMenus => Set<NavigationMenu>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -91,7 +92,19 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.SubModule).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Page).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Access).HasMaxLength(20).IsRequired();
+            entity.Ignore(x => x.NavigationMenu);
             entity.HasIndex(x => new { x.Role, x.Module, x.SubModule, x.Page }).IsUnique();
+        });
+
+        modelBuilder.Entity<NavigationMenu>(entity =>
+        {
+            entity.HasKey(x => x.FeatureID);
+            entity.Property(x => x.Module).HasMaxLength(100);
+
+            entity.Property(x => x.SubModule).HasMaxLength(100);
+            entity.Property(x => x.Activity).HasMaxLength(100);
+            entity.Property(x => x.RoutingUrl).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.ItemDescription).HasMaxLength(250);
         });
 
         modelBuilder.Entity<Event>(entity =>
