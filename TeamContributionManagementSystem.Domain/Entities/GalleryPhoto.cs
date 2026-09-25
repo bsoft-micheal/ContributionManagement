@@ -1,3 +1,5 @@
+using TeamContributionManagementSystem.Domain.Common;
+
 namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class GalleryPhoto
@@ -5,7 +7,7 @@ public class GalleryPhoto
     public Guid PhotoId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string EventName { get; set; } = string.Empty;
-    public string Category { get; set; } = "Moments";
+    public string Category { get; set; } = DomainConstants.Categories.Moments;
     public string ImageUrl { get; set; } = string.Empty;
     public DateTime TakenDate { get; set; }
     public string? Description { get; set; }

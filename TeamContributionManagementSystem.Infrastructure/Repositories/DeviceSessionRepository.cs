@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
-using TeamContributionManagementSystem.Domain.Enums;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 
 namespace TeamContributionManagementSystem.Infrastructure.Repositories;
@@ -10,9 +10,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class DeviceSessionRepository : IDeviceSessionRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<DeviceSessionRepository> _logger;
+    private readonly ILogger<DeviceSessionRepository> _logger;
 
-    public DeviceSessionRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<DeviceSessionRepository> logger)
+    public DeviceSessionRepository(ApplicationDbContext context, ILogger<DeviceSessionRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -26,7 +26,7 @@ public class DeviceSessionRepository : IDeviceSessionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Add");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Add));
             throw;
         }
     }
@@ -39,7 +39,7 @@ public class DeviceSessionRepository : IDeviceSessionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Update");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Update));
             throw;
         }
     }
@@ -49,11 +49,11 @@ public class DeviceSessionRepository : IDeviceSessionRepository
         try
         {
             return await _context.DeviceDetails
-            .FirstOrDefaultAsync(d => d.UserId == userId && d.DeviceId == deviceId, cancellationToken);
+                .FirstOrDefaultAsync(d => d.UserId == userId && d.DeviceId == deviceId, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetDeviceByDeviceIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetDeviceByDeviceIdAsync));
             throw;
         }
     }
@@ -63,13 +63,13 @@ public class DeviceSessionRepository : IDeviceSessionRepository
         try
         {
             return await _context.DeviceDetails
-            .Include(d => d.LoginHistories.Where(h => h.IsActive))
-            .Where(d => d.UserId == userId && d.IsActive)
-            .ToListAsync(cancellationToken);
+                .Include(d => d.LoginHistories.Where(h => h.IsActive))
+                .Where(d => d.UserId == userId && d.IsActive)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetActiveSessionsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetActiveSessionsAsync));
             throw;
         }
     }
@@ -79,13 +79,13 @@ public class DeviceSessionRepository : IDeviceSessionRepository
         try
         {
             return await _context.DeviceDetails
-            .Include(d => d.LoginHistories.OrderByDescending(h => h.LoginTime))
-            .Where(d => d.UserId == userId)
-            .ToListAsync(cancellationToken);
+                .Include(d => d.LoginHistories.OrderByDescending(h => h.LoginTime))
+                .Where(d => d.UserId == userId)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetSessionHistoryAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetSessionHistoryAsync));
             throw;
         }
     }
@@ -95,12 +95,12 @@ public class DeviceSessionRepository : IDeviceSessionRepository
         try
         {
             return await _context.DeviceLoginHistories
-            .Include(h => h.DeviceDetail)
-            .FirstOrDefaultAsync(h => h.Id == historyId, cancellationToken);
+                .Include(h => h.DeviceDetail)
+                .FirstOrDefaultAsync(h => h.Id == historyId, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetLoginHistoryByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetLoginHistoryByIdAsync));
             throw;
         }
     }
@@ -113,7 +113,7 @@ public class DeviceSessionRepository : IDeviceSessionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddLoginHistory");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddLoginHistory));
             throw;
         }
     }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -8,14 +9,14 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class ReportService : IReportService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<ReportService> _logger;
+    private readonly ILogger<ReportService> _logger;
     private readonly IEventRepository _eventRepository;
     private readonly IContributionRepository _contributionRepository;
     private readonly IExpenseRepository _expenseRepository;
     private readonly IPaymentTransactionRepository _paymentTransactionRepository;
 
     public ReportService(
-        Microsoft.Extensions.Logging.ILogger<ReportService> logger, 
+        ILogger<ReportService> logger, 
         IEventRepository eventRepository, 
         IContributionRepository contributionRepository,
         IExpenseRepository expenseRepository,
@@ -111,7 +112,9 @@ public class ReportService : IReportService
                 var days = x.Event?.EventDate != null 
                     ? Math.Max(0, (DateTime.UtcNow - x.Event.EventDate).Days)
                     : 0;
-                var aging = days > 30 ? "Critical (> 30d)" : (days >= 15 ? "Moderate (15-30d)" : "Recent (< 15d)");
+                var aging = days > 30 
+                    ? CommonConstants.AgingCategories.Critical 
+                    : (days >= 15 ? CommonConstants.AgingCategories.Moderate : CommonConstants.AgingCategories.Recent);
 
                 return new PendingDueDto
                 {
@@ -148,7 +151,7 @@ public class ReportService : IReportService
                     TotalCollections = collections,
                     TotalExpenses = expenses,
                     NetBalance = net,
-                    Status = net >= 0 ? "Surplus" : "Deficit",
+                    Status = net >= 0 ? CommonConstants.FinancialStatus.Surplus : CommonConstants.FinancialStatus.Deficit,
                     SavingsRatePercent = savingsRate,
                     CreatedBy = x.CreatedByUser != null ? x.CreatedByUser.FullName : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt
@@ -170,20 +173,20 @@ public class ReportService : IReportService
 
                     if (cash > 0)
                     {
-                        if (!modeTotals.ContainsKey("Cash")) modeTotals["Cash"] = (0, 0);
-                        var cur = modeTotals["Cash"];
-                        modeTotals["Cash"] = (cur.TotalAmount + cash, cur.Count + 1);
+                        if (!modeTotals.ContainsKey(CommonConstants.PaymentModes.Cash)) modeTotals[CommonConstants.PaymentModes.Cash] = (0, 0);
+                        var cur = modeTotals[CommonConstants.PaymentModes.Cash];
+                        modeTotals[CommonConstants.PaymentModes.Cash] = (cur.TotalAmount + cash, cur.Count + 1);
                     }
                     if (upi > 0)
                     {
-                        if (!modeTotals.ContainsKey("UPI")) modeTotals["UPI"] = (0, 0);
-                        var cur = modeTotals["UPI"];
-                        modeTotals["UPI"] = (cur.TotalAmount + upi, cur.Count + 1);
+                        if (!modeTotals.ContainsKey(CommonConstants.PaymentModes.Upi)) modeTotals[CommonConstants.PaymentModes.Upi] = (0, 0);
+                        var cur = modeTotals[CommonConstants.PaymentModes.Upi];
+                        modeTotals[CommonConstants.PaymentModes.Upi] = (cur.TotalAmount + upi, cur.Count + 1);
                     }
                 }
                 else
                 {
-                    var modeName = c.PaymentMode == PaymentMode.None ? "UPI" : (c.PaymentMode == PaymentMode.Upi ? "UPI" : c.PaymentMode.ToString());
+                    var modeName = c.PaymentMode == PaymentMode.None ? CommonConstants.PaymentModes.Upi : (c.PaymentMode == PaymentMode.Upi ? CommonConstants.PaymentModes.Upi : c.PaymentMode.ToString());
                     if (!modeTotals.ContainsKey(modeName)) modeTotals[modeName] = (0, 0);
                     var cur = modeTotals[modeName];
                     modeTotals[modeName] = (cur.TotalAmount + c.Amount, cur.Count + 1);
@@ -206,14 +209,14 @@ public class ReportService : IReportService
             {
                 var totalFromPayments = allPayments.Sum(p => p.Amount);
                 paymentModeGroups = allPayments
-                    .GroupBy(p => string.IsNullOrWhiteSpace(p.PaymentMode) ? "UPI" : p.PaymentMode)
+                    .GroupBy(p => string.IsNullOrWhiteSpace(p.PaymentMode) ? CommonConstants.PaymentModes.Upi : p.PaymentMode)
                     .Select(g => new PaymentModeReportDto
                     {
                         PaymentMode = g.Key,
                         TransactionCount = g.Count(),
                         TotalAmount = g.Sum(p => p.Amount),
                         Percentage = totalFromPayments > 0 ? Math.Round((g.Sum(p => p.Amount) / totalFromPayments) * 100, 1) : 0,
-                        VerifiedCount = g.Count(p => p.Status == "Verified" || p.Status == "Approved")
+                        VerifiedCount = g.Count(p => p.Status == CommonConstants.PaymentStatuses.Verified || p.Status == CommonConstants.PaymentStatuses.Approved)
                     })
                     .OrderByDescending(x => x.TotalAmount)
                     .ToList();
@@ -249,7 +252,7 @@ public class ReportService : IReportService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetSummaryAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetSummaryAsync));
             throw;
         }
     }

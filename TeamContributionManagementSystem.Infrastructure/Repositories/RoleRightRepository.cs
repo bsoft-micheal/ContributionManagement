@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -10,9 +11,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class RoleRightRepository : IRoleRightRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<RoleRightRepository> _logger;
+    private readonly ILogger<RoleRightRepository> _logger;
 
-    public RoleRightRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<RoleRightRepository> logger)
+    public RoleRightRepository(ApplicationDbContext context, ILogger<RoleRightRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -38,7 +39,7 @@ public class RoleRightRepository : IRoleRightRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -57,7 +58,7 @@ public class RoleRightRepository : IRoleRightRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByRoleAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByRoleAsync));
             throw;
         }
     }
@@ -80,17 +81,16 @@ public class RoleRightRepository : IRoleRightRepository
 
             if (menu.ParentID == 0)
             {
-                moduleName = menu.Module ?? "";
-                subModuleName = "";
-                pageName = menu.Module ?? "";
+                moduleName = menu.Module ?? string.Empty;
+                subModuleName = string.Empty;
+                pageName = menu.Module ?? string.Empty;
             }
             else
             {
-                // Child row
                 parentMap.TryGetValue(menu.ParentID, out var parent);
-                moduleName = parent?.Module ?? "";
-                subModuleName = menu.SubModule ?? "";
-                pageName = menu.SubModule ?? menu.Activity ?? "";
+                moduleName = parent?.Module ?? string.Empty;
+                subModuleName = menu.SubModule ?? string.Empty;
+                pageName = menu.SubModule ?? menu.Activity ?? string.Empty;
             }
 
             var key = $"{moduleName.Trim()}|{subModuleName.Trim()}|{pageName.Trim()}";
@@ -206,7 +206,7 @@ public class RoleRightRepository : IRoleRightRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in SaveRoleRightsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(SaveRoleRightsAsync));
             throw;
         }
     }

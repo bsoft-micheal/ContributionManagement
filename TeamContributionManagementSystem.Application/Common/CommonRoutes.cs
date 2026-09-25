@@ -6,6 +6,7 @@ namespace TeamContributionManagementSystem.Application.Common;
 public static class CommonRoutes
 {
     public const string ApiBase = "api/v{version:apiVersion}";
+    public const string Health = "/health";
 
     public static class Auth
     {
@@ -100,6 +101,8 @@ public static class CommonRoutes
         public const string GetAll = "getAllPaymentAsync";
         public const string GetById = "getPaymentAsyncById/{id:guid}";
         public const string Create = "savePaymentAsync";
+        public const string SubmitProof = "submitProofAsync";
+        public const string GetPaymentContext = "getPaymentContextAsync";
         public const string Verify = "verifyPaymentAsync/{id:guid}";
         public const string Delete = "deletePaymentAsyncById/{id:guid}";
     }

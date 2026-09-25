@@ -64,6 +64,33 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
+    /// Allows a member to submit payment proof (UTR / Ref no) with optional screenshot (e.g. from email payment link).
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost(CommonRoutes.Payments.SubmitProof)]
+    [ActionName(nameof(SubmitPaymentProofAsync))]
+    public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> SubmitPaymentProofAsync([FromBody] SubmitPaymentProofDto request, CancellationToken cancellationToken)
+    {
+        var result = await _transactionService.SubmitProofAsync(request, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.SubmitProofSuccess, CommonStatusCodes.Status201Created));
+    }
+
+    /// <summary>
+    /// Loads event & member context for the payment confirmation page.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet(CommonRoutes.Payments.GetPaymentContext)]
+    [ActionName(nameof(GetPaymentContextDetailsAsync))]
+    public async Task<ActionResult<ApiResponse<PaymentContextDto>>> GetPaymentContextDetailsAsync(
+        [FromQuery] Guid? eventId,
+        [FromQuery] Guid? memberId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _transactionService.GetPaymentContextAsync(eventId, memberId, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentContextDto>.SuccessResult(result, CommonMessages.Payments.GetContextSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
     /// Verifies or approves a pending payment transaction (Admin or Manager).
     /// </summary>
     [Authorize(Roles = CommonRoles.AdminOrManager)]

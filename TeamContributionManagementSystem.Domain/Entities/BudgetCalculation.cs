@@ -1,3 +1,5 @@
+using TeamContributionManagementSystem.Domain.Common;
+
 namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class BudgetCalculation
@@ -5,7 +7,7 @@ public class BudgetCalculation
     public Guid BudgetCalculationId { get; set; }
     public string ExpenseItem { get; set; } = string.Empty;
     public decimal Rate { get; set; }
-    public string? Category { get; set; } = "Birthday";
+    public string? Category { get; set; } = DomainConstants.Categories.Birthday;
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
 

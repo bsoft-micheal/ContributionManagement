@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
-using TeamContributionManagementSystem.Domain.Enums;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 
 namespace TeamContributionManagementSystem.Infrastructure.Repositories;
@@ -10,9 +10,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class UserMfaDeviceRepository : IUserMfaDeviceRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<UserMfaDeviceRepository> _logger;
+    private readonly ILogger<UserMfaDeviceRepository> _logger;
 
-    public UserMfaDeviceRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<UserMfaDeviceRepository> logger)
+    public UserMfaDeviceRepository(ApplicationDbContext context, ILogger<UserMfaDeviceRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -26,7 +26,7 @@ public class UserMfaDeviceRepository : IUserMfaDeviceRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddAsync));
             throw;
         }
     }
@@ -36,13 +36,13 @@ public class UserMfaDeviceRepository : IUserMfaDeviceRepository
         try
         {
             return await _context.UserMfaDevices
-            .Where(x => x.UserId == userId)
-            .OrderByDescending(x => x.DateAdded)
-            .ToListAsync(cancellationToken);
+                .Where(x => x.UserId == userId)
+                .OrderByDescending(x => x.DateAdded)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByUserIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByUserIdAsync));
             throw;
         }
     }
@@ -52,11 +52,11 @@ public class UserMfaDeviceRepository : IUserMfaDeviceRepository
         try
         {
             _context.UserMfaDevices.Remove(device);
-        return Task.CompletedTask;
+            return Task.CompletedTask;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in RemoveAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(RemoveAsync));
             throw;
         }
     }
@@ -66,11 +66,11 @@ public class UserMfaDeviceRepository : IUserMfaDeviceRepository
         try
         {
             return await _context.UserMfaDevices
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.Id == deviceId, cancellationToken);
+                .FirstOrDefaultAsync(x => x.UserId == userId && x.Id == deviceId, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }

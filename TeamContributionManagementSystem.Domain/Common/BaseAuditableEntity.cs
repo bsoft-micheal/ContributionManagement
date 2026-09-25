@@ -15,12 +15,15 @@ namespace TeamContributionManagementSystem.Domain.Common
         public string? CreatedBy { get; set; }
 
         [Column("created_at")]
-        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+        public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [Column("created_on")]
+        public DateTime? CreatedOn { get; set; } = DateTime.UtcNow;
 
         [Column("modified_by")]
         public string? ModifiedBy { get; set; }
 
         [Column("modified_on")]
-        public DateTimeOffset? ModifiedOn { get; set; }
+        public DateTime? ModifiedOn { get; set; }
     }
 }

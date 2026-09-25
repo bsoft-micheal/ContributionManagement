@@ -24,12 +24,14 @@ public class MappingProfile : Profile
     public MappingProfile()
     {
         CreateMap<Role, RoleDto>()
-            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt ?? src.CreatedOn))
+            .ForMember(dest => dest.ModifiedOn, opt => opt.MapFrom(src => src.ModifiedOn));
 
         CreateMap<Member, MemberDto>()
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.RoleName : string.Empty))
             .ForMember(dest => dest.DefaultContributionAmount, opt => opt.MapFrom(src => src.Role != null ? src.Role.DefaultContributionAmount : 0))
-            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt ?? src.CreatedOn))
+            .ForMember(dest => dest.ModifiedOn, opt => opt.MapFrom(src => src.ModifiedOn));
 
         CreateMap<AppUser, UserDto>()
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.ToString()))
@@ -51,6 +53,11 @@ public class MappingProfile : Profile
 
         CreateMap<Event, EventSummaryDto>()
             .ForMember(dest => dest.EventTypeName, opt => opt.MapFrom(src => src.EventType != null ? src.EventType.EventTypeName : string.Empty))
+            .ForMember(dest => dest.HasTenureRule, opt => opt.MapFrom(src => src.EventType != null && src.EventType.HasTenureRule))
+            .ForMember(dest => dest.TenureThresholdYears, opt => opt.MapFrom(src => src.EventType != null ? src.EventType.TenureThresholdYears : 1.0m))
+            .ForMember(dest => dest.NewEntrantSharePercentage, opt => opt.MapFrom(src => src.EventType != null ? src.EventType.NewEntrantSharePercentage : 50.0m))
+            .ForMember(dest => dest.StandardSharePercentage, opt => opt.MapFrom(src => src.EventType != null ? src.EventType.StandardSharePercentage : 100.0m))
+            .ForMember(dest => dest.RuleDescription, opt => opt.MapFrom(src => src.EventType != null ? src.EventType.RuleDescription : null))
             .ForMember(dest => dest.ParticipantCount, opt => opt.MapFrom(src => src.Participants.Count))
             .ForMember(dest => dest.TotalExpectedAmount, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted).Sum(x => x.Amount)))
             .ForMember(dest => dest.TotalPaidAmount, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted && x.PaymentStatus == PaymentStatus.Paid).Sum(x => x.Amount)))

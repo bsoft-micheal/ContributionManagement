@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
-using TeamContributionManagementSystem.Domain.Enums;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 
 namespace TeamContributionManagementSystem.Infrastructure.Repositories;
@@ -10,9 +10,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class SystemSettingRepository : ISystemSettingRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<SystemSettingRepository> _logger;
+    private readonly ILogger<SystemSettingRepository> _logger;
 
-    public SystemSettingRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<SystemSettingRepository> logger)
+    public SystemSettingRepository(ApplicationDbContext context, ILogger<SystemSettingRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -26,7 +26,7 @@ public class SystemSettingRepository : ISystemSettingRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -39,7 +39,7 @@ public class SystemSettingRepository : ISystemSettingRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByKeyAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByKeyAsync));
             throw;
         }
     }
@@ -52,7 +52,7 @@ public class SystemSettingRepository : ISystemSettingRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddRangeAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddRangeAsync));
             throw;
         }
     }
@@ -65,7 +65,7 @@ public class SystemSettingRepository : ISystemSettingRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Update");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Update));
             throw;
         }
     }

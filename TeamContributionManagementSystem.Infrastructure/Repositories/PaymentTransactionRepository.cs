@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
-using TeamContributionManagementSystem.Domain.Enums;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 
 namespace TeamContributionManagementSystem.Infrastructure.Repositories;
@@ -10,9 +10,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class PaymentTransactionRepository : IPaymentTransactionRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<PaymentTransactionRepository> _logger;
+    private readonly ILogger<PaymentTransactionRepository> _logger;
 
-    public PaymentTransactionRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<PaymentTransactionRepository> logger)
+    public PaymentTransactionRepository(ApplicationDbContext context, ILogger<PaymentTransactionRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -24,36 +24,36 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         {
             var query = _context.PaymentTransactions.Where(x => !x.IsDeleted).AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(eventName) && eventName != "ALL")
-        {
-            query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
-        }
+            if (!string.IsNullOrWhiteSpace(eventName) && !eventName.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
+            }
 
-        if (!string.IsNullOrWhiteSpace(mode) && mode != "ALL")
-        {
-            query = query.Where(x => x.PaymentMode.ToLower() == mode.ToLower());
-        }
+            if (!string.IsNullOrWhiteSpace(mode) && !mode.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(x => x.PaymentMode.ToLower() == mode.ToLower());
+            }
 
-        if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
-        {
-            query = query.Where(x => x.Status.ToLower() == status.ToLower());
-        }
+            if (!string.IsNullOrWhiteSpace(status) && !status.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(x => x.Status.ToLower() == status.ToLower());
+            }
 
-        if (startDate.HasValue)
-        {
-            query = query.Where(x => x.PaymentDate >= startDate.Value);
-        }
+            if (startDate.HasValue)
+            {
+                query = query.Where(x => x.PaymentDate >= startDate.Value);
+            }
 
-        if (endDate.HasValue)
-        {
-            query = query.Where(x => x.PaymentDate <= endDate.Value);
-        }
+            if (endDate.HasValue)
+            {
+                query = query.Where(x => x.PaymentDate <= endDate.Value);
+            }
 
-        return await query.OrderByDescending(x => x.PaymentDate).ToListAsync(cancellationToken);
+            return await query.OrderByDescending(x => x.PaymentDate).ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -66,7 +66,7 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -79,7 +79,7 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddAsync));
             throw;
         }
     }
@@ -92,7 +92,7 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Update");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Update));
             throw;
         }
     }
@@ -102,12 +102,12 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         try
         {
             transaction.IsDeleted = true;
-        transaction.ModifiedOn = DateTime.UtcNow;
-        _context.PaymentTransactions.Update(transaction);
+            transaction.ModifiedOn = DateTime.UtcNow;
+            _context.PaymentTransactions.Update(transaction);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Delete");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Delete));
             throw;
         }
     }

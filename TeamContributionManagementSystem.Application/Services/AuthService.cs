@@ -1,16 +1,18 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
+using TeamContributionManagementSystem.Domain.Entities;
 
 namespace TeamContributionManagementSystem.Application.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<AuthService> _logger;
+    private readonly ILogger<AuthService> _logger;
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
@@ -23,7 +25,7 @@ public class AuthService : IAuthService
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingService _systemSettingService;
 
-    public AuthService(Microsoft.Extensions.Logging.ILogger<AuthService> logger, 
+    public AuthService(ILogger<AuthService> logger, 
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
@@ -54,31 +56,34 @@ public class AuthService : IAuthService
     {
         try
         {
+            _logger.LogInformation(CommonLogMessages.Auth.LoginAttempt, request.Email);
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-        if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
-        {
-            throw new InvalidOperationException("Invalid email or password");
-        }
-
-        if (!user.IsActive)
-        {
-            throw new InvalidOperationException("This user account is deactivated. Please contact an administrator.");
-        }
-
-        if (user.MfaDevices != null && user.MfaDevices.Any())
-        {
-            return new AuthResponseDto
+            if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
             {
-                RequiresTwoFactor = true,
-                Email = user.Email
-            };
-        }
+                _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, request.Email, CommonMessages.Auth.InvalidCredentials);
+                throw new InvalidOperationException(CommonMessages.Auth.InvalidCredentials);
+            }
 
-        return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
+            if (!user.IsActive)
+            {
+                throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
+            }
+
+            if (user.MfaDevices != null && user.MfaDevices.Any())
+            {
+                return new AuthResponseDto
+                {
+                    RequiresTwoFactor = true,
+                    Email = user.Email
+                };
+            }
+
+            _logger.LogInformation(CommonLogMessages.Auth.LoginSuccess, user.Email);
+            return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in LoginAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(LoginAsync));
             throw;
         }
     }
@@ -90,24 +95,24 @@ public class AuthService : IAuthService
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
             if (user is null)
             {
-                throw new InvalidOperationException("Invalid user.");
+                throw new InvalidOperationException(CommonMessages.Auth.UserNotFound);
             }
 
             if (!user.IsActive)
             {
-                throw new InvalidOperationException("This user account is deactivated. Please contact an administrator.");
+                throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
             }
 
             if (user.MfaDevices == null || !user.MfaDevices.Any())
             {
-                throw new InvalidOperationException("MFA is not enabled for this user.");
+                throw new InvalidOperationException(CommonMessages.Mfa.NotEnabled);
             }
 
             int maxFailedAttempts = int.TryParse(_configuration["MfaSecurity:MaxFailedAttempts"], out var maxAttempts) ? maxAttempts : 3;
             int lockoutMinutes = int.TryParse(_configuration["MfaSecurity:LockoutMinutes"], out var lockMins) ? lockMins : 15;
 
-            var lockoutKey = $"mfa_lockout_{user.UserId}";
-            var attemptsKey = $"mfa_attempts_{user.UserId}";
+            var lockoutKey = $"{CommonConstants.CacheKeys.MfaLockoutPrefix}{user.UserId}";
+            var attemptsKey = $"{CommonConstants.CacheKeys.MfaAttemptsPrefix}{user.UserId}";
 
             // 1. Check if user is currently locked out
             if (_memoryCache.TryGetValue(lockoutKey, out DateTime lockoutUntil))
@@ -115,11 +120,10 @@ public class AuthService : IAuthService
                 if (DateTime.UtcNow < lockoutUntil)
                 {
                     var remainingMinutes = Math.Max(1, (int)Math.Ceiling((lockoutUntil - DateTime.UtcNow).TotalMinutes));
-                    throw new InvalidOperationException($"Too many failed attempts. MFA verification is temporarily locked. Please try again in {remainingMinutes} minute(s).");
+                    throw new InvalidOperationException(string.Format(CommonMessages.Mfa.LockoutFormat, remainingMinutes));
                 }
                 else
                 {
-                    // Lockout period has elapsed, clean up
                     _memoryCache.Remove(lockoutKey);
                     _memoryCache.Remove(attemptsKey);
                 }
@@ -131,7 +135,7 @@ public class AuthService : IAuthService
             {
                 var base32Bytes = OtpNet.Base32Encoding.ToBytes(mfaDevice.SecretKey);
                 var totp = new OtpNet.Totp(base32Bytes);
-                if (totp.VerifyTotp(request.Otp.Trim(), out long timeStepMatched, new OtpNet.VerificationWindow(2, 2)))
+                if (totp.VerifyTotp(request.Otp.Trim(), out long _, new OtpNet.VerificationWindow(2, 2)))
                 {
                     isValid = true;
                     break;
@@ -155,12 +159,12 @@ public class AuthService : IAuthService
                     _memoryCache.Set(lockoutKey, lockoutUntilTime, TimeSpan.FromMinutes(lockoutMinutes));
                     _memoryCache.Remove(attemptsKey);
 
-                    throw new InvalidOperationException($"Invalid OTP. You have exceeded maximum attempts. MFA verification is temporarily locked for {lockoutMinutes} minutes.");
+                    throw new InvalidOperationException(string.Format(CommonMessages.Mfa.MaxAttemptsExceededFormat, lockoutMinutes));
                 }
                 else
                 {
                     int remaining = maxFailedAttempts - currentAttempts;
-                    throw new InvalidOperationException($"Invalid OTP code. {remaining} attempt{(remaining > 1 ? "s" : "")} remaining.");
+                    throw new InvalidOperationException(string.Format(CommonMessages.Mfa.InvalidOtpRemainingFormat, remaining, remaining > 1 ? "s" : string.Empty));
                 }
             }
 
@@ -168,16 +172,17 @@ public class AuthService : IAuthService
             _memoryCache.Remove(attemptsKey);
             _memoryCache.Remove(lockoutKey);
 
+            _logger.LogInformation(CommonLogMessages.Auth.MfaVerified, user.Email);
             return await GenerateAuthResponseAndLogSessionAsync(user, request.DeviceInfo, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in VerifyTwoFactorAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(VerifyTwoFactorAsync));
             throw;
         }
     }
 
-    private async Task<AuthResponseDto> GenerateAuthResponseAndLogSessionAsync(TeamContributionManagementSystem.Domain.Entities.AppUser user, DeviceDetailPayloadDto? deviceInfo, CancellationToken cancellationToken)
+    private async Task<AuthResponseDto> GenerateAuthResponseAndLogSessionAsync(AppUser user, DeviceDetailPayloadDto? deviceInfo, CancellationToken cancellationToken)
     {
         Guid? sessionId = null;
 
@@ -294,7 +299,7 @@ public class AuthService : IAuthService
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
             if (user is null)
             {
-                throw new InvalidOperationException("A user with this email address was not found.");
+                throw new InvalidOperationException(CommonMessages.Auth.UserNotFound);
             }
 
             var settings = await _systemSettingService.GetSettingsAsync(cancellationToken);
@@ -311,11 +316,10 @@ public class AuthService : IAuthService
             _userRepository.Update(user);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Reset attempt counter for this email
-            var cacheKey = $"pwd_reset_attempts_{request.Email.Trim().ToLowerInvariant()}";
+            var cacheKey = $"{CommonConstants.CacheKeys.PwdResetAttemptsPrefix}{request.Email.Trim().ToLowerInvariant()}";
             _memoryCache.Remove(cacheKey);
 
-            var subject = "Password Reset OTP - Team Contribution Management System";
+            var subject = CommonConstants.EmailTemplates.PasswordResetSubject;
             var emailBody = $@"
 <div style=""font-family: 'Outfit', 'Inter', sans-serif; background-color: #f7f6fb; padding: 40px; border-radius: 16px; max-width: 600px; margin: 0 auto; color: #1e1a2e; border: 1px solid rgba(74, 63, 107, 0.08);"">
     <div style=""text-align: center; margin-bottom: 30px;"">
@@ -339,10 +343,11 @@ public class AuthService : IAuthService
 </div>";
 
             await _emailService.SendEmailAsync(user.Email, subject, emailBody, cancellationToken: cancellationToken);
+            _logger.LogInformation(CommonLogMessages.Auth.OtpSent, user.Email);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in RequestPasswordResetOtpAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(RequestPasswordResetOtpAsync));
             throw;
         }
     }
@@ -354,7 +359,7 @@ public class AuthService : IAuthService
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
             if (user is null)
             {
-                throw new InvalidOperationException("A user with this email address was not found.");
+                throw new InvalidOperationException(CommonMessages.Auth.UserNotFound);
             }
 
             var settings = await _systemSettingService.GetSettingsAsync(cancellationToken);
@@ -364,7 +369,7 @@ public class AuthService : IAuthService
                 maxRetry = parsedMax;
             }
 
-            var cacheKey = $"pwd_reset_attempts_{request.Email.Trim().ToLowerInvariant()}";
+            var cacheKey = $"{CommonConstants.CacheKeys.PwdResetAttemptsPrefix}{request.Email.Trim().ToLowerInvariant()}";
             int currentAttempts = _memoryCache.TryGetValue(cacheKey, out int val) ? val : 0;
 
             if (currentAttempts >= maxRetry)
@@ -373,12 +378,12 @@ public class AuthService : IAuthService
                 user.PasswordResetOtpExpiry = null;
                 _userRepository.Update(user);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
-                throw new InvalidOperationException("Maximum OTP attempts exceeded. Please request a new OTP.");
+                throw new InvalidOperationException(CommonMessages.Auth.MaxOtpAttemptsExceeded);
             }
 
             if (string.IsNullOrEmpty(user.PasswordResetOtp) || user.PasswordResetOtpExpiry < DateTime.UtcNow)
             {
-                throw new InvalidOperationException("The password reset OTP has expired. Please request a new one.");
+                throw new InvalidOperationException(CommonMessages.Auth.OtpExpired);
             }
 
             if (user.PasswordResetOtp != request.Otp.Trim())
@@ -392,11 +397,11 @@ public class AuthService : IAuthService
                     user.PasswordResetOtpExpiry = null;
                     _userRepository.Update(user);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
-                    throw new InvalidOperationException("Maximum OTP attempts exceeded. Please request a new OTP.");
+                    throw new InvalidOperationException(CommonMessages.Auth.MaxOtpAttemptsExceeded);
                 }
 
                 int remaining = maxRetry - currentAttempts;
-                throw new InvalidOperationException($"Invalid OTP code. {remaining} attempt{(remaining == 1 ? "" : "s")} remaining.");
+                throw new InvalidOperationException(string.Format(CommonMessages.Auth.InvalidOtpRemainingFormat, remaining, remaining == 1 ? string.Empty : "s"));
             }
 
             _memoryCache.Remove(cacheKey);
@@ -404,7 +409,7 @@ public class AuthService : IAuthService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in VerifyPasswordResetOtpAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(VerifyPasswordResetOtpAsync));
             throw;
         }
     }
@@ -416,17 +421,17 @@ public class AuthService : IAuthService
             var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
             if (user is null)
             {
-                throw new InvalidOperationException("A user with this email address was not found.");
+                throw new InvalidOperationException(CommonMessages.Auth.UserNotFound);
             }
 
             if (string.IsNullOrEmpty(user.PasswordResetOtp) || user.PasswordResetOtp != request.Otp.Trim())
             {
-                throw new InvalidOperationException("Invalid or missing password reset OTP.");
+                throw new InvalidOperationException(CommonMessages.Auth.InvalidOrExpiredOtp);
             }
 
             if (user.PasswordResetOtpExpiry < DateTime.UtcNow)
             {
-                throw new InvalidOperationException("The password reset OTP has expired. Please request a new one.");
+                throw new InvalidOperationException(CommonMessages.Auth.OtpExpired);
             }
 
             user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
@@ -436,11 +441,12 @@ public class AuthService : IAuthService
             _userRepository.Update(user);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            _memoryCache.Remove($"pwd_reset_attempts_{request.Email.Trim().ToLowerInvariant()}");
+            _memoryCache.Remove($"{CommonConstants.CacheKeys.PwdResetAttemptsPrefix}{request.Email.Trim().ToLowerInvariant()}");
+            _logger.LogInformation(CommonLogMessages.Auth.PasswordResetSuccess, user.Email);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in ResetPasswordWithOtpAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(ResetPasswordWithOtpAsync));
             throw;
         }
     }

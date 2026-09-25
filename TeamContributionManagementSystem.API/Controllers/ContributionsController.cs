@@ -57,7 +57,7 @@ public class ContributionsController : ControllerBase
     {
         var email = User.FindFirstValue(ClaimTypes.Email)
             ?? User.FindFirstValue(ClaimTypes.Name)
-            ?? User.FindFirstValue("email");
+            ?? User.FindFirstValue(CommonConstants.Auth.EmailClaim);
 
         if (string.IsNullOrEmpty(email))
             return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<MemberContributionSummaryDto>.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));

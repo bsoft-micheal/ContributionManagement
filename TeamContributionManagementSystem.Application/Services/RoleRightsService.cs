@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -10,12 +11,12 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class RoleRightsService : IRoleRightsService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<RoleRightsService> _logger;
+    private readonly ILogger<RoleRightsService> _logger;
     private readonly IRoleRightRepository _roleRightRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public RoleRightsService(Microsoft.Extensions.Logging.ILogger<RoleRightsService> logger, 
+    public RoleRightsService(ILogger<RoleRightsService> logger, 
         IRoleRightRepository roleRightRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper)
@@ -35,7 +36,7 @@ public class RoleRightsService : IRoleRightsService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllRoleRightAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllRoleRightAsync));
             throw;
         }
     }
@@ -46,7 +47,7 @@ public class RoleRightsService : IRoleRightsService
         {
             if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var role))
             {
-                throw new ArgumentException($"Invalid role: '{roleName}'");
+                throw new ArgumentException(string.Format(CommonMessages.Roles.InvalidRoleFormat, roleName));
             }
 
             var rights = await _roleRightRepository.GetByRoleAsync(role, cancellationToken);
@@ -54,7 +55,7 @@ public class RoleRightsService : IRoleRightsService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetRoleRightAsyncByRole");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetRoleRightAsyncByRole));
             throw;
         }
     }
@@ -64,9 +65,9 @@ public class RoleRightsService : IRoleRightsService
         try
         {
             if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
-        {
-            throw new ArgumentException($"Invalid role: '{request.RoleName}'");
-        }
+            {
+                throw new ArgumentException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
+            }
 
         var entities = request.Rights.Select(r => new RoleRight
         {
@@ -82,12 +83,12 @@ public class RoleRightsService : IRoleRightsService
             CreatedAt = DateTime.UtcNow
         }).ToList();
 
-        await _roleRightRepository.SaveRoleRightsAsync(role, entities, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _roleRightRepository.SaveRoleRightsAsync(role, entities, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in SaveRoleRightsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(SaveRoleRightsAsync));
             throw;
         }
     }

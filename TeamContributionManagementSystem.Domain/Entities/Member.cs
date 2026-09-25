@@ -1,6 +1,8 @@
+using TeamContributionManagementSystem.Domain.Common;
+
 namespace TeamContributionManagementSystem.Domain.Entities;
 
-public class Member
+public class Member : IAuditableEntity
 {
     public Guid MemberId { get; set; }
     public string Name { get; set; } = string.Empty;
@@ -13,7 +15,7 @@ public class Member
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
     public bool IsDeleted { get; set; }
-    public string MemberType { get; set; } = "Office";
+    public string MemberType { get; set; } = DomainConstants.MemberTypes.Office;
 
     public Role? Role { get; set; }
     public ICollection<EventParticipant> EventParticipants { get; set; } = new List<EventParticipant>();
@@ -22,6 +24,8 @@ public class Member
     // Common Audit Properties
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CreatedOn { get; set; } = DateTime.UtcNow;
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }
+

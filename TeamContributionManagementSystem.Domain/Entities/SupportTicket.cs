@@ -1,3 +1,5 @@
+using TeamContributionManagementSystem.Domain.Common;
+
 namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class SupportTicket
@@ -7,11 +9,11 @@ public class SupportTicket
     public string MemberName { get; set; } = string.Empty;
     public string? MemberId { get; set; }
     public string? RelatedEvent { get; set; }
-    public string TicketType { get; set; } = "General Query";
+    public string TicketType { get; set; } = DomainConstants.TicketTypes.GeneralQuery;
     public string Subject { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string Status { get; set; } = "Open";
-    public string Priority { get; set; } = "Medium";
+    public string Status { get; set; } = DomainConstants.TicketStatuses.Open;
+    public string Priority { get; set; } = DomainConstants.TicketPriorities.Medium;
     public string? AssignedTo { get; set; }
     public string? RefNo { get; set; }
     public string? Utr { get; set; }

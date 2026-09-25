@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -7,9 +8,14 @@ namespace TeamContributionManagementSystem.Infrastructure.Persistence;
 
 public class ApplicationDbContext : DbContext, IUnitOfWork
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+    private readonly ICurrentUserService? _currentUserService;
+
+    public ApplicationDbContext(
+        DbContextOptions<ApplicationDbContext> options,
+        ICurrentUserService? currentUserService = null)
         : base(options)
     {
+        _currentUserService = currentUserService;
     }
 
     public DbSet<Member> Members => Set<Member>();
@@ -64,6 +70,11 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasKey(x => x.EventTypeId);
             entity.Property(x => x.EventTypeName).HasMaxLength(100).IsRequired();
             entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
+            entity.Property(x => x.HasTenureRule).HasDefaultValue(false);
+            entity.Property(x => x.TenureThresholdYears).HasPrecision(4, 2).HasDefaultValue(1.0m);
+            entity.Property(x => x.NewEntrantSharePercentage).HasPrecision(5, 2).HasDefaultValue(50.0m);
+            entity.Property(x => x.StandardSharePercentage).HasPrecision(5, 2).HasDefaultValue(100.0m);
+            entity.Property(x => x.RuleDescription).HasMaxLength(200);
             entity.HasIndex(x => x.EventTypeName).IsUnique();
         });
 
@@ -222,7 +233,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
             entity.Property(x => x.VerifiedBy).HasMaxLength(150);
             entity.Property(x => x.Notes).HasMaxLength(1000);
-            entity.Property(x => x.Screenshot).HasMaxLength(500);
+            entity.Property(x => x.Screenshot).HasColumnType("text");
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.TxnNumber).IsUnique();
@@ -325,6 +336,136 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                     property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime?, DateTime?>(
                         v => v.HasValue ? (v.Value.Kind == DateTimeKind.Utc ? v : v.Value.ToUniversalTime()) : v,
                         v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v));
+                }
+            }
+        }
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ApplyAuditInformation();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ApplyAuditInformation();
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    public override int SaveChanges()
+    {
+        ApplyAuditInformation();
+        return base.SaveChanges();
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ApplyAuditInformation();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    private void ApplyAuditInformation()
+    {
+        var currentUserName = _currentUserService?.UserName ?? _currentUserService?.UserId;
+        var currentUserId = _currentUserService?.UserId;
+        var now = DateTime.UtcNow;
+
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                var createdByProp = entry.Metadata.FindProperty("CreatedBy");
+                if (createdByProp != null)
+                {
+                    if (createdByProp.ClrType == typeof(string))
+                    {
+                        var existingValue = entry.Property("CreatedBy").CurrentValue as string;
+                        if (string.IsNullOrWhiteSpace(existingValue) && !string.IsNullOrWhiteSpace(currentUserName))
+                        {
+                            entry.Property("CreatedBy").CurrentValue = currentUserName;
+                        }
+                    }
+                    else if (createdByProp.ClrType == typeof(Guid) || createdByProp.ClrType == typeof(Guid?))
+                    {
+                        var existingValue = entry.Property("CreatedBy").CurrentValue;
+                        if ((existingValue == null || (Guid)existingValue == Guid.Empty) && !string.IsNullOrWhiteSpace(currentUserId) && Guid.TryParse(currentUserId, out var parsedGuid))
+                        {
+                            entry.Property("CreatedBy").CurrentValue = parsedGuid;
+                        }
+                    }
+                }
+
+                var createdAtProp = entry.Metadata.FindProperty("CreatedAt");
+                if (createdAtProp != null)
+                {
+                    if (createdAtProp.ClrType == typeof(DateTime) || createdAtProp.ClrType == typeof(DateTime?))
+                    {
+                        entry.Property("CreatedAt").CurrentValue = now;
+                    }
+                    else if (createdAtProp.ClrType == typeof(DateTimeOffset) || createdAtProp.ClrType == typeof(DateTimeOffset?))
+                    {
+                        entry.Property("CreatedAt").CurrentValue = DateTimeOffset.UtcNow;
+                    }
+                }
+
+                var createdOnProp = entry.Metadata.FindProperty("CreatedOn");
+                if (createdOnProp != null)
+                {
+                    if (createdOnProp.ClrType == typeof(DateTime) || createdOnProp.ClrType == typeof(DateTime?))
+                    {
+                        entry.Property("CreatedOn").CurrentValue = now;
+                    }
+                    else if (createdOnProp.ClrType == typeof(DateTimeOffset) || createdOnProp.ClrType == typeof(DateTimeOffset?))
+                    {
+                        entry.Property("CreatedOn").CurrentValue = DateTimeOffset.UtcNow;
+                    }
+                }
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                var modifiedByProp = entry.Metadata.FindProperty("ModifiedBy");
+                if (modifiedByProp != null)
+                {
+                    if (modifiedByProp.ClrType == typeof(string) && !string.IsNullOrWhiteSpace(currentUserName))
+                    {
+                        entry.Property("ModifiedBy").CurrentValue = currentUserName;
+                    }
+                    else if ((modifiedByProp.ClrType == typeof(Guid) || modifiedByProp.ClrType == typeof(Guid?)) && !string.IsNullOrWhiteSpace(currentUserId) && Guid.TryParse(currentUserId, out var parsedGuid))
+                    {
+                        entry.Property("ModifiedBy").CurrentValue = parsedGuid;
+                    }
+                }
+
+                var modifiedOnProp = entry.Metadata.FindProperty("ModifiedOn");
+                if (modifiedOnProp != null)
+                {
+                    if (modifiedOnProp.ClrType == typeof(DateTime) || modifiedOnProp.ClrType == typeof(DateTime?))
+                    {
+                        entry.Property("ModifiedOn").CurrentValue = now;
+                    }
+                    else if (modifiedOnProp.ClrType == typeof(DateTimeOffset) || modifiedOnProp.ClrType == typeof(DateTimeOffset?))
+                    {
+                        entry.Property("ModifiedOn").CurrentValue = DateTimeOffset.UtcNow;
+                    }
+                }
+
+                var createdByProp = entry.Metadata.FindProperty("CreatedBy");
+                if (createdByProp != null)
+                {
+                    entry.Property("CreatedBy").IsModified = false;
+                }
+
+                var createdAtProp = entry.Metadata.FindProperty("CreatedAt");
+                if (createdAtProp != null)
+                {
+                    entry.Property("CreatedAt").IsModified = false;
+                }
+
+                var createdOnProp = entry.Metadata.FindProperty("CreatedOn");
+                if (createdOnProp != null)
+                {
+                    entry.Property("CreatedOn").IsModified = false;
                 }
             }
         }

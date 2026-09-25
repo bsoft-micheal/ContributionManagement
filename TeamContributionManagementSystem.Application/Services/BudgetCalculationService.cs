@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.BudgetCalculations;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -35,7 +36,7 @@ public class BudgetCalculationService : IBudgetCalculationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync for BudgetCalculationService");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -49,7 +50,7 @@ public class BudgetCalculationService : IBudgetCalculationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync for BudgetCalculationService");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -61,7 +62,7 @@ public class BudgetCalculationService : IBudgetCalculationService
             var existing = await _repository.GetByNameAsync(request.ExpenseItem.Trim(), cancellationToken);
             if (existing is not null)
             {
-                throw new InvalidOperationException($"Expense item '{request.ExpenseItem.Trim()}' already exists.");
+                throw new InvalidOperationException(string.Format(CommonMessages.BudgetCalculations.AlreadyExistsFormat, request.ExpenseItem.Trim()));
             }
 
             var item = new BudgetCalculation
@@ -72,7 +73,7 @@ public class BudgetCalculationService : IBudgetCalculationService
                 Category = request.Category?.Trim() ?? string.Empty,
                 IsActive = request.IsActive,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user,
+                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
                 CreatedAt = DateTime.UtcNow,
                 CreatedOn = DateTime.UtcNow
             };
@@ -84,7 +85,7 @@ public class BudgetCalculationService : IBudgetCalculationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync for BudgetCalculationService");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
@@ -94,12 +95,12 @@ public class BudgetCalculationService : IBudgetCalculationService
         try
         {
             var item = await _repository.GetByIdAsync(budgetCalculationId, cancellationToken)
-                ?? throw new KeyNotFoundException("Budget calculation item not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.BudgetCalculations.NotFound);
 
             var duplicate = await _repository.GetByNameAsync(request.ExpenseItem.Trim(), cancellationToken);
             if (duplicate is not null && duplicate.BudgetCalculationId != budgetCalculationId)
             {
-                throw new InvalidOperationException($"Expense item '{request.ExpenseItem.Trim()}' already exists.");
+                throw new InvalidOperationException(string.Format(CommonMessages.BudgetCalculations.AlreadyExistsFormat, request.ExpenseItem.Trim()));
             }
 
             item.ExpenseItem = request.ExpenseItem.Trim();
@@ -109,7 +110,7 @@ public class BudgetCalculationService : IBudgetCalculationService
                 item.Category = request.Category.Trim();
             }
             item.IsActive = request.IsActive;
-            item.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user;
+            item.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             item.ModifiedOn = DateTime.UtcNow;
 
             _repository.Update(item);
@@ -119,7 +120,7 @@ public class BudgetCalculationService : IBudgetCalculationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in UpdateAsync for BudgetCalculationService");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
             throw;
         }
     }
@@ -129,14 +130,14 @@ public class BudgetCalculationService : IBudgetCalculationService
         try
         {
             var item = await _repository.GetByIdAsync(budgetCalculationId, cancellationToken)
-                ?? throw new KeyNotFoundException("Budget calculation item not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.BudgetCalculations.NotFound);
 
             _repository.Delete(item);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync for BudgetCalculationService");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }

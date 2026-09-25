@@ -16,7 +16,7 @@ public static class CommonMethods
     private static readonly string EncryptionKey = "1a2b3c4d5e6f7a8B9c0d1E2f3a4b5c6D"; // 32 bytes for AES-256
     private static readonly string EncryptionIv = "5F4D3c2b1a0X9d8c"; // 16 bytes for AES-128
     private static readonly Random RandomGenerator = new();
-    private static readonly TimeZoneInfo IstZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+    private static readonly TimeZoneInfo IstZone = TimeZoneInfo.FindSystemTimeZoneById(CommonConstants.Defaults.IndiaStandardTimeId);
 
     /// <summary>
     /// Serializes an object to JSON.
@@ -114,7 +114,7 @@ public static class CommonMethods
     {
         if (digits <= 0)
         {
-            throw new ArgumentException("The number of digits must be greater than 0.", nameof(digits));
+            throw new ArgumentException(CommonMessages.Validation.DigitsGreaterThanZero, nameof(digits));
         }
 
         var randomNumber = new byte[4];
@@ -229,7 +229,7 @@ public static class CommonMethods
         string trimmed = mobile.Trim();
         if (trimmed.Length < 10 || trimmed.Length > 15)
         {
-            throw new ArgumentException("Invalid mobile phone number format.");
+            throw new ArgumentException(CommonMessages.Validation.InvalidMobileFormat);
         }
 
         if (trimmed.Length == 10 && !trimmed.StartsWith('+'))

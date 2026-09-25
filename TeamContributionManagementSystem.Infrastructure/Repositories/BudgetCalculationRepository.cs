@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -28,7 +29,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync for BudgetCalculation");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -42,7 +43,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync for BudgetCalculation");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -56,7 +57,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByNameAsync for BudgetCalculation");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByNameAsync));
             throw;
         }
     }
@@ -69,7 +70,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddAsync for BudgetCalculation");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddAsync));
             throw;
         }
     }
@@ -82,7 +83,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Update for BudgetCalculation");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Update));
             throw;
         }
     }
@@ -97,7 +98,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Delete for BudgetCalculation");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Delete));
             throw;
         }
     }

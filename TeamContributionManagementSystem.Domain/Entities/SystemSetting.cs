@@ -1,3 +1,5 @@
+using TeamContributionManagementSystem.Domain.Common;
+
 namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class SystemSetting
@@ -5,7 +7,7 @@ public class SystemSetting
     public Guid SettingId { get; set; }
     public string SettingKey { get; set; } = string.Empty;
     public string SettingValue { get; set; } = string.Empty;
-    public string Category { get; set; } = "General";
+    public string Category { get; set; } = DomainConstants.Categories.General;
     public string? Description { get; set; }
 
     // Default Audit Fields

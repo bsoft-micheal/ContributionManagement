@@ -1,3 +1,4 @@
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
 namespace TeamContributionManagementSystem.API.HostedServices;
@@ -32,11 +33,11 @@ public class BirthdayEventHostedService : BackgroundService
         try
         {
             var createdEvents = await service.CreateMonthlyBirthdayEventsAsync(cancellationToken);
-            _logger.LogInformation("Birthday event automation completed. Created {CreatedEvents} event(s).", createdEvents);
+            _logger.LogInformation(CommonLogMessages.Events.BirthdayAutomationCompleted, createdEvents);
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Birthday event automation failed.");
+            _logger.LogError(exception, CommonLogMessages.Events.BirthdayAutomationFailed);
         }
     }
 }
