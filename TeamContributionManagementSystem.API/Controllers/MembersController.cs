@@ -43,8 +43,7 @@ public class MembersController : ControllerBase
     [ActionName(nameof(SaveMemberAsync))]
     public async Task<ActionResult<ApiResponse<MemberDto>>> SaveMemberAsync([FromBody] CreateMemberRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var member = await _memberService.SaveMemberAsync(request, currentUser, cancellationToken);
+        var member = await _memberService.SaveMemberAsync(request, null, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<MemberDto>.SuccessResult(member, CommonMessages.Members.SaveSuccess, CommonStatusCodes.Status201Created));
     }
 
@@ -60,7 +59,6 @@ public class MembersController : ControllerBase
     {
         try
         {
-            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
             var rawJson = jsonElement.GetRawText();
             var options = new System.Text.Json.JsonSerializerOptions
             {
@@ -80,7 +78,7 @@ public class MembersController : ControllerBase
                 {
                     return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult(CommonMessages.General.NullRequestItem, CommonStatusCodes.Status400BadRequest));
                 }
-                created.Add(await _memberService.SaveMemberAsync(req, currentUser, cancellationToken));
+                created.Add(await _memberService.SaveMemberAsync(req, null, cancellationToken));
             }
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<MemberDto>>.SuccessResult(created, CommonMessages.Members.SaveBulkSuccess, CommonStatusCodes.Status200OK));
         }
@@ -105,8 +103,7 @@ public class MembersController : ControllerBase
     [ActionName(nameof(UpdateMemberAsyncById))]
     public async Task<ActionResult<ApiResponse<MemberDto>>> UpdateMemberAsyncById(Guid id, [FromBody] UpdateMemberRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var result = await _memberService.UpdateMemberAsyncById(id, request, currentUser, cancellationToken);
+        var result = await _memberService.UpdateMemberAsyncById(id, request, null, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<MemberDto>.SuccessResult(result, CommonMessages.Members.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
 

@@ -65,8 +65,7 @@ public class MemberService : IMemberService
                 IsActive = request.IsActive,
                 IsExited = request.IsExited,
                 MemberType = request.MemberType?.Trim() ?? string.Empty,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
-                CreatedAt = DateTime.UtcNow
+                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim()
             };
 
             await _memberRepository.AddAsync(member, cancellationToken);
@@ -111,8 +110,10 @@ public class MemberService : IMemberService
             member.IsActive = request.IsActive;
             member.IsExited = request.IsExited;
             member.MemberType = !string.IsNullOrWhiteSpace(request.MemberType) ? request.MemberType.Trim() : member.MemberType;
-            member.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
-            member.ModifiedOn = DateTime.UtcNow;
+            if (!string.IsNullOrWhiteSpace(user))
+            {
+                member.ModifiedBy = user.Trim();
+            }
 
             _memberRepository.Update(member);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

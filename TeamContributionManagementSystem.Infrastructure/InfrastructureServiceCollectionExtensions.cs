@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Application.Mappings;
@@ -18,6 +19,9 @@ public static class InfrastructureServiceCollectionExtensions
 {
     public static IServiceCollection AddApplicationAndInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("ConnString")));
 

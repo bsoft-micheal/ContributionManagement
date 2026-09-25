@@ -7,8 +7,9 @@ namespace TeamContributionManagementSystem.Domain.Common
         bool IsActive { get; set; }
         bool IsDeleted { get; set; }
         string? CreatedBy { get; set; }
-        DateTimeOffset CreatedAt { get; set; }
+        DateTime? CreatedAt { get; set; }
+        DateTime? CreatedOn { get; set; }
         string? ModifiedBy { get; set; }
-        DateTimeOffset? ModifiedOn { get; set; }
+        DateTime? ModifiedOn { get; set; }
     }
 }

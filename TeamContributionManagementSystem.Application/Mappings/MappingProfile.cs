@@ -24,12 +24,14 @@ public class MappingProfile : Profile
     public MappingProfile()
     {
         CreateMap<Role, RoleDto>()
-            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt ?? src.CreatedOn))
+            .ForMember(dest => dest.ModifiedOn, opt => opt.MapFrom(src => src.ModifiedOn));
 
         CreateMap<Member, MemberDto>()
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.RoleName : string.Empty))
             .ForMember(dest => dest.DefaultContributionAmount, opt => opt.MapFrom(src => src.Role != null ? src.Role.DefaultContributionAmount : 0))
-            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt ?? src.CreatedOn))
+            .ForMember(dest => dest.ModifiedOn, opt => opt.MapFrom(src => src.ModifiedOn));
 
         CreateMap<AppUser, UserDto>()
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.ToString()))

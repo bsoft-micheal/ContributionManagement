@@ -2,7 +2,7 @@ using TeamContributionManagementSystem.Domain.Common;
 
 namespace TeamContributionManagementSystem.Domain.Entities;
 
-public class Member
+public class Member : IAuditableEntity
 {
     public Guid MemberId { get; set; }
     public string Name { get; set; } = string.Empty;
@@ -24,6 +24,8 @@ public class Member
     // Common Audit Properties
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CreatedOn { get; set; } = DateTime.UtcNow;
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }
+
