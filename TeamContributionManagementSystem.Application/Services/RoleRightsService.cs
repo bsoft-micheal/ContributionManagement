@@ -69,18 +69,19 @@ public class RoleRightsService : IRoleRightsService
                 throw new ArgumentException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
             }
 
-            var entities = request.Rights.Select(r => new RoleRight
-            {
-                RoleRightId = Guid.NewGuid(),
-                Role = role,
-                FeatureID = r.FeatureID,
-                Module = r.Module,
-                SubModule = r.SubModule,
-                Page = r.Page,
-                Access = r.Access,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
-                CreatedAt = DateTime.UtcNow
-            }).ToList();
+        var entities = request.Rights.Select(r => new RoleRight
+        {
+            RoleRightId = Guid.NewGuid(),
+            Role = role,
+            FeatureID = r.FeatureID,
+            Module = r.Module,
+            SubModule = r.SubModule,
+            Page = r.Page,
+            Access = r.Access,
+            AccessType = r.AccessType > 0 ? (AccessType)r.AccessType : (r.Access == "deny" ? AccessType.Deny : (r.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite)),
+            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+            CreatedAt = DateTime.UtcNow
+        }).ToList();
 
             await _roleRightRepository.SaveRoleRightsAsync(role, entities, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

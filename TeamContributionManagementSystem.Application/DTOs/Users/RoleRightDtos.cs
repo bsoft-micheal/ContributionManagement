@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.Application.DTOs.Users;
 
@@ -24,6 +25,8 @@ public class RoleRightDto
     [Required]
     [MaxLength(20)]
     public string Access { get; set; } = string.Empty; // "readOnly", "readWrite", "deny"
+
+    public int AccessType { get; set; } = 2; // 1 = ReadOnly, 2 = ReadWrite, 3 = Deny
 
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }

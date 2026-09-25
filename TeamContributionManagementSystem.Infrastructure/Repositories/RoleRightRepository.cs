@@ -108,13 +108,16 @@ public class RoleRightRepository : IRoleRightRepository
                     SubModule = subModuleName,
                     Page = pageName,
                     Access = existing.Access,
+                    AccessType = (int)existing.AccessType > 0 ? existing.AccessType : (existing.Access == "deny" ? AccessType.Deny : (existing.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite)),
                     CreatedBy = existing.CreatedBy,
                     CreatedAt = existing.CreatedAt
                 });
             }
             else
             {
-                string defaultAccess = (role == UserRole.Admin || role == UserRole.Manager) ? "readWrite" : "readOnly";
+                // Default access fallback if not yet stored in DB
+                AccessType defaultAccessType = (role == UserRole.Admin || role == UserRole.Manager) ? AccessType.ReadWrite : AccessType.ReadOnly;
+                string defaultAccess = defaultAccessType == AccessType.ReadWrite ? "readWrite" : "readOnly";
                 result.Add(new RoleRight
                 {
                     RoleRightId = Guid.NewGuid(),
@@ -123,7 +126,8 @@ public class RoleRightRepository : IRoleRightRepository
                     Module = moduleName,
                     SubModule = subModuleName,
                     Page = pageName,
-                    Access = defaultAccess
+                    Access = defaultAccess,
+                    AccessType = defaultAccessType
                 });
             }
         }
@@ -155,17 +159,23 @@ public class RoleRightRepository : IRoleRightRepository
                 incomingKeys.Add(key);
                 if (right.FeatureID > 0) incomingFeatureIds.Add(right.FeatureID);
 
+                // Determine effective AccessType & string Access
+                AccessType effectiveAccessType = (int)right.AccessType > 0 ? right.AccessType : (right.Access == "deny" ? AccessType.Deny : (right.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite));
+                string effectiveAccess = effectiveAccessType == AccessType.Deny ? "deny" : (effectiveAccessType == AccessType.ReadOnly ? "readOnly" : "readWrite");
+
                 RoleRight? existingRight = null;
                 if (right.FeatureID > 0 && rightsByFeature.TryGetValue(right.FeatureID, out existingRight))
                 {
-                    existingRight.Access = right.Access;
+                    existingRight.Access = effectiveAccess;
+                    existingRight.AccessType = effectiveAccessType;
                     existingRight.Module = right.Module.Trim();
                     existingRight.SubModule = right.SubModule.Trim();
                     existingRight.Page = right.Page.Trim();
                 }
                 else if (existingMap.TryGetValue(key, out existingRight))
                 {
-                    existingRight.Access = right.Access;
+                    existingRight.Access = effectiveAccess;
+                    existingRight.AccessType = effectiveAccessType;
                     existingRight.FeatureID = right.FeatureID;
                 }
                 else
@@ -178,7 +188,8 @@ public class RoleRightRepository : IRoleRightRepository
                         Module = right.Module.Trim(),
                         SubModule = right.SubModule.Trim(),
                         Page = right.Page.Trim(),
-                        Access = right.Access
+                        Access = effectiveAccess,
+                        AccessType = effectiveAccessType
                     }, cancellationToken);
                 }
             }

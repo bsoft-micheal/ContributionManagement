@@ -60,10 +60,10 @@ public class SessionService : ISessionService
                 history.IsActive = false;
                 history.LogoutTime = DateTime.UtcNow;
 
-                if (history.DeviceDetail != null)
-                {
-                    history.DeviceDetail.IsActive = false;
-                }
+            if (history.DeviceDetail != null && history.DeviceDetail.DeviceType == 2)
+            {
+                history.DeviceDetail.IsActive = false;
+            }
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }

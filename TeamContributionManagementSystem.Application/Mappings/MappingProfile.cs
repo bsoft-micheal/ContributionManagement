@@ -72,6 +72,7 @@ public class MappingProfile : Profile
 
         CreateMap<RoleRight, RoleRightDto>()
             .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role.ToString()))
+            .ForMember(dest => dest.AccessType, opt => opt.MapFrom(src => (int)src.AccessType))
             .ReverseMap()
             .ForMember(dest => dest.Role, opt => opt.Ignore()); // Role set explicitly in service
 
