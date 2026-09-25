@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -11,7 +12,7 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class UserManagementService : IUserManagementService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<UserManagementService> _logger;
+    private readonly ILogger<UserManagementService> _logger;
     private readonly IUserRepository _userRepository;
     private readonly IMemberRepository _memberRepository;
     private readonly IRoleRepository _roleRepository;
@@ -19,7 +20,7 @@ public class UserManagementService : IUserManagementService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
 
-    public UserManagementService(Microsoft.Extensions.Logging.ILogger<UserManagementService> logger, 
+    public UserManagementService(ILogger<UserManagementService> logger, 
         IUserRepository userRepository,
         IMemberRepository memberRepository,
         IRoleRepository roleRepository,
@@ -89,7 +90,7 @@ public class UserManagementService : IUserManagementService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -100,13 +101,13 @@ public class UserManagementService : IUserManagementService
         try
         {
             var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
-                ?? throw new KeyNotFoundException("User not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
             return await EnrichUserDtoWithMemberProfileAsync(user, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetProfileAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetProfileAsync));
             throw;
         }
     }
@@ -116,18 +117,16 @@ public class UserManagementService : IUserManagementService
     {
         try
         {
-            // Unique email check
             var emailExists = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
             if (emailExists is not null)
-                throw new InvalidOperationException("A user with this email already exists.");
+                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
 
-            // Unique username check
             var usernameExists = await _userRepository.GetByUsernameAsync(request.Username.Trim(), cancellationToken);
             if (usernameExists is not null)
-                throw new InvalidOperationException("A user with this username already exists.");
+                throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
 
             if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
-                throw new InvalidOperationException($"Invalid role: '{request.RoleName}'. Valid values: Admin, Manager, User.");
+                throw new InvalidOperationException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
 
             var appUser = new AppUser
             {
@@ -136,7 +135,7 @@ public class UserManagementService : IUserManagementService
                 Email        = request.Email.Trim().ToLowerInvariant(),
                 PasswordHash = _passwordHasher.HashPassword(request.Password),
                 Role         = role,
-                FullName     = request.Username.Trim(), // default FullName to username; can be changed later
+                FullName     = request.Username.Trim(),
                 IsActive     = request.IsActive,
                 CreatedBy    = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
                 CreatedAt    = DateTime.UtcNow,
@@ -147,13 +146,14 @@ public class UserManagementService : IUserManagementService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var created = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
-                ?? throw new KeyNotFoundException("Created user could not be loaded.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
+            _logger.LogInformation(CommonLogMessages.Users.UserCreated, appUser.Username, appUser.UserId);
             return await EnrichUserDtoWithMemberProfileAsync(created, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
@@ -164,20 +164,18 @@ public class UserManagementService : IUserManagementService
         try
         {
             var appUser = await _userRepository.GetByIdAsync(userId, cancellationToken)
-                ?? throw new KeyNotFoundException("User not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
-            // Email uniqueness (excluding self)
             var emailOwner = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
             if (emailOwner is not null && emailOwner.UserId != userId)
-                throw new InvalidOperationException("A user with this email already exists.");
+                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
 
-            // Username uniqueness (excluding self)
             var usernameOwner = await _userRepository.GetByUsernameAsync(request.Username.Trim(), cancellationToken);
             if (usernameOwner is not null && usernameOwner.UserId != userId)
-                throw new InvalidOperationException("A user with this username already exists.");
+                throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
 
             if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
-                throw new InvalidOperationException($"Invalid role: '{request.RoleName}'. Valid values: Admin, Manager, User.");
+                throw new InvalidOperationException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
 
             var oldEmail = appUser.Email;
             var newEmail = request.Email.Trim().ToLowerInvariant();
@@ -189,13 +187,11 @@ public class UserManagementService : IUserManagementService
             appUser.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             appUser.ModifiedOn = DateTime.UtcNow;
 
-            // Update password only when a new one is supplied
             if (!string.IsNullOrWhiteSpace(request.Password))
                 appUser.PasswordHash = _passwordHasher.HashPassword(request.Password);
 
             _userRepository.Update(appUser);
 
-            // Also keep linked Member email in sync if it changed
             if (!string.Equals(oldEmail, newEmail, StringComparison.OrdinalIgnoreCase))
             {
                 var linkedMember = await _memberRepository.GetByEmailAsync(oldEmail, cancellationToken);
@@ -209,13 +205,14 @@ public class UserManagementService : IUserManagementService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var updated = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
-                ?? throw new KeyNotFoundException("Updated user could not be loaded.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
+            _logger.LogInformation(CommonLogMessages.Users.UserUpdated, appUser.UserId);
             return await EnrichUserDtoWithMemberProfileAsync(updated, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in UpdateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
             throw;
         }
     }
@@ -226,14 +223,16 @@ public class UserManagementService : IUserManagementService
         try
         {
             var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
-                ?? throw new KeyNotFoundException("User not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
             _userRepository.Delete(user);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(CommonLogMessages.Users.UserDeleted, userId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }
@@ -244,15 +243,14 @@ public class UserManagementService : IUserManagementService
         try
         {
             var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
-                ?? throw new KeyNotFoundException("User not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
             var oldEmail = user.Email;
             var newEmail = request.Email.Trim().ToLowerInvariant();
 
-            // Email uniqueness check (excluding self)
             var emailOwner = await _userRepository.GetByEmailAsync(newEmail, cancellationToken);
             if (emailOwner is not null && emailOwner.UserId != userId)
-                throw new InvalidOperationException("A user with this email already exists.");
+                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
 
             user.FullName = request.FullName.Trim();
             user.Email    = newEmail;
@@ -268,7 +266,7 @@ public class UserManagementService : IUserManagementService
                 if (!string.IsNullOrEmpty(user.ProfileImage))
                 {
                     var relativePath = user.ProfileImage.Split('?')[0];
-                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath.TrimStart('/'));
+                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, relativePath.TrimStart('/'));
                     if (File.Exists(oldFilePath))
                     {
                         try { File.Delete(oldFilePath); } catch {}
@@ -276,50 +274,47 @@ public class UserManagementService : IUserManagementService
                 }
                 user.ProfileImage = null;
             }
-            else if (request.ProfileImage.StartsWith("data:image"))
+            else if (request.ProfileImage.StartsWith(CommonConstants.Defaults.DataImagePrefix))
             {
-                // Delete old file if it exists to avoid server clutter and junk files
                 if (!string.IsNullOrEmpty(user.ProfileImage))
                 {
                     var relativePath = user.ProfileImage.Split('?')[0];
-                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath.TrimStart('/'));
+                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, relativePath.TrimStart('/'));
                     if (File.Exists(oldFilePath))
                     {
                         try { File.Delete(oldFilePath); } catch {}
                     }
                 }
 
-                var base64Data = request.ProfileImage.Substring(request.ProfileImage.IndexOf(",") + 1);
+                var base64Data = request.ProfileImage.Substring(request.ProfileImage.IndexOf(CommonConstants.Defaults.Comma) + 1);
                 var imageBytes = Convert.FromBase64String(base64Data);
 
-                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "user_images");
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, CommonConstants.Defaults.UserImagesFolder);
                 if (!Directory.Exists(folderPath))
                 {
                     Directory.CreateDirectory(folderPath);
                 }
 
-                // Detect image extension (default to png as requested, fallback if needed)
-                var extension = "png";
-                if (request.ProfileImage.Contains("image/jpeg") || request.ProfileImage.Contains("image/jpg"))
+                var extension = CommonConstants.Defaults.ExtPng;
+                if (request.ProfileImage.Contains(CommonConstants.Defaults.ImageJpeg) || request.ProfileImage.Contains(CommonConstants.Defaults.ImageJpg))
                 {
-                    extension = "jpg";
+                    extension = CommonConstants.Defaults.ExtJpg;
                 }
 
-                var dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
-                var cleanUsername = user.Username.Replace(" ", "_").ToLowerInvariant();
+                var dateStr = DateTime.UtcNow.ToString(CommonConstants.Defaults.DateFormatYmd);
+                var cleanUsername = user.Username.Replace(CommonConstants.Defaults.Space, CommonConstants.Defaults.Underscore).ToLowerInvariant();
                 var fileName = $"{dateStr}{cleanUsername}.{extension}";
                 var filePath = Path.Combine(folderPath, fileName);
 
                 await File.WriteAllBytesAsync(filePath, imageBytes, cancellationToken);
                 
-                // Append cache buster parameter to DB path to bypass browser caching and reflect instantly
                 var cacheBuster = DateTime.UtcNow.Ticks;
-                user.ProfileImage = $"/user_images/{fileName}?v={cacheBuster}";
+                user.ProfileImage = $"{CommonConstants.Defaults.UserImagesPathPrefix}{fileName}{CommonConstants.Defaults.VersionParamPrefix}{cacheBuster}";
             }
 
             _userRepository.Update(user);
 
-            // ── JOIN & UPDATE CORRESPONDING MEMBER RECORD (Zero DB Alter) ─────────
+            // ── JOIN & UPDATE CORRESPONDING MEMBER RECORD ─────────────────────────
             var member = await _memberRepository.GetByEmailAsync(oldEmail, cancellationToken);
             if (member == null && !string.Equals(oldEmail, newEmail, StringComparison.OrdinalIgnoreCase))
             {
@@ -345,7 +340,6 @@ public class UserManagementService : IUserManagementService
             }
             else
             {
-                // If this user does not have a member record yet (e.g. system admin), create one so the profile is fully backed
                 var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
                 var userRoleName = user.Role.ToString();
                 var defaultRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, userRoleName, StringComparison.OrdinalIgnoreCase)) 
@@ -377,13 +371,14 @@ public class UserManagementService : IUserManagementService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var updated = await _userRepository.GetByIdAsync(user.UserId, cancellationToken)
-                ?? throw new KeyNotFoundException("Updated user could not be loaded.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
+            _logger.LogInformation(CommonLogMessages.Users.ProfileUpdated, user.UserId);
             return await EnrichUserDtoWithMemberProfileAsync(updated, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in UpdateProfileAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateProfileAsync));
             throw;
         }
     }

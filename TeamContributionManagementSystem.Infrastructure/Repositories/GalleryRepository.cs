@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
-using TeamContributionManagementSystem.Domain.Enums;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 
 namespace TeamContributionManagementSystem.Infrastructure.Repositories;
@@ -10,9 +10,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class GalleryRepository : IGalleryRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<GalleryRepository> _logger;
+    private readonly ILogger<GalleryRepository> _logger;
 
-    public GalleryRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<GalleryRepository> logger)
+    public GalleryRepository(ApplicationDbContext context, ILogger<GalleryRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -24,21 +24,21 @@ public class GalleryRepository : IGalleryRepository
         {
             var query = _context.GalleryPhotos.Where(x => !x.IsDeleted).AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(eventName) && eventName != "ALL")
-        {
-            query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
-        }
+            if (!string.IsNullOrWhiteSpace(eventName) && !eventName.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
+            }
 
-        if (!string.IsNullOrWhiteSpace(category) && category != "ALL")
-        {
-            query = query.Where(x => x.Category.ToLower() == category.ToLower());
-        }
+            if (!string.IsNullOrWhiteSpace(category) && !category.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(x => x.Category.ToLower() == category.ToLower());
+            }
 
-        return await query.OrderByDescending(x => x.TakenDate).ToListAsync(cancellationToken);
+            return await query.OrderByDescending(x => x.TakenDate).ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -51,7 +51,7 @@ public class GalleryRepository : IGalleryRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -64,7 +64,7 @@ public class GalleryRepository : IGalleryRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddAsync));
             throw;
         }
     }
@@ -74,12 +74,12 @@ public class GalleryRepository : IGalleryRepository
         try
         {
             photo.IsDeleted = true;
-        photo.ModifiedOn = DateTime.UtcNow;
-        _context.GalleryPhotos.Update(photo);
+            photo.ModifiedOn = DateTime.UtcNow;
+            _context.GalleryPhotos.Update(photo);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Delete");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Delete));
             throw;
         }
     }

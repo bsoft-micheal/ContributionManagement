@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Gallery;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -9,12 +10,12 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class GalleryService : IGalleryService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<GalleryService> _logger;
+    private readonly ILogger<GalleryService> _logger;
     private readonly IGalleryRepository _galleryRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public GalleryService(Microsoft.Extensions.Logging.ILogger<GalleryService> logger, IGalleryRepository galleryRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public GalleryService(ILogger<GalleryService> logger, IGalleryRepository galleryRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
         _logger = logger;
         _galleryRepository = galleryRepository;
@@ -27,11 +28,11 @@ public class GalleryService : IGalleryService
         try
         {
             var photos = await _galleryRepository.GetAllAsync(eventName, category, cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<GalleryPhotoDto>>(photos);
+            return _mapper.Map<IReadOnlyCollection<GalleryPhotoDto>>(photos);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -41,28 +42,29 @@ public class GalleryService : IGalleryService
         try
         {
             var photo = new GalleryPhoto
-        {
-            PhotoId = Guid.NewGuid(),
-            Title = request.Title.Trim(),
-            EventName = request.EventName.Trim(),
-            Category = string.IsNullOrWhiteSpace(request.Category) ? "Moments" : request.Category.Trim(),
-            ImageUrl = request.ImageUrl.Trim(),
-            TakenDate = request.TakenDate,
-            Description = request.Description?.Trim(),
-            IsActive = true,
-            IsDeleted = false,
-            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
-            CreatedAt = DateTime.UtcNow
-        };
+            {
+                PhotoId = Guid.NewGuid(),
+                Title = request.Title.Trim(),
+                EventName = request.EventName.Trim(),
+                Category = string.IsNullOrWhiteSpace(request.Category) ? CommonConstants.Defaults.DefaultGalleryCategory : request.Category.Trim(),
+                ImageUrl = request.ImageUrl.Trim(),
+                TakenDate = request.TakenDate,
+                Description = request.Description?.Trim(),
+                IsActive = true,
+                IsDeleted = false,
+                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedAt = DateTime.UtcNow
+            };
 
-        await _galleryRepository.AddAsync(photo, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _galleryRepository.AddAsync(photo, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return _mapper.Map<GalleryPhotoDto>(photo);
+            _logger.LogInformation(CommonLogMessages.Gallery.PhotoCreated, photo.Title, photo.PhotoId);
+            return _mapper.Map<GalleryPhotoDto>(photo);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
@@ -72,14 +74,16 @@ public class GalleryService : IGalleryService
         try
         {
             var photo = await _galleryRepository.GetByIdAsync(photoId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Photo with ID {photoId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Gallery.NotFound);
 
-        _galleryRepository.Delete(photo);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _galleryRepository.Delete(photo);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(CommonLogMessages.Gallery.PhotoDeleted, photoId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }

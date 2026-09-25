@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -8,14 +9,15 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class BirthdayAutomationService : IBirthdayAutomationService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<BirthdayAutomationService> _logger;
+    private readonly ILogger<BirthdayAutomationService> _logger;
     private readonly IMemberRepository _memberRepository;
     private readonly IEventTypeRepository _eventTypeRepository;
     private readonly IUserRepository _userRepository;
     private readonly IEventService _eventService;
     private readonly IEventRepository _eventRepository;
 
-    public BirthdayAutomationService(Microsoft.Extensions.Logging.ILogger<BirthdayAutomationService> logger, 
+    public BirthdayAutomationService(
+        ILogger<BirthdayAutomationService> logger, 
         IMemberRepository memberRepository,
         IEventTypeRepository eventTypeRepository,
         IUserRepository userRepository,
@@ -36,56 +38,57 @@ public class BirthdayAutomationService : IBirthdayAutomationService
         {
             var today = DateTime.UtcNow.Date;
             var allEventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
-            var birthdayEventType = allEventTypes.FirstOrDefault(x => x.EventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase))
+            var birthdayEventType = allEventTypes.FirstOrDefault(x => x.EventTypeName.Contains(CommonConstants.EventTypeNames.Birthday, StringComparison.OrdinalIgnoreCase))
                 ?? allEventTypes.FirstOrDefault()
-                ?? throw new KeyNotFoundException("No active event type is configured in the database.");
+                ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NoActiveConfigured);
 
             var adminUser = await _userRepository.GetFirstAdminAsync(cancellationToken)
-                ?? throw new KeyNotFoundException("No admin user available for scheduled event creation.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.AdminNotFound);
 
-        var birthdayMembers = await _memberRepository.GetActiveBirthdaysInMonthAsync(today.Month, cancellationToken);
-        var activeMembers = await _memberRepository.GetAllActiveAsync(cancellationToken);
-        var createdCount = 0;
+            var birthdayMembers = await _memberRepository.GetActiveBirthdaysInMonthAsync(today.Month, cancellationToken);
+            var activeMembers = await _memberRepository.GetAllActiveAsync(cancellationToken);
+            var createdCount = 0;
 
-        foreach (var member in birthdayMembers)
-        {
-            var alreadyExists = await _eventRepository.BirthdayEventExistsAsync(member.MemberId, today.Month, today.Year, cancellationToken);
-            if (alreadyExists)
+            foreach (var member in birthdayMembers)
             {
-                continue;
+                var alreadyExists = await _eventRepository.BirthdayEventExistsAsync(member.MemberId, today.Month, today.Year, cancellationToken);
+                if (alreadyExists)
+                {
+                    continue;
+                }
+
+                var eventDate = new DateTime(today.Year, today.Month, Math.Min(member.DateOfBirth.Day, DateTime.DaysInMonth(today.Year, today.Month)), 0, 0, 0, DateTimeKind.Utc);
+                var participants = activeMembers
+                    .Where(x => x.MemberId != member.MemberId)
+                    .Select(x => x.MemberId)
+                    .ToList();
+
+                if (participants.Count == 0)
+                {
+                    continue;
+                }
+
+                await _eventService.CreateAsync(adminUser.UserId, new CreateEventRequestDto
+                {
+                    EventName = $"{CommonConstants.EmailTemplates.BirthdaySubjectPrefix}{member.Name}",
+                    EventTypeId = birthdayEventType.EventTypeId,
+                    EventDate = eventDate,
+                    Description = $"Auto-generated birthday contribution event for {member.Name}. {CommonConstants.Defaults.BirthdayMemberPrefix}{member.MemberId}",
+                    Status = EventStatus.Planned,
+                    ParticipantIds = participants,
+                    BaseAmount = birthdayMembers.Count * birthdayEventType.BaseAmount
+                }, cancellationToken);
+
+                createdCount++;
             }
 
-            var eventDate = new DateTime(today.Year, today.Month, Math.Min(member.DateOfBirth.Day, DateTime.DaysInMonth(today.Year, today.Month)), 0, 0, 0, DateTimeKind.Utc);
-            var participants = activeMembers
-                .Where(x => x.MemberId != member.MemberId)
-                .Select(x => x.MemberId)
-                .ToList();
-
-            if (participants.Count == 0)
-            {
-                continue;
-            }
-
-            await _eventService.CreateAsync(adminUser.UserId, new CreateEventRequestDto
-            {
-                EventName = $"Birthday Celebration - {member.Name}",
-                EventTypeId = birthdayEventType.EventTypeId,
-                EventDate = eventDate,
-                Description = $"Auto-generated birthday contribution event for {member.Name}. birthday-member:{member.MemberId}",
-                Status = EventStatus.Planned,
-                ParticipantIds = participants,
-                BaseAmount = birthdayMembers.Count * birthdayEventType.BaseAmount
-            }, cancellationToken);
-
-            createdCount++;
-        }
-
-        return createdCount;
+            return createdCount;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateMonthlyBirthdayEventsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateMonthlyBirthdayEventsAsync));
             throw;
         }
     }
 }
+

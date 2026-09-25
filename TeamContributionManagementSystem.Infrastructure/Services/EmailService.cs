@@ -3,6 +3,7 @@ using System.Net.Mail;
 using System.Net.Mime;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
 namespace TeamContributionManagementSystem.Infrastructure.Services;
@@ -47,14 +48,14 @@ public class EmailService : IEmailService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to read email limit tracker file.");
+                    _logger.LogError(ex, CommonLogMessages.Emails.TrackerReadFailed);
                 }
             }
 
             if (count >= 500)
             {
-                _logger.LogError("Email send blocked. Daily email limit of 500 reached to protect Gmail SMTP threshold.");
-                throw new InvalidOperationException("Daily email sending limit (500) has been reached. Please try again tomorrow.");
+                _logger.LogError(CommonLogMessages.Emails.DailyLimitReached);
+                throw new InvalidOperationException(CommonMessages.Emails.DailyLimitReached);
             }
 
             count++;
@@ -63,11 +64,11 @@ public class EmailService : IEmailService
             {
                 var newContent = $"{{\"Date\":\"{todayStr}\",\"Count\":{count}}}";
                 File.WriteAllText(trackerPath, newContent);
-                _logger.LogInformation("Daily email count updated: {Count}/500", count);
+                _logger.LogInformation(CommonLogMessages.Emails.DailyCountUpdated, count);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to write email limit tracker file.");
+                _logger.LogError(ex, CommonLogMessages.Emails.TrackerWriteFailed);
             }
         }
     }
@@ -79,46 +80,39 @@ public class EmailService : IEmailService
         IEnumerable<InlineEmailImage>? inlineImages = null,
         CancellationToken cancellationToken = default)
     {
-        // Enforce the 500 emails/day restriction
         CheckAndIncrementEmailCount();
         var inlineImageList = inlineImages?.Where(image => !string.IsNullOrWhiteSpace(image.ContentId) && !string.IsNullOrWhiteSpace(image.FilePath)).ToList()
             ?? new List<InlineEmailImage>();
 
-        var smtpSection = _configuration.GetSection("Smtp");
-        var host = smtpSection["Host"];
+        var smtpSection = _configuration.GetSection(CommonConstants.ConfigSections.Smtp);
+        var host = smtpSection[CommonConstants.ConfigKeys.Host];
         
-        int.TryParse(smtpSection["Port"], out var port);
+        int.TryParse(smtpSection[CommonConstants.ConfigKeys.Port], out var port);
         if (port == 0) port = 587;
         
-        var username = smtpSection["Username"];
-        var password = smtpSection["Password"];
+        var username = smtpSection[CommonConstants.ConfigKeys.Username];
+        var password = smtpSection[CommonConstants.ConfigKeys.Password];
         
-        if (!bool.TryParse(smtpSection["EnableSsl"], out var enableSsl))
+        if (!bool.TryParse(smtpSection[CommonConstants.ConfigKeys.EnableSsl], out var enableSsl))
         {
             enableSsl = true;
         }
         
-        var fromAddress = smtpSection["FromAddress"];
+        var fromAddress = smtpSection[CommonConstants.ConfigKeys.FromAddress];
         if (string.IsNullOrWhiteSpace(fromAddress))
         {
-            fromAddress = username ?? "noreply@teamcontribution.local";
+            fromAddress = username ?? CommonConstants.Defaults.DefaultFromAddress;
         }
         
-        var fromName = smtpSection["FromName"];
+        var fromName = smtpSection[CommonConstants.ConfigKeys.FromName];
         if (string.IsNullOrWhiteSpace(fromName))
         {
-            fromName = "Team Contribution System";
+            fromName = CommonConstants.Defaults.DefaultFromName;
         }
 
-        // Fallback local logging and file saving for local development if SMTP is not fully configured
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
         {
-            _logger.LogWarning("SMTP is not fully configured in appsettings.json. Logging email instead.");
-            _logger.LogInformation("========================================\n" +
-                                   "EMAIL TO: {ToEmail}\n" +
-                                   "SUBJECT: {Subject}\n" +
-                                   "BODY:\n{Body}\n" +
-                                   "========================================", toEmail, subject, body);
+            _logger.LogWarning(CommonLogMessages.Emails.SmtpNotConfigured);
 
             try
             {
@@ -126,24 +120,22 @@ public class EmailService : IEmailService
                 Directory.CreateDirectory(directoryPath);
                 var filePath = Path.Combine(directoryPath, $"{DateTime.UtcNow:yyyyMMddHHmmss}_{toEmail}.html");
 
-                // Replace cid: references with base64 data URIs for local browser preview
                 string localBody = body;
                 foreach (var img in inlineImageList)
                 {
                     if (File.Exists(img.FilePath))
                     {
-                        var mType = string.IsNullOrWhiteSpace(img.MediaType) ? "image/png" : img.MediaType;
+                        var mType = string.IsNullOrWhiteSpace(img.MediaType) ? CommonConstants.Defaults.ImagePng : img.MediaType;
                         var b64 = Convert.ToBase64String(File.ReadAllBytes(img.FilePath));
-                        localBody = localBody.Replace($"cid:{img.ContentId}", $"data:{mType};base64,{b64}");
+                        localBody = localBody.Replace($"cid:{img.ContentId}", $"{CommonConstants.Defaults.DataUriPrefix}{mType};base64,{b64}");
                     }
                 }
 
                 await File.WriteAllTextAsync(filePath, localBody, cancellationToken);
-                _logger.LogInformation("Email mock saved to local file: {FilePath}", filePath);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to write mock email to local file.");
+                _logger.LogError(ex, CommonLogMessages.Emails.MockEmailWriteFailed);
             }
 
             return;
@@ -166,11 +158,11 @@ public class EmailService : IEmailService
                 {
                     if (!File.Exists(image.FilePath))
                     {
-                        _logger.LogWarning("Inline email image not found at {FilePath}.", image.FilePath);
+                        _logger.LogWarning(CommonLogMessages.Emails.InlineImageNotFound, image.FilePath);
                         continue;
                     }
 
-                    var mediaType = string.IsNullOrWhiteSpace(image.MediaType) ? "image/png" : image.MediaType;
+                    var mediaType = string.IsNullOrWhiteSpace(image.MediaType) ? CommonConstants.Defaults.ImagePng : image.MediaType;
                     var linkedResource = new LinkedResource(image.FilePath, mediaType)
                     {
                         ContentId = image.ContentId,
@@ -196,12 +188,12 @@ public class EmailService : IEmailService
             };
 
             await smtpClient.SendMailAsync(mailMessage, cancellationToken);
-            _logger.LogInformation("Email sent successfully to {ToEmail}", toEmail);
+            _logger.LogInformation(CommonLogMessages.Emails.EmailSentSuccess, toEmail);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending email to {ToEmail} via SMTP.", toEmail);
-            throw new InvalidOperationException($"Failed to send email: {ex.Message}", ex);
+            _logger.LogError(ex, CommonLogMessages.Emails.SmtpSendFailed, toEmail);
+            throw new InvalidOperationException(string.Format(CommonMessages.Emails.SendFailedFormat, ex.Message), ex);
         }
     }
 }

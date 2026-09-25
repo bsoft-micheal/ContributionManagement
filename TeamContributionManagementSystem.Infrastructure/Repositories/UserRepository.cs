@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -10,9 +11,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class UserRepository : IUserRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<UserRepository> _logger;
+    private readonly ILogger<UserRepository> _logger;
 
-    public UserRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<UserRepository> logger)
+    public UserRepository(ApplicationDbContext context, ILogger<UserRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -23,12 +24,12 @@ public class UserRepository : IUserRepository
         try
         {
             return await _context.Users
-            .OrderBy(x => x.Username)
-            .ToListAsync(cancellationToken);
+                .OrderBy(x => x.Username)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -38,12 +39,12 @@ public class UserRepository : IUserRepository
         try
         {
             return await _context.Users
-            .Include(u => u.MfaDevices)
-            .FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
+                .Include(u => u.MfaDevices)
+                .FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByEmailAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByEmailAsync));
             throw;
         }
     }
@@ -52,11 +53,12 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            return await _context.Users.FirstOrDefaultAsync(x => x.Username.ToLower() == username.ToLower(), cancellationToken);
+            return await _context.Users
+                .FirstOrDefaultAsync(x => x.Username.ToLower() == username.ToLower(), cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByUsernameAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByUsernameAsync));
             throw;
         }
     }
@@ -66,12 +68,12 @@ public class UserRepository : IUserRepository
         try
         {
             return await _context.Users
-            .Include(u => u.MfaDevices)
-            .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+                .Include(u => u.MfaDevices)
+                .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -84,7 +86,7 @@ public class UserRepository : IUserRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetFirstAdminAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetFirstAdminAsync));
             throw;
         }
     }
@@ -97,7 +99,7 @@ public class UserRepository : IUserRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddAsync));
             throw;
         }
     }
@@ -110,7 +112,7 @@ public class UserRepository : IUserRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Update");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Update));
             throw;
         }
     }
@@ -123,7 +125,7 @@ public class UserRepository : IUserRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Delete");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Delete));
             throw;
         }
     }

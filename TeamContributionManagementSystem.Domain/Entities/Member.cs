@@ -1,3 +1,5 @@
+using TeamContributionManagementSystem.Domain.Common;
+
 namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class Member
@@ -13,7 +15,7 @@ public class Member
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
     public bool IsDeleted { get; set; }
-    public string MemberType { get; set; } = "Office";
+    public string MemberType { get; set; } = DomainConstants.MemberTypes.Office;
 
     public Role? Role { get; set; }
     public ICollection<EventParticipant> EventParticipants { get; set; } = new List<EventParticipant>();

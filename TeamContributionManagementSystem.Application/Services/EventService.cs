@@ -1,6 +1,7 @@
 using AutoMapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -55,7 +56,7 @@ public class EventService : IEventService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -65,13 +66,13 @@ public class EventService : IEventService
         try
         {
             var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
-                ?? throw new KeyNotFoundException("Event not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
             return _mapper.Map<EventDetailsDto>(eventItem);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -81,26 +82,27 @@ public class EventService : IEventService
         try
         {
             var user = await _userRepository.GetByIdAsync(createdByUserId, cancellationToken)
-                ?? throw new KeyNotFoundException("Creating user not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
             var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
-                ?? throw new KeyNotFoundException("Event type not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
 
             if (!eventType.IsActive)
             {
-                throw new InvalidOperationException("Inactive event types cannot be used.");
+                throw new InvalidOperationException(CommonMessages.Events.InactiveEventType);
             }
 
             var participantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
             if (participantIds.Count == 0)
             {
-                throw new InvalidOperationException("At least one participant is required.");
+                throw new InvalidOperationException(CommonMessages.Events.AtLeastOneParticipantRequired);
             }
 
             var members = await _memberRepository.GetByIdsAsync(participantIds, cancellationToken);
+
             if (members.Count != participantIds.Count)
             {
-                throw new InvalidOperationException("One or more participants could not be found.");
+                throw new InvalidOperationException(CommonMessages.Events.ParticipantsNotFound);
             }
 
             var eventItem = new Event
@@ -191,9 +193,9 @@ public class EventService : IEventService
                         var scopedMemberRepo = scope.ServiceProvider.GetRequiredService<IMemberRepository>();
                         var scopedSettingService = scope.ServiceProvider.GetService<ISystemSettingService>();
 
-                        string upiReceiverName = "Daniel A";
-                        string upiId = "danielrobertanto604@okicici";
-                        string qrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=danielrobertanto604@okicici%26pn=Daniel%20A";
+                        string upiReceiverName = CommonConstants.Defaults.DefaultPayeeName;
+                        string upiId = CommonConstants.Defaults.DefaultUpiId;
+                        string qrImageUrl = string.Empty;
 
                         if (scopedSettingService != null)
                         {
@@ -209,7 +211,7 @@ public class EventService : IEventService
                             }
                             catch (Exception ex)
                             {
-                                scopedLogger.LogWarning(ex, "Could not load payment settings for email notification; using default scanner details.");
+                                scopedLogger.LogWarning(ex, CommonLogMessages.Events.SettingsLoadWarning);
                             }
                         }
 
@@ -218,8 +220,8 @@ public class EventService : IEventService
                         {
                             try
                             {
-                                var targetDir = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-                                var targetFile = Path.Combine(targetDir, "gpay.png");
+                                var targetDir = Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot);
+                                var targetFile = Path.Combine(targetDir, CommonConstants.Defaults.GpayFileName);
                                 Directory.CreateDirectory(targetDir);
                                 File.Copy(gpayImagePath, targetFile, true);
                             }
@@ -227,6 +229,7 @@ public class EventService : IEventService
                         }
 
                         List<Member> targetCelebrants = new();
+
 
                         if (isBirthdayEvent)
                         {
@@ -591,15 +594,15 @@ public class EventService : IEventService
 </html>";
 
                                 var inlineImages = hasInlineScanner
-                                    ? new[] { new InlineEmailImage("gpay-banner", gpayImagePath!, "image/png") }
+                                    ? new[] { new InlineEmailImage(CommonConstants.Defaults.GpayBannerContentId, gpayImagePath!, CommonConstants.Defaults.ImagePng) }
                                     : null;
 
                                 await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, inlineImages, CancellationToken.None);
-                                scopedLogger.LogInformation("Successfully sent event creation email to contributor: {Email} for Event: {EventName}", contributor.Email, eventName);
+                                scopedLogger.LogInformation(CommonLogMessages.Events.EmailSentSuccess, contributor.Email, eventName);
                             }
                             catch (Exception ex)
                             {
-                                scopedLogger.LogError(ex, "Failed to send event creation email to contributor: {Email}", contributor.Email);
+                                scopedLogger.LogError(ex, CommonLogMessages.Events.EmailSendFailed, contributor.Email);
                             }
                         });
 
@@ -607,7 +610,7 @@ public class EventService : IEventService
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to run background email tasks for new event: {EventId}", eventId);
+                        _logger.LogError(ex, CommonLogMessages.Events.EmailTasksFailed, eventId);
                     }
                 });
             }
@@ -616,7 +619,7 @@ public class EventService : IEventService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
@@ -626,10 +629,10 @@ public class EventService : IEventService
         try
         {
             var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
-                ?? throw new KeyNotFoundException("Event not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
             var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
-                ?? throw new KeyNotFoundException("Event type not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
 
             eventItem.EventName = (request.EventName ?? string.Empty).Trim();
             eventItem.EventTypeId = eventType.EventTypeId;
@@ -645,13 +648,13 @@ public class EventService : IEventService
             var newParticipantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
             if (newParticipantIds.Count == 0)
             {
-                throw new InvalidOperationException("At least one participant is required.");
+                throw new InvalidOperationException(CommonMessages.Events.AtLeastOneParticipantRequired);
             }
 
             var members = await _memberRepository.GetByIdsAsync(newParticipantIds, cancellationToken);
             if (members.Count != newParticipantIds.Count)
             {
-                throw new InvalidOperationException("One or more participants could not be found.");
+                throw new InvalidOperationException(CommonMessages.Events.ParticipantsNotFound);
             }
 
             var memberAmounts = CalculateMemberContributionAmounts(
@@ -753,7 +756,7 @@ public class EventService : IEventService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in UpdateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
             throw;
         }
     }
@@ -763,7 +766,7 @@ public class EventService : IEventService
         try
         {
             var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
-                ?? throw new KeyNotFoundException("Event not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
             eventItem.IsDeleted = true;
             eventItem.ModifiedOn = DateTime.UtcNow;
@@ -778,7 +781,7 @@ public class EventService : IEventService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -20,12 +21,12 @@ public class JwtTokenGenerator : IJwtTokenGenerator
 
     public AuthResponseDto GenerateToken(AppUser user, Guid? sessionId = null)
     {
-        var secret = _configuration["Jwt:Secret"]
-            ?? throw new InvalidOperationException("JWT secret is not configured.");
+        var secret = _configuration[CommonConstants.ConfigKeys.JwtSecret]
+            ?? throw new InvalidOperationException(CommonMessages.Auth.JwtSecretNotConfigured);
 
-        var issuer = _configuration["Jwt:Issuer"] ?? "TeamContributionManagementSystem";
-        var audience = _configuration["Jwt:Audience"] ?? "TeamContributionManagementSystemClient";
-        var expiryMinutes = int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var configuredValue) ? configuredValue : 120;
+        var issuer = _configuration[CommonConstants.ConfigKeys.JwtIssuer] ?? CommonConstants.Defaults.JwtIssuer;
+        var audience = _configuration[CommonConstants.ConfigKeys.JwtAudience] ?? CommonConstants.Defaults.JwtAudience;
+        var expiryMinutes = int.TryParse(_configuration[CommonConstants.ConfigKeys.JwtExpiryMinutes], out var configuredValue) ? configuredValue : 120;
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(expiryMinutes);
 
         var claims = new List<Claim>
@@ -40,7 +41,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
 
         if (sessionId.HasValue)
         {
-            claims.Add(new Claim("SessionId", sessionId.Value.ToString()));
+            claims.Add(new Claim(CommonConstants.Defaults.SessionIdClaim, sessionId.Value.ToString()));
         }
 
         var credentials = new SigningCredentials(

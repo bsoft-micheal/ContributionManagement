@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -10,9 +11,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class ContributionRepository : IContributionRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<ContributionRepository> _logger;
+    private readonly ILogger<ContributionRepository> _logger;
 
-    public ContributionRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<ContributionRepository> logger)
+    public ContributionRepository(ApplicationDbContext context, ILogger<ContributionRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -23,16 +24,16 @@ public class ContributionRepository : IContributionRepository
         try
         {
             return await _context.Contributions
-            .Include(x => x.Event)
-                .ThenInclude(x => x!.EventType)
-            .Include(x => x.Member)
-            .Where(x => !x.IsDeleted)
-            .OrderBy(x => x.Event!.EventDate)
-            .ToListAsync(cancellationToken);
+                .Include(x => x.Event)
+                    .ThenInclude(x => x!.EventType)
+                .Include(x => x.Member)
+                .Where(x => !x.IsDeleted)
+                .OrderBy(x => x.Event!.EventDate)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -42,15 +43,15 @@ public class ContributionRepository : IContributionRepository
         try
         {
             return await _context.Contributions
-            .Include(x => x.Event)
-            .Include(x => x.Member)
-            .Where(x => x.EventId == eventId && !x.IsDeleted)
-            .OrderBy(x => x.Member!.Name)
-            .ToListAsync(cancellationToken);
+                .Include(x => x.Event)
+                .Include(x => x.Member)
+                .Where(x => x.EventId == eventId && !x.IsDeleted)
+                .OrderBy(x => x.Member!.Name)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByEventIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByEventIdAsync));
             throw;
         }
     }
@@ -60,13 +61,13 @@ public class ContributionRepository : IContributionRepository
         try
         {
             return await _context.Contributions
-            .Include(x => x.Event)
-            .Include(x => x.Member)
-            .FirstOrDefaultAsync(x => x.EventId == eventId && x.MemberId == memberId && !x.IsDeleted, cancellationToken);
+                .Include(x => x.Event)
+                .Include(x => x.Member)
+                .FirstOrDefaultAsync(x => x.EventId == eventId && x.MemberId == memberId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByEventAndMemberAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByEventAndMemberAsync));
             throw;
         }
     }
@@ -76,27 +77,27 @@ public class ContributionRepository : IContributionRepository
         try
         {
             var query = _context.Contributions
-            .Include(x => x.Event)
-            .Include(x => x.Member)
-            .Where(x => !x.IsDeleted && x.PaymentStatus != PaymentStatus.Paid);
+                .Include(x => x.Event)
+                .Include(x => x.Member)
+                .Where(x => !x.IsDeleted && x.PaymentStatus != PaymentStatus.Paid);
 
-        if (month.HasValue)
-        {
-            query = query.Where(x => x.Event != null && x.Event.EventDate.Month == month.Value);
-        }
+            if (month.HasValue)
+            {
+                query = query.Where(x => x.Event != null && x.Event.EventDate.Month == month.Value);
+            }
 
-        if (year.HasValue)
-        {
-            query = query.Where(x => x.Event != null && x.Event.EventDate.Year == year.Value);
-        }
+            if (year.HasValue)
+            {
+                query = query.Where(x => x.Event != null && x.Event.EventDate.Year == year.Value);
+            }
 
-        return await query
-            .OrderBy(x => x.Event!.EventDate)
-            .ToListAsync(cancellationToken);
+            return await query
+                .OrderBy(x => x.Event!.EventDate)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetPendingAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetPendingAsync));
             throw;
         }
     }
@@ -109,7 +110,7 @@ public class ContributionRepository : IContributionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddRangeAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddRangeAsync));
             throw;
         }
     }
@@ -122,7 +123,7 @@ public class ContributionRepository : IContributionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Update");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Update));
             throw;
         }
     }
@@ -135,7 +136,7 @@ public class ContributionRepository : IContributionRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteRange");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteRange));
             throw;
         }
     }
@@ -145,16 +146,16 @@ public class ContributionRepository : IContributionRepository
         try
         {
             return await _context.Contributions
-            .Include(x => x.Event)
-                .ThenInclude(x => x!.EventType)
-            .Include(x => x.Member)
-            .Where(x => !x.IsDeleted && x.Member != null && x.Member.Email == email)
-            .OrderBy(x => x.Event!.EventDate)
-            .ToListAsync(cancellationToken);
+                .Include(x => x.Event)
+                    .ThenInclude(x => x!.EventType)
+                .Include(x => x.Member)
+                .Where(x => !x.IsDeleted && x.Member != null && x.Member.Email == email)
+                .OrderBy(x => x.Event!.EventDate)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByMemberEmailAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByMemberEmailAsync));
             throw;
         }
     }

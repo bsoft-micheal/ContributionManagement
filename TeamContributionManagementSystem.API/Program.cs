@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using TeamContributionManagementSystem.API.Middleware;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Infrastructure;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 using TeamContributionManagementSystem.Infrastructure.Persistence.Seed;
@@ -36,7 +37,7 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddFluentValidationAutoValidation()
     .AddFluentValidationClientsideAdapters()
-    .AddValidatorsFromAssembly(Assembly.Load("TeamContributionManagementSystem.Application"));
+    .AddValidatorsFromAssembly(typeof(CommonConstants).Assembly);
 
 builder.Services.AddApiVersioning(options =>
 {
@@ -48,21 +49,21 @@ builder.Services.AddApiVersioning(options =>
 
 builder.Services.AddVersionedApiExplorer(options =>
 {
-    options.GroupNameFormat = "'v'VVV";
+    options.GroupNameFormat = CommonConstants.ApiConfig.VersionGroupFormat;
     options.SubstituteApiVersionInUrl = true;
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Team Contribution Management API", Version = "v1" });
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    options.SwaggerDoc(CommonConstants.ApiConfig.V1, new OpenApiInfo { Title = CommonConstants.ApiConfig.ApiTitle, Version = CommonConstants.ApiConfig.V1 });
+    options.AddSecurityDefinition(CommonConstants.Auth.Bearer, new OpenApiSecurityScheme
     {
-        Name = "Authorization",
+        Name = CommonConstants.Auth.Authorization,
         Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer",
-        BearerFormat = "JWT",
+        Scheme = CommonConstants.Auth.Bearer,
+        BearerFormat = CommonConstants.Auth.Jwt,
         In = ParameterLocation.Header,
-        Description = "JWT Authorization header using the Bearer scheme. \r\n\r\n Enter 'Bearer' [space] and then your token in the text input below.\r\n\r\nExample: \"Bearer 12345abcdef\""
+        Description = CommonConstants.Auth.BearerDescription
     });
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
@@ -72,7 +73,7 @@ builder.Services.AddSwaggerGen(options =>
                 Reference = new OpenApiReference
                 {
                     Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
+                    Id = CommonConstants.Auth.Bearer
                 }
             },
             Array.Empty<string>()
@@ -88,12 +89,12 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>();
 
 var allowedOrigins = builder.Configuration
-    .GetSection("Cors:AllowedOrigins")
+    .GetSection(CommonConstants.ConfigSections.CorsAllowedOrigins)
     .Get<string[]>() ?? Array.Empty<string>();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("FrontendPolicy", policy =>
+    options.AddPolicy(CommonConstants.CorsPolicies.FrontendPolicy, policy =>
     {
         if (allowedOrigins.Length > 0)
         {
@@ -106,7 +107,7 @@ builder.Services.AddCors(options =>
         {
             // Fallback: allow all localhost ports in development
             policy.SetIsOriginAllowed(origin =>
-                    new Uri(origin).Host == "localhost")
+                    new Uri(origin).Host == CommonConstants.Defaults.Localhost)
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
@@ -114,8 +115,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-var jwtSecret = builder.Configuration["Jwt:Secret"]
-    ?? throw new InvalidOperationException("JWT secret is not configured.");
+var jwtSecret = builder.Configuration[CommonConstants.ConfigKeys.JwtSecret]
+    ?? throw new InvalidOperationException(CommonMessages.Auth.JwtSecretNotConfigured);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -126,8 +127,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = builder.Configuration[CommonConstants.ConfigKeys.JwtIssuer],
+            ValidAudience = builder.Configuration[CommonConstants.ConfigKeys.JwtAudience],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
         };
     });
@@ -147,11 +148,11 @@ if (app.Environment.IsDevelopment())
 app.UseSerilogRequestLogging();
 app.UseStaticFiles();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.UseCors("FrontendPolicy");
+app.UseCors(CommonConstants.CorsPolicies.FrontendPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapHealthChecks(CommonRoutes.Health);
 
 using (var scope = app.Services.CreateScope())
 {

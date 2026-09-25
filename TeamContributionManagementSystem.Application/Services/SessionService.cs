@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -7,11 +8,11 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class SessionService : ISessionService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<SessionService> _logger;
+    private readonly ILogger<SessionService> _logger;
     private readonly IDeviceSessionRepository _deviceSessionRepository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public SessionService(Microsoft.Extensions.Logging.ILogger<SessionService> logger, IDeviceSessionRepository deviceSessionRepository, IUnitOfWork unitOfWork)
+    public SessionService(ILogger<SessionService> logger, IDeviceSessionRepository deviceSessionRepository, IUnitOfWork unitOfWork)
     {
         _logger = logger;
         _deviceSessionRepository = deviceSessionRepository;
@@ -26,7 +27,7 @@ public class SessionService : ISessionService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetActiveSessionsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetActiveSessionsAsync));
             throw;
         }
     }
@@ -39,7 +40,7 @@ public class SessionService : ISessionService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetSessionHistoryAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetSessionHistoryAsync));
             throw;
         }
     }
@@ -49,27 +50,27 @@ public class SessionService : ISessionService
         try
         {
             var history = await _deviceSessionRepository.GetLoginHistoryByIdAsync(historyId, cancellationToken);
-        if (history == null || history.UserId != userId)
-        {
-            throw new KeyNotFoundException("Session not found or does not belong to the user.");
-        }
-
-        if (history.IsActive)
-        {
-            history.IsActive = false;
-            history.LogoutTime = DateTime.UtcNow;
-
-            if (history.DeviceDetail != null)
+            if (history == null || history.UserId != userId)
             {
-                history.DeviceDetail.IsActive = false;
+                throw new KeyNotFoundException(CommonMessages.DeviceInfo.SessionNotFound);
             }
 
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
+            if (history.IsActive)
+            {
+                history.IsActive = false;
+                history.LogoutTime = DateTime.UtcNow;
+
+                if (history.DeviceDetail != null)
+                {
+                    history.DeviceDetail.IsActive = false;
+                }
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in LogoutSessionAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(LogoutSessionAsync));
             throw;
         }
     }

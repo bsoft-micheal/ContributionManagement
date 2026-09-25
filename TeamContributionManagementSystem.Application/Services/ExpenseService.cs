@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Expenses;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -31,7 +32,7 @@ public class ExpenseService : IExpenseService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -41,12 +42,12 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-                ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
             return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -75,7 +76,7 @@ public class ExpenseService : IExpenseService
                 CreatedAt = DateTime.UtcNow
             };
 
-            if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
+            if (expense.Status == CommonConstants.ExpenseStatuses.Approved && string.IsNullOrWhiteSpace(expense.ApprovedBy))
             {
                 expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             }
@@ -83,11 +84,12 @@ public class ExpenseService : IExpenseService
             await _expenseRepository.AddAsync(expense, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            _logger.LogInformation(CommonLogMessages.Expenses.ExpenseCreated, expense.ExpenseId, expense.Amount);
             return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
@@ -97,7 +99,7 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-                ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
 
             var savedFilePath = await ProcessAttachmentAsync(request.FileName, request.FileData, expense.FileName, cancellationToken);
 
@@ -113,7 +115,7 @@ public class ExpenseService : IExpenseService
             expense.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             expense.ModifiedOn = DateTime.UtcNow;
 
-            if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
+            if (expense.Status == CommonConstants.ExpenseStatuses.Approved && string.IsNullOrWhiteSpace(expense.ApprovedBy))
             {
                 expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             }
@@ -121,11 +123,12 @@ public class ExpenseService : IExpenseService
             _expenseRepository.Update(expense);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            _logger.LogInformation(CommonLogMessages.Expenses.ExpenseUpdated, expense.ExpenseId);
             return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in UpdateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
             throw;
         }
     }
@@ -135,39 +138,37 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-                ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
 
             _expenseRepository.Delete(expense);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(CommonLogMessages.Expenses.ExpenseDeleted, expenseId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }
 
     private Task<string?> ProcessAttachmentAsync(string? originalFileName, string? fileData, string? existingFilePath, CancellationToken cancellationToken)
     {
-        // 1. If new fileData provided in base64 format (data:image/...), store base64 string directly in DB
-        if (!string.IsNullOrWhiteSpace(fileData) && (fileData.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || fileData.Length > 100))
+        if (!string.IsNullOrWhiteSpace(fileData) && (fileData.StartsWith(CommonConstants.Defaults.DataUriPrefix, StringComparison.OrdinalIgnoreCase) || fileData.Length > 100))
         {
             return Task.FromResult<string?>(fileData);
         }
 
-        // 2. If originalFileName is already a base64 string
-        if (!string.IsNullOrWhiteSpace(originalFileName) && (originalFileName.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || originalFileName.Length > 100))
+        if (!string.IsNullOrWhiteSpace(originalFileName) && (originalFileName.StartsWith(CommonConstants.Defaults.DataUriPrefix, StringComparison.OrdinalIgnoreCase) || originalFileName.Length > 100))
         {
             return Task.FromResult<string?>(originalFileName);
         }
 
-        // 3. If file was cleared (both fileName and fileData null or empty)
         if (string.IsNullOrWhiteSpace(originalFileName) && string.IsNullOrWhiteSpace(fileData))
         {
             return Task.FromResult<string?>(null);
         }
 
-        // 4. Retain previous base64 or file value
         var result = !string.IsNullOrWhiteSpace(originalFileName) ? originalFileName : existingFilePath;
         return Task.FromResult<string?>(result);
     }

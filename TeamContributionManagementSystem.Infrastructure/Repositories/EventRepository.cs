@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
-using TeamContributionManagementSystem.Domain.Enums;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 
 namespace TeamContributionManagementSystem.Infrastructure.Repositories;
@@ -10,9 +10,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class EventRepository : IEventRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<EventRepository> _logger;
+    private readonly ILogger<EventRepository> _logger;
 
-    public EventRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<EventRepository> logger)
+    public EventRepository(ApplicationDbContext context, ILogger<EventRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -24,24 +24,24 @@ public class EventRepository : IEventRepository
         {
             var query = BuildEventQuery();
 
-        if (month.HasValue)
-        {
-            query = query.Where(x => x.EventDate.Month == month.Value);
-        }
+            if (month.HasValue)
+            {
+                query = query.Where(x => x.EventDate.Month == month.Value);
+            }
 
-        if (year.HasValue)
-        {
-            query = query.Where(x => x.EventDate.Year == year.Value);
-        }
+            if (year.HasValue)
+            {
+                query = query.Where(x => x.EventDate.Year == year.Value);
+            }
 
-        return await query
-            .Where(x => !x.IsDeleted)
-            .OrderByDescending(x => x.EventDate)
-            .ToListAsync(cancellationToken);
+            return await query
+                .Where(x => !x.IsDeleted)
+                .OrderByDescending(x => x.EventDate)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -51,14 +51,14 @@ public class EventRepository : IEventRepository
         try
         {
             return await BuildEventQuery()
-            .Where(x => !x.IsDeleted && x.EventDate >= DateTime.UtcNow.Date)
-            .OrderBy(x => x.EventDate)
-            .Take(count)
-            .ToListAsync(cancellationToken);
+                .Where(x => !x.IsDeleted && x.EventDate >= DateTime.UtcNow.Date)
+                .OrderBy(x => x.EventDate)
+                .Take(count)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetUpcomingAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetUpcomingAsync));
             throw;
         }
     }
@@ -71,7 +71,7 @@ public class EventRepository : IEventRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -81,11 +81,11 @@ public class EventRepository : IEventRepository
         try
         {
             return await BuildEventQuery()
-            .FirstOrDefaultAsync(x => x.EventId == eventId && !x.IsDeleted, cancellationToken);
+                .FirstOrDefaultAsync(x => x.EventId == eventId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdWithDetailsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdWithDetailsAsync));
             throw;
         }
     }
@@ -95,18 +95,18 @@ public class EventRepository : IEventRepository
         try
         {
             return await _context.Events
-            .Include(x => x.EventType)
-            .AnyAsync(x =>
-                x.EventType != null &&
-                x.EventType.EventTypeName == "Birthday" &&
-                x.EventDate.Month == month &&
-                x.EventDate.Year == year &&
-                x.Description.Contains(memberId.ToString()),
-                cancellationToken);
+                .Include(x => x.EventType)
+                .AnyAsync(x =>
+                    x.EventType != null &&
+                    x.EventType.EventTypeName == CommonConstants.EventTypeNames.Birthday &&
+                    x.EventDate.Month == month &&
+                    x.EventDate.Year == year &&
+                    x.Description.Contains(memberId.ToString()),
+                    cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in BirthdayEventExistsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(BirthdayEventExistsAsync));
             throw;
         }
     }
@@ -119,7 +119,7 @@ public class EventRepository : IEventRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddAsync));
             throw;
         }
     }
@@ -132,7 +132,7 @@ public class EventRepository : IEventRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Update");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Update));
             throw;
         }
     }
@@ -145,7 +145,7 @@ public class EventRepository : IEventRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteParticipants");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteParticipants));
             throw;
         }
     }

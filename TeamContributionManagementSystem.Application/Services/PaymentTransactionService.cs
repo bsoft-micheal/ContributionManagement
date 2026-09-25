@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -48,7 +49,7 @@ public class PaymentTransactionService : IPaymentTransactionService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -58,12 +59,12 @@ public class PaymentTransactionService : IPaymentTransactionService
         try
         {
             var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
-                ?? throw new KeyNotFoundException($"Payment transaction with ID {transactionId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Payments.NotFound);
             return _mapper.Map<PaymentTransactionDto>(entity);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -74,7 +75,7 @@ public class PaymentTransactionService : IPaymentTransactionService
         {
             var all = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
             var nextNum = 1250 + all.Count + 1;
-            var txnNumber = $"TXN{nextNum:D6}";
+            var txnNumber = $"{CommonConstants.Defaults.TxnPrefix}{nextNum:D6}";
 
             var entity = new PaymentTransaction
             {
@@ -84,9 +85,9 @@ public class PaymentTransactionService : IPaymentTransactionService
                 EventName = request.EventName.Trim(),
                 Amount = request.Amount,
                 PaymentDate = request.PaymentDate,
-                PaymentMode = request.PaymentMode?.Trim() ?? "UPI",
+                PaymentMode = request.PaymentMode?.Trim() ?? CommonConstants.PaymentModes.Upi,
                 Utr = request.Utr?.Trim(),
-                Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status.Trim(),
+                Status = string.IsNullOrWhiteSpace(request.Status) ? CommonConstants.PaymentStatuses.Pending : request.Status.Trim(),
                 Notes = request.Notes?.Trim(),
                 Screenshot = request.Screenshot?.Trim(),
                 IsActive = true,
@@ -95,7 +96,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 CreatedAt = DateTime.UtcNow
             };
 
-            if (entity.Status == "Verified")
+            if (entity.Status == CommonConstants.PaymentStatuses.Verified)
             {
                 entity.VerifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
                 entity.VerifiedOn = DateTime.UtcNow;
@@ -108,7 +109,7 @@ public class PaymentTransactionService : IPaymentTransactionService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
@@ -134,7 +135,7 @@ public class PaymentTransactionService : IPaymentTransactionService
 
             var all = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
             var nextNum = 1250 + all.Count + 1;
-            var txnNumber = $"TXN{nextNum:D6}";
+            var txnNumber = $"{CommonConstants.Defaults.TxnPrefix}{nextNum:D6}";
 
             var entity = new PaymentTransaction
             {
@@ -144,9 +145,9 @@ public class PaymentTransactionService : IPaymentTransactionService
                 EventName = resolvedEventName,
                 Amount = request.Amount,
                 PaymentDate = request.PaymentDate != default ? request.PaymentDate : DateTime.UtcNow,
-                PaymentMode = string.IsNullOrWhiteSpace(request.PaymentMode) ? "UPI" : request.PaymentMode.Trim(),
+                PaymentMode = string.IsNullOrWhiteSpace(request.PaymentMode) ? CommonConstants.PaymentModes.Upi : request.PaymentMode.Trim(),
                 Utr = request.Utr?.Trim(),
-                Status = "Pending",
+                Status = CommonConstants.PaymentStatuses.Pending,
                 Notes = request.Notes?.Trim(),
                 Screenshot = request.Screenshot?.Trim(),
                 IsActive = true,
@@ -158,14 +159,14 @@ public class PaymentTransactionService : IPaymentTransactionService
             await _transactionRepository.AddAsync(entity, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("New Payment proof submitted: TxnNumber {TxnNumber}, Member {MemberName}, Event {EventName}, Amount {Amount}, UTR {Utr}",
+            _logger.LogInformation(CommonLogMessages.Payments.PaymentProofSubmitted,
                 txnNumber, resolvedMemberName, resolvedEventName, request.Amount, request.Utr);
 
             return _mapper.Map<PaymentTransactionDto>(entity);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in SubmitProofAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(SubmitProofAsync));
             throw;
         }
     }
@@ -180,15 +181,15 @@ public class PaymentTransactionService : IPaymentTransactionService
             try
             {
                 var settings = await _settingService.GetSettingsAsync(cancellationToken);
-                result.QrReceiverName = settings.QrReceiverName ?? "Daniel A";
-                result.QrUpiId = settings.QrUpiId ?? "danielrobertanto604@okicici";
+                result.QrReceiverName = settings.QrReceiverName ?? CommonConstants.Defaults.DefaultPayeeName;
+                result.QrUpiId = settings.QrUpiId ?? CommonConstants.Defaults.DefaultUpiId;
                 result.QrImage = settings.QrImage ?? string.Empty;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Could not fetch settings for payment context; using defaults");
-                result.QrReceiverName = "Daniel A";
-                result.QrUpiId = "danielrobertanto604@okicici";
+                _logger.LogWarning(ex, CommonLogMessages.Payments.SettingsLoadWarning);
+                result.QrReceiverName = CommonConstants.Defaults.DefaultPayeeName;
+                result.QrUpiId = CommonConstants.Defaults.DefaultUpiId;
             }
 
             if (eventId.HasValue && eventId.Value != Guid.Empty)
@@ -227,7 +228,7 @@ public class PaymentTransactionService : IPaymentTransactionService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetPaymentContextAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetPaymentContextAsync));
             throw;
         }
     }
@@ -237,7 +238,7 @@ public class PaymentTransactionService : IPaymentTransactionService
         try
         {
             var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
-                ?? throw new KeyNotFoundException($"Payment transaction with ID {transactionId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Payments.NotFound);
 
             entity.Status = request.Status.Trim();
             entity.VerifiedBy = string.IsNullOrWhiteSpace(request.VerifiedBy) ? (string.IsNullOrWhiteSpace(user) ? null : user.Trim()) : request.VerifiedBy.Trim();
@@ -266,7 +267,7 @@ public class PaymentTransactionService : IPaymentTransactionService
 
                 if (match != null)
                 {
-                    if (entity.Status.Equals("Verified", StringComparison.OrdinalIgnoreCase))
+                    if (entity.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase))
                     {
                         match.PaymentStatus = PaymentStatus.Paid;
                         match.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
@@ -275,22 +276,24 @@ public class PaymentTransactionService : IPaymentTransactionService
                         match.ModifiedBy = entity.VerifiedBy ?? user;
                         match.ModifiedOn = DateTime.UtcNow;
                         _contributionRepository.Update(match);
-                        _logger.LogInformation("Synchronized Contribution {ContributionId} to Paid for Member {Member} on Event {Event}", match.ContributionId, entity.MemberName, entity.EventName);
+                        _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Paid, entity.MemberName, entity.EventName);
                     }
-                    else if (entity.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase) || entity.Status.Equals("Failed", StringComparison.OrdinalIgnoreCase) || entity.Status.Equals("Needs Clarification", StringComparison.OrdinalIgnoreCase))
+                    else if (entity.Status.Equals(CommonConstants.PaymentStatuses.Pending, StringComparison.OrdinalIgnoreCase) || 
+                             entity.Status.Equals(CommonConstants.PaymentStatuses.Failed, StringComparison.OrdinalIgnoreCase) || 
+                             entity.Status.Equals(CommonConstants.PaymentStatuses.NeedsClarification, StringComparison.OrdinalIgnoreCase))
                     {
                         match.PaymentStatus = PaymentStatus.Pending;
                         match.UpiAmount = 0;
                         match.ModifiedBy = entity.VerifiedBy ?? user;
                         match.ModifiedOn = DateTime.UtcNow;
                         _contributionRepository.Update(match);
-                        _logger.LogInformation("Synchronized Contribution {ContributionId} to Pending for Member {Member} on Event {Event}", match.ContributionId, entity.MemberName, entity.EventName);
+                        _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Pending, entity.MemberName, entity.EventName);
                     }
                 }
             }
             catch (Exception syncEx)
             {
-                _logger.LogWarning(syncEx, "Failed to auto-sync contribution status during payment verification for Txn: {TxnNumber}", entity.TxnNumber);
+                _logger.LogWarning(syncEx, CommonLogMessages.Payments.ContributionSyncFailed, entity.TxnNumber);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -299,7 +302,7 @@ public class PaymentTransactionService : IPaymentTransactionService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in VerifyAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(VerifyAsync));
             throw;
         }
     }
@@ -309,14 +312,14 @@ public class PaymentTransactionService : IPaymentTransactionService
         try
         {
             var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
-                ?? throw new KeyNotFoundException($"Payment transaction with ID {transactionId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Payments.NotFound);
 
             _transactionRepository.Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }

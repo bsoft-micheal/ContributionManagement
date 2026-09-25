@@ -6,6 +6,7 @@ namespace TeamContributionManagementSystem.Application.Common;
 public static class CommonRoutes
 {
     public const string ApiBase = "api/v{version:apiVersion}";
+    public const string Health = "/health";
 
     public static class Auth
     {
