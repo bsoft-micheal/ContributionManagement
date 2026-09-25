@@ -50,9 +50,9 @@ public class GalleryController : ControllerBase
     }
 
     /// <summary>
-    /// Deletes a photo from the gallery (Admin or Manager).
+    /// Deletes a photo from the gallery (Admin or Organizer).
     /// </summary>
-    [Authorize(Roles = CommonRoles.AdminOrManager)]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
     [HttpDelete(CommonRoutes.Gallery.Delete)]
     [ActionName(nameof(DeleteGalleryAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteGalleryAsyncById(Guid id, CancellationToken cancellationToken)

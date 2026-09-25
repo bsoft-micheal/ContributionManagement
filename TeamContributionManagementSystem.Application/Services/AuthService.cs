@@ -7,6 +7,7 @@ using TeamContributionManagementSystem.Application.Interfaces.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
+using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.Application.Services;
 
@@ -67,6 +68,11 @@ public class AuthService : IAuthService
             if (!user.IsActive)
             {
                 throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
+            }
+
+            if (request.IsFromMobile && user.Role == UserRole.Admin)
+            {
+                throw new InvalidOperationException(CommonMessages.Auth.MobileAdminLoginNotAllowed);
             }
 
             if (user.MfaDevices != null && user.MfaDevices.Any())

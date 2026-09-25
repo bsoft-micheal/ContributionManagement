@@ -91,9 +91,9 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// Verifies or approves a pending payment transaction (Admin or Manager).
+    /// Verifies or approves a pending payment transaction (Admin or Organizer).
     /// </summary>
-    [Authorize(Roles = CommonRoles.AdminOrManager)]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
     [HttpPut(CommonRoutes.Payments.Verify)]
     [ActionName(nameof(VerifyPaymentAsync))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> VerifyPaymentAsync(Guid id, [FromBody] VerifyPaymentRequestDto request, CancellationToken cancellationToken)
