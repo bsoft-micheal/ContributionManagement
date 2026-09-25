@@ -11,7 +11,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// </summary>
 [ApiVersion("1.0")]
 [ApiController]
-[Route("api/v{version:apiVersion}/auth")]
+[Route(CommonRoutes.Auth.Base)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -28,8 +28,8 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An ApiResponse containing AuthResponseDto.</returns>
     [AllowAnonymous]
-    [HttpPost("loginAsync")]
-    [ActionName("LoginAsync")]
+    [HttpPost(CommonRoutes.Auth.Login)]
+    [ActionName(nameof(LoginAsync))]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginAsync([FromBody] LoginRequestDto request, CancellationToken cancellationToken)
     {
         try
@@ -50,8 +50,8 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An ApiResponse containing AuthResponseDto upon successful verification.</returns>
     [AllowAnonymous]
-    [HttpPost("verify-2faAsync")]
-    [ActionName("VerifyTwoFactorAsync")]
+    [HttpPost(CommonRoutes.Auth.Verify2Fa)]
+    [ActionName(nameof(VerifyTwoFactorAsync))]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> VerifyTwoFactorAsync([FromBody] VerifyTwoFactorRequestDto request, CancellationToken cancellationToken)
     {
         try
@@ -71,8 +71,8 @@ public class AuthController : ControllerBase
     /// <param name="request">The user's registered email address.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
-    [HttpPost("forgot-password/requestAsync")]
-    [ActionName("RequestForgotPasswordOtpAsync")]
+    [HttpPost(CommonRoutes.Auth.ForgotPasswordRequest)]
+    [ActionName(nameof(RequestForgotPasswordOtpAsync))]
     public async Task<ActionResult<ApiResponse>> RequestForgotPasswordOtpAsync([FromBody] ForgotPasswordRequestDto request, CancellationToken cancellationToken)
     {
         await _authService.RequestPasswordResetOtpAsync(request, cancellationToken);
@@ -85,14 +85,14 @@ public class AuthController : ControllerBase
     /// <param name="request">The email and the OTP received.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
-    [HttpPost("forgot-password/verifyAsync")]
-    [ActionName("VerifyForgotPasswordOtpAsync")]
+    [HttpPost(CommonRoutes.Auth.ForgotPasswordVerify)]
+    [ActionName(nameof(VerifyForgotPasswordOtpAsync))]
     public async Task<ActionResult<ApiResponse>> VerifyForgotPasswordOtpAsync([FromBody] VerifyOtpRequestDto request, CancellationToken cancellationToken)
     {
         var isValid = await _authService.VerifyPasswordResetOtpAsync(request, cancellationToken);
         if (!isValid)
         {
-            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse.FailureResult("Invalid or expired password reset OTP.", CommonStatusCodes.Status400BadRequest));
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse.FailureResult(CommonMessages.Auth.InvalidOrExpiredOtp, CommonStatusCodes.Status400BadRequest));
         }
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Auth.ForgotPasswordOtpVerifiedSuccess, CommonStatusCodes.Status200OK));
     }
@@ -103,8 +103,8 @@ public class AuthController : ControllerBase
     /// <param name="request">The email, OTP, and the new password.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
-    [HttpPost("forgot-password/resetAsync")]
-    [ActionName("ResetPasswordWithOtpAsync")]
+    [HttpPost(CommonRoutes.Auth.ForgotPasswordReset)]
+    [ActionName(nameof(ResetPasswordWithOtpAsync))]
     public async Task<ActionResult<ApiResponse>> ResetPasswordWithOtpAsync([FromBody] ResetPasswordRequestDto request, CancellationToken cancellationToken)
     {
         await _authService.ResetPasswordWithOtpAsync(request, cancellationToken);

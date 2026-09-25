@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.Common;
 
 namespace TeamContributionManagementSystem.Application.DTOs.WorkTypes;
 
@@ -16,8 +17,8 @@ public class WorkTypeDto
 
 public class CreateWorkTypeRequestDto
 {
-    [Required(ErrorMessage = "Work Type name is required.")]
-    [MaxLength(100, ErrorMessage = "Work Type name cannot exceed 100 characters.")]
+    [Required(ErrorMessage = CommonValidationMessages.WorkTypeNameRequired)]
+    [MaxLength(100, ErrorMessage = CommonValidationMessages.WorkTypeNameMaxLength)]
     public string WorkTypeName { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;

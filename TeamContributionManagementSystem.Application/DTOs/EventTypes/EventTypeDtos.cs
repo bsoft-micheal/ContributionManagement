@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.Common;
 
 namespace TeamContributionManagementSystem.Application.DTOs.EventTypes;
 
@@ -21,7 +22,7 @@ public class CreateEventTypeRequestDto
 
     public bool IsActive { get; set; } = true;
 
-    [Range(1, 1000000, ErrorMessage = "Base amount must be greater than 0.")]
+    [Range(1, 1000000, ErrorMessage = CommonValidationMessages.BaseAmountGreaterThanZero)]
     public decimal BaseAmount { get; set; }
 }
 

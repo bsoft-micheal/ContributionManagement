@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.Common;
 
 namespace TeamContributionManagementSystem.Application.DTOs.Statuses;
 
@@ -16,8 +17,8 @@ public class StatusDto
 
 public class CreateStatusRequestDto
 {
-    [Required(ErrorMessage = "Status name is required.")]
-    [MaxLength(100, ErrorMessage = "Status name cannot exceed 100 characters.")]
+    [Required(ErrorMessage = CommonValidationMessages.StatusNameRequired)]
+    [MaxLength(100, ErrorMessage = CommonValidationMessages.StatusNameMaxLength)]
     public string StatusName { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;

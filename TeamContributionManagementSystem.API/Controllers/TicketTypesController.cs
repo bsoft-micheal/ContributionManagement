@@ -13,7 +13,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/ticket-types")]
+[Route(CommonRoutes.TicketTypes.Base)]
 public class TicketTypesController : ControllerBase
 {
     private readonly ITicketTypeService _ticketTypeService;
@@ -26,8 +26,8 @@ public class TicketTypesController : ControllerBase
     /// <summary>
     /// Retrieves all ticket types.
     /// </summary>
-    [HttpGet("getAllTicketTypeAsync")]
-    [ActionName("GetAllTicketTypeAsync")]
+    [HttpGet(CommonRoutes.TicketTypes.GetAll)]
+    [ActionName(nameof(GetAllTicketTypeAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<TicketTypeDto>>>> GetAllTicketTypeAsync([FromQuery] bool? activeOnly, CancellationToken cancellationToken)
     {
         var result = await _ticketTypeService.GetAllTicketTypeAsync(activeOnly, cancellationToken);
@@ -37,8 +37,8 @@ public class TicketTypesController : ControllerBase
     /// <summary>
     /// Retrieves a ticket type by ID.
     /// </summary>
-    [HttpGet("getTicketTypeAsyncById/{id:guid}")]
-    [ActionName("GetTicketTypeAsyncById")]
+    [HttpGet(CommonRoutes.TicketTypes.GetById)]
+    [ActionName(nameof(GetTicketTypeAsyncById))]
     public async Task<ActionResult<ApiResponse<TicketTypeDto>>> GetTicketTypeAsyncById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _ticketTypeService.GetTicketTypeAsyncById(id, cancellationToken);
@@ -52,9 +52,9 @@ public class TicketTypesController : ControllerBase
     /// <summary>
     /// Creates a new ticket type (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpPost("saveTicketTypeAsync")]
-    [ActionName("SaveTicketTypeAsync")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.TicketTypes.Create)]
+    [ActionName(nameof(SaveTicketTypeAsync))]
     public async Task<ActionResult<ApiResponse<TicketTypeDto>>> SaveTicketTypeAsync([FromBody] CreateTicketTypeRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -65,9 +65,9 @@ public class TicketTypesController : ControllerBase
     /// <summary>
     /// Updates an existing ticket type (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpPut("updateTicketTypeAsyncById/{id:guid}")]
-    [ActionName("UpdateTicketTypeAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPut(CommonRoutes.TicketTypes.Update)]
+    [ActionName(nameof(UpdateTicketTypeAsyncById))]
     public async Task<ActionResult<ApiResponse<TicketTypeDto>>> UpdateTicketTypeAsyncById(Guid id, [FromBody] UpdateTicketTypeRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -78,9 +78,9 @@ public class TicketTypesController : ControllerBase
     /// <summary>
     /// Deletes a ticket type (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("deleteTicketTypeAsyncById/{id:guid}")]
-    [ActionName("DeleteTicketTypeAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpDelete(CommonRoutes.TicketTypes.Delete)]
+    [ActionName(nameof(DeleteTicketTypeAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteTicketTypeAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _ticketTypeService.DeleteTicketTypeAsyncById(id, cancellationToken);

@@ -13,7 +13,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/roles")]
+[Route(CommonRoutes.Roles.Base)]
 public class RolesController : ControllerBase
 {
     private readonly IRoleService _roleService;
@@ -26,8 +26,8 @@ public class RolesController : ControllerBase
     /// <summary>
     /// Retrieves a list of all defined roles in the system.
     /// </summary>
-    [HttpGet("getAllRoleAsync")]
-    [ActionName("GetAllRoleAsync")]
+    [HttpGet(CommonRoutes.Roles.GetAll)]
+    [ActionName(nameof(GetAllRoleAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<RoleDto>>>> GetAllRoleAsync(CancellationToken cancellationToken)
     {
         var result = await _roleService.GetAllRoleAsync(cancellationToken);
@@ -39,11 +39,11 @@ public class RolesController : ControllerBase
     /// </summary>
     /// <param name="request">The details of the role to create.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpPost("saveRoleAsync")]
-    [ActionName("SaveRoleAsync")]
+    [HttpPost(CommonRoutes.Roles.Create)]
+    [ActionName(nameof(SaveRoleAsync))]
     public async Task<ActionResult<ApiResponse<RoleDto>>> SaveRoleAsync([FromBody] CreateRoleRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(System.Security.Claims.ClaimTypes.Name) ?? User.Identity?.Name;
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _roleService.SaveRoleAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<RoleDto>.SuccessResult(result, CommonMessages.Roles.SaveSuccess, CommonStatusCodes.Status201Created));
     }
@@ -54,11 +54,11 @@ public class RolesController : ControllerBase
     /// <param name="id">The unique identifier of the role.</param>
     /// <param name="request">The updated role details.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpPut("updateRoleAsyncById/{id:guid}")]
-    [ActionName("UpdateRoleAsyncById")]
+    [HttpPut(CommonRoutes.Roles.Update)]
+    [ActionName(nameof(UpdateRoleAsyncById))]
     public async Task<ActionResult<ApiResponse<RoleDto>>> UpdateRoleAsyncById(Guid id, [FromBody] UpdateRoleRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(System.Security.Claims.ClaimTypes.Name) ?? User.Identity?.Name;
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _roleService.UpdateRoleAsyncById(id, request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<RoleDto>.SuccessResult(result, CommonMessages.Roles.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
@@ -68,8 +68,8 @@ public class RolesController : ControllerBase
     /// </summary>
     /// <param name="id">The unique identifier of the role to delete.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpDelete("deleteRoleAsyncById/{id:guid}")]
-    [ActionName("DeleteRoleAsyncById")]
+    [HttpDelete(CommonRoutes.Roles.Delete)]
+    [ActionName(nameof(DeleteRoleAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteRoleAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _roleService.DeleteRoleAsyncById(id, cancellationToken);

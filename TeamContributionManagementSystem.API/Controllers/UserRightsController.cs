@@ -13,7 +13,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/user-rights")]
+[Route(CommonRoutes.UserRights.Base)]
 public class UserRightsController : ControllerBase
 {
     private readonly IRoleRightsService _roleRightsService;
@@ -26,8 +26,8 @@ public class UserRightsController : ControllerBase
     /// <summary>
     /// Retrieves a list of all rights mapped to roles.
     /// </summary>
-    [HttpGet("getAllUserRightAsync")]
-    [ActionName("GetAllUserRightAsync")]
+    [HttpGet(CommonRoutes.UserRights.GetAll)]
+    [ActionName(nameof(GetAllUserRightAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<RoleRightDto>>>> GetAllUserRightAsync(CancellationToken cancellationToken)
     {
         var result = await _roleRightsService.GetAllRoleRightAsync(cancellationToken);
@@ -39,8 +39,8 @@ public class UserRightsController : ControllerBase
     /// </summary>
     /// <param name="roleName">The name of the role (e.g., 'Admin').</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getUserRightAsyncByRole/{roleName}")]
-    [ActionName("GetUserRightAsyncByRole")]
+    [HttpGet(CommonRoutes.UserRights.GetByRole)]
+    [ActionName(nameof(GetUserRightAsyncByRole))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<RoleRightDto>>>> GetUserRightAsyncByRole(string roleName, CancellationToken cancellationToken)
     {
         var result = await _roleRightsService.GetRoleRightAsyncByRole(roleName, cancellationToken);
@@ -52,8 +52,8 @@ public class UserRightsController : ControllerBase
     /// </summary>
     /// <param name="request">The role and its new rights configuration.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpPost("saveUserRightAsync")]
-    [ActionName("SaveUserRightAsync")]
+    [HttpPost(CommonRoutes.UserRights.Save)]
+    [ActionName(nameof(SaveUserRightAsync))]
     public async Task<ActionResult<ApiResponse>> SaveUserRightAsync([FromBody] UpdateRoleRightsRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;

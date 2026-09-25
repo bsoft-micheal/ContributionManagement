@@ -13,7 +13,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/work-types")]
+[Route(CommonRoutes.WorkTypes.Base)]
 public class WorkTypesController : ControllerBase
 {
     private readonly IWorkTypeService _workTypeService;
@@ -26,8 +26,8 @@ public class WorkTypesController : ControllerBase
     /// <summary>
     /// Retrieves all work types.
     /// </summary>
-    [HttpGet("getAllWorkTypeAsync")]
-    [ActionName("GetAllWorkTypeAsync")]
+    [HttpGet(CommonRoutes.WorkTypes.GetAll)]
+    [ActionName(nameof(GetAllWorkTypeAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<WorkTypeDto>>>> GetAllWorkTypeAsync([FromQuery] bool? activeOnly, CancellationToken cancellationToken)
     {
         var result = await _workTypeService.GetAllWorkTypeAsync(activeOnly, cancellationToken);
@@ -37,8 +37,8 @@ public class WorkTypesController : ControllerBase
     /// <summary>
     /// Retrieves a work type by ID.
     /// </summary>
-    [HttpGet("getWorkTypeAsyncById/{id:guid}")]
-    [ActionName("GetWorkTypeAsyncById")]
+    [HttpGet(CommonRoutes.WorkTypes.GetById)]
+    [ActionName(nameof(GetWorkTypeAsyncById))]
     public async Task<ActionResult<ApiResponse<WorkTypeDto>>> GetWorkTypeAsyncById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _workTypeService.GetWorkTypeAsyncById(id, cancellationToken);
@@ -52,9 +52,9 @@ public class WorkTypesController : ControllerBase
     /// <summary>
     /// Creates a new work type (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpPost("saveWorkTypeAsync")]
-    [ActionName("SaveWorkTypeAsync")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.WorkTypes.Create)]
+    [ActionName(nameof(SaveWorkTypeAsync))]
     public async Task<ActionResult<ApiResponse<WorkTypeDto>>> SaveWorkTypeAsync([FromBody] CreateWorkTypeRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -65,9 +65,9 @@ public class WorkTypesController : ControllerBase
     /// <summary>
     /// Updates an existing work type (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpPut("updateWorkTypeAsyncById/{id:guid}")]
-    [ActionName("UpdateWorkTypeAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPut(CommonRoutes.WorkTypes.Update)]
+    [ActionName(nameof(UpdateWorkTypeAsyncById))]
     public async Task<ActionResult<ApiResponse<WorkTypeDto>>> UpdateWorkTypeAsyncById(Guid id, [FromBody] UpdateWorkTypeRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -78,9 +78,9 @@ public class WorkTypesController : ControllerBase
     /// <summary>
     /// Deletes a work type (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("deleteWorkTypeAsyncById/{id:guid}")]
-    [ActionName("DeleteWorkTypeAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpDelete(CommonRoutes.WorkTypes.Delete)]
+    [ActionName(nameof(DeleteWorkTypeAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteWorkTypeAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _workTypeService.DeleteWorkTypeAsyncById(id, cancellationToken);

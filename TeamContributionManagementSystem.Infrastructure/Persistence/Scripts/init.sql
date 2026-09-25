@@ -1,32 +1,123 @@
+-- ============================================================================
+-- TEAM CONTRIBUTION MANAGEMENT SYSTEM - DATABASE SCHEMA SCRIPT (init.sql)
+-- Complete DDL: Extensions, Table Creations, Schema Upgrades (Alter), & Indexes
+-- ============================================================================
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TABLE roles (
-    role_id UUID PRIMARY KEY,
+-- ============================================================================
+-- 1. TABLE CREATIONS (CREATE TABLE IF NOT EXISTS)
+-- ============================================================================
+
+-- 1. Roles Table
+CREATE TABLE IF NOT EXISTS roles (
+    role_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     role_name VARCHAR(100) NOT NULL UNIQUE,
-    default_contribution_amount NUMERIC(12,2) NOT NULL
-);
-
-CREATE TABLE event_types (
-    event_type_id UUID PRIMARY KEY,
-    event_type_name VARCHAR(100) NOT NULL UNIQUE,
+    default_contribution_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    base_amount NUMERIC(12,2) NOT NULL DEFAULT 0
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
 );
 
-CREATE TABLE users (
-    user_id UUID PRIMARY KEY,
+-- 2. Event Types Table
+CREATE TABLE IF NOT EXISTS event_types (
+    event_type_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    event_type_name VARCHAR(100) NOT NULL UNIQUE,
+    base_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+-- 3. Users Table
+CREATE TABLE IF NOT EXISTS users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(150) NOT NULL UNIQUE,
     password_hash VARCHAR(500) NOT NULL,
-    role VARCHAR(20) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'User',
     full_name VARCHAR(150) NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     profile_image VARCHAR(500) NULL,
     password_reset_otp VARCHAR(10) NULL,
-    password_reset_otp_expiry TIMESTAMP WITH TIME ZONE NULL
+    password_reset_otp_expiry TIMESTAMPTZ NULL,
+    is_two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
 );
 
-CREATE TABLE members (
-    member_id UUID PRIMARY KEY,
+-- 4. User MFA Devices Table
+CREATE TABLE IF NOT EXISTS user_mfa_devices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    device_label VARCHAR(100) NOT NULL DEFAULT '',
+    secret_key VARCHAR(100) NOT NULL DEFAULT '',
+    date_added TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+-- 5. Device Details Table
+CREATE TABLE IF NOT EXISTS device_details (
+    device_detail_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    device_id VARCHAR(255) NOT NULL DEFAULT '',
+    device_name VARCHAR(100) NOT NULL DEFAULT '',
+    brand VARCHAR(50) NOT NULL DEFAULT '',
+    model VARCHAR(100) NOT NULL DEFAULT '',
+    os VARCHAR(50) NOT NULL DEFAULT '',
+    os_version VARCHAR(50) NOT NULL DEFAULT '',
+    system_name VARCHAR(50) NOT NULL DEFAULT '',
+    system_version VARCHAR(50) NOT NULL DEFAULT '',
+    device_type SMALLINT NOT NULL DEFAULT 1,
+    app_version VARCHAR(20) NOT NULL DEFAULT '',
+    total_memory BIGINT NULL,
+    browser VARCHAR(100) NOT NULL DEFAULT '',
+    browser_version VARCHAR(50) NOT NULL DEFAULT '',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+-- 6. Device Login History Table
+CREATE TABLE IF NOT EXISTS device_login_history (
+    history_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    device_detail_id UUID NOT NULL REFERENCES device_details(device_detail_id) ON DELETE CASCADE,
+    login_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    logout_time TIMESTAMPTZ NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+-- 7. Members Table
+CREATE TABLE IF NOT EXISTS members (
+    member_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(150) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     phone VARCHAR(20) NOT NULL,
@@ -34,315 +125,451 @@ CREATE TABLE members (
     date_of_birth DATE NOT NULL,
     joining_date DATE NOT NULL,
     gender VARCHAR(20) NOT NULL DEFAULT '',
+    member_type VARCHAR(20) NOT NULL DEFAULT 'Office',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_exited BOOLEAN NOT NULL DEFAULT FALSE,
-    is_deleted BOOLEAN NOT NULL DEFAULT FALSE
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
 );
 
-CREATE TABLE events (
-    event_id UUID PRIMARY KEY,
+-- 8. Events Table
+CREATE TABLE IF NOT EXISTS events (
+    event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     event_name VARCHAR(200) NOT NULL,
     event_type_id UUID NOT NULL REFERENCES event_types(event_type_id) ON DELETE RESTRICT,
     event_date DATE NOT NULL,
     created_by UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
     description VARCHAR(1000) NOT NULL DEFAULT '',
-    status VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'Planned',
+    base_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    base_amount NUMERIC(12,2) NOT NULL DEFAULT 0
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
 );
 
-CREATE TABLE event_participants (
-    id UUID PRIMARY KEY,
+-- 9. Event Participants Table
+CREATE TABLE IF NOT EXISTS event_participants (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     event_id UUID NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
     member_id UUID NOT NULL REFERENCES members(member_id) ON DELETE RESTRICT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL,
     CONSTRAINT uq_event_participants UNIQUE (event_id, member_id)
 );
 
-CREATE TABLE contributions (
-    contribution_id UUID PRIMARY KEY,
+-- 10. Contributions Table
+CREATE TABLE IF NOT EXISTS contributions (
+    contribution_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     event_id UUID NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
     member_id UUID NOT NULL REFERENCES members(member_id) ON DELETE RESTRICT,
-    amount NUMERIC(12,2) NOT NULL,
-    payment_status VARCHAR(20) NOT NULL,
-    payment_date TIMESTAMP NULL,
-    payment_mode VARCHAR(20) NOT NULL,
+    amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+    payment_status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+    payment_date TIMESTAMPTZ NULL,
+    payment_mode VARCHAR(20) NOT NULL DEFAULT 'None',
+    cash_amount NUMERIC(12,2) NULL,
+    upi_amount NUMERIC(12,2) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL,
     CONSTRAINT uq_contributions UNIQUE (event_id, member_id)
 );
 
-CREATE TABLE role_rights (
-    role_right_id UUID PRIMARY KEY,
+-- 11. Role Rights Table
+CREATE TABLE IF NOT EXISTS role_rights (
+    role_right_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     role VARCHAR(50) NOT NULL,
     module VARCHAR(100) NOT NULL,
     sub_module VARCHAR(100) NOT NULL,
     page VARCHAR(100) NOT NULL,
-    access VARCHAR(50) NOT NULL
+    access VARCHAR(50) NOT NULL DEFAULT 'readWrite',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL,
+    CONSTRAINT uq_role_rights UNIQUE (role, module, sub_module, page)
 );
 
-CREATE UNIQUE INDEX ix_role_rights_role_module_sub_module_page ON role_rights(role, module, sub_module, page);
-
-CREATE INDEX ix_members_role_active ON members(role_id, is_active);
-CREATE INDEX ix_events_date_type ON events(event_date, event_type_id);
-CREATE INDEX ix_contributions_event_status ON contributions(event_id, payment_status);
-
-INSERT INTO roles (role_id, role_name, default_contribution_amount) VALUES
-('11111111-1111-1111-1111-111111111111', 'Intern', 150.00),
-('22222222-2222-2222-2222-222222222222', 'Developer', 300.00),
-('33333333-3333-3333-3333-333333333333', 'Manager', 500.00);
-
-INSERT INTO event_types (event_type_id, event_type_name, is_active, base_amount) VALUES
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Birthday', TRUE, 500.00),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Farewell', TRUE, 1000.00),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Team Dinner', TRUE, 2000.00),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'Custom Event', TRUE, 1500.00);
-
-INSERT INTO users (user_id, email, password_hash, role, full_name, is_active) VALUES
-('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'admin@teamcontribution.local', '100000.v+81s0TtMH5cHma9kcAiGg==.yL2yB2nZvg/qorlAq/exryN969C/TW1HSSSeAPgN2ng=', 'Admin', 'System Administrator', TRUE),
-('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'member@teamcontribution.local', '100000.iij2d7FP46fK87x6bGdSoQ==.GgKzKQn4tepuZuoN5DGL8rhPLP4rphVrUZFSlq/aWk4=', 'Member', 'General Member', TRUE);
-
-INSERT INTO members (member_id, name, email, phone, role_id, date_of_birth, joining_date, gender, is_active, is_deleted) VALUES
-('cccccccc-cccc-cccc-cccc-ccccccccccc1', 'Aarav Patel', 'aarav.patel@team.local', '9876543210', '22222222-2222-2222-2222-222222222222', '1996-04-18', '2023-01-10', 'Male', TRUE, FALSE),
-('cccccccc-cccc-cccc-cccc-ccccccccccc2', 'Nisha Verma', 'nisha.verma@team.local', '9876501234', '33333333-3333-3333-3333-333333333333', '1992-04-25', '2021-09-15', 'Female', TRUE, FALSE),
-('cccccccc-cccc-cccc-cccc-ccccccccccc3', 'Rohan Das', 'rohan.das@team.local', '9012345678', '11111111-1111-1111-1111-111111111111', '1999-06-05', '2024-02-02', 'Male', TRUE, FALSE);
-
-INSERT INTO events (event_id, event_name, event_type_id, event_date, created_by, description, status, is_deleted, base_amount) VALUES
-('dddddddd-dddd-dddd-dddd-ddddddddddd1', 'April Team Dinner', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', CURRENT_DATE + INTERVAL '10 day', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'Quarterly dinner contribution event.', 'Planned', FALSE, 2000.00);
-
-INSERT INTO event_participants (id, event_id, member_id) VALUES
-('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1', 'dddddddd-dddd-dddd-dddd-ddddddddddd1', 'cccccccc-cccc-cccc-cccc-ccccccccccc1'),
-('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2', 'dddddddd-dddd-dddd-dddd-ddddddddddd1', 'cccccccc-cccc-cccc-cccc-ccccccccccc2'),
-('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee3', 'dddddddd-dddd-dddd-dddd-ddddddddddd1', 'cccccccc-cccc-cccc-cccc-ccccccccccc3');
-
-INSERT INTO contributions (contribution_id, event_id, member_id, amount, payment_status, payment_date, payment_mode, is_deleted) VALUES
-('ffffffff-ffff-ffff-ffff-fffffffffff1', 'dddddddd-dddd-dddd-dddd-ddddddddddd1', 'cccccccc-cccc-cccc-cccc-ccccccccccc1', 300.00, 'Paid', CURRENT_TIMESTAMP, 'Upi', FALSE),
-('ffffffff-ffff-ffff-ffff-fffffffffff2', 'dddddddd-dddd-dddd-dddd-ddddddddddd1', 'cccccccc-cccc-cccc-cccc-ccccccccccc2', 500.00, 'Pending', NULL, 'None', FALSE),
-('ffffffff-ffff-ffff-ffff-fffffffffff3', 'dddddddd-dddd-dddd-dddd-ddddddddddd1', 'cccccccc-cccc-cccc-cccc-ccccccccccc3', 150.00, 'Pending', NULL, 'None', FALSE);
-
--- Schema upgrades for existing databases:
-ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image VARCHAR(500) NULL;
-ALTER TABLE events ADD COLUMN IF NOT EXISTS base_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp VARCHAR(10) NULL;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_expiry TIMESTAMP WITH TIME ZONE NULL;
-ALTER TABLE event_types ADD COLUMN IF NOT EXISTS base_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
-ALTER TABLE members ADD COLUMN IF NOT EXISTS member_type VARCHAR(20) NOT NULL DEFAULT 'Office';
-
--- 1. Expenses Table
+-- 12. Expenses Table
 CREATE TABLE IF NOT EXISTS expenses (
-    expense_id UUID PRIMARY KEY,
+    expense_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     event_name VARCHAR(200) NOT NULL,
     category VARCHAR(100) NOT NULL,
-    amount NUMERIC(12,2) NOT NULL,
-    expense_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    status VARCHAR(50) NOT NULL,
+    amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+    expense_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) NOT NULL DEFAULT 'Pending',
     submitted_by VARCHAR(150) NOT NULL,
     approved_by VARCHAR(150) NULL,
     description VARCHAR(1000) NOT NULL DEFAULT '',
-    file_name VARCHAR(500) NULL,
+    file_name TEXT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by VARCHAR(150) NULL,
-    modified_on TIMESTAMP WITH TIME ZONE NULL
+    modified_on TIMESTAMPTZ NULL
 );
-CREATE INDEX IF NOT EXISTS ix_expenses_date_status ON expenses(expense_date, status);
 
--- 2. Support Tickets Table
+-- 13. Support Tickets Table
 CREATE TABLE IF NOT EXISTS support_tickets (
-    ticket_id UUID PRIMARY KEY,
+    ticket_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     ticket_no VARCHAR(50) NOT NULL UNIQUE,
     member_name VARCHAR(150) NOT NULL,
     member_id VARCHAR(100) NULL,
     related_event VARCHAR(200) NULL,
     ticket_type VARCHAR(100) NOT NULL,
     subject VARCHAR(300) NOT NULL,
-    description VARCHAR(2000) NOT NULL,
-    status VARCHAR(50) NOT NULL,
-    priority VARCHAR(50) NOT NULL,
+    description VARCHAR(2000) NOT NULL DEFAULT '',
+    status VARCHAR(50) NOT NULL DEFAULT 'Open',
+    priority VARCHAR(50) NOT NULL DEFAULT 'Medium',
     assigned_to VARCHAR(150) NULL,
     ref_no VARCHAR(100) NULL,
     utr VARCHAR(100) NULL,
-    attachment VARCHAR(500) NULL,
+    attachment TEXT NULL,
     resolution_notes VARCHAR(2000) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by VARCHAR(150) NULL,
-    modified_on TIMESTAMP WITH TIME ZONE NULL
+    modified_on TIMESTAMPTZ NULL
 );
-CREATE INDEX IF NOT EXISTS ix_support_tickets_status_priority ON support_tickets(status, priority);
 
--- 3. System Settings Table
+-- 14. System Settings Table
 CREATE TABLE IF NOT EXISTS system_settings (
-    setting_id UUID PRIMARY KEY,
+    setting_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     setting_key VARCHAR(100) NOT NULL UNIQUE,
     setting_value TEXT NOT NULL,
-    category VARCHAR(100) NOT NULL,
+    category VARCHAR(100) NOT NULL DEFAULT 'General',
     description VARCHAR(500) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by VARCHAR(150) NULL,
-    modified_on TIMESTAMP WITH TIME ZONE NULL
+    modified_on TIMESTAMPTZ NULL
 );
 
--- 4. Payment Transactions Table
+-- 15. Payment Transactions Table
 CREATE TABLE IF NOT EXISTS payment_transactions (
-    transaction_id UUID PRIMARY KEY,
+    transaction_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     txn_number VARCHAR(50) NOT NULL UNIQUE,
     member_name VARCHAR(150) NOT NULL,
     event_name VARCHAR(200) NOT NULL,
-    amount NUMERIC(12,2) NOT NULL,
-    payment_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    payment_mode VARCHAR(50) NOT NULL,
+    amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+    payment_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    payment_mode VARCHAR(50) NOT NULL DEFAULT 'UPI',
     utr VARCHAR(100) NULL,
-    status VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'Pending',
     verified_by VARCHAR(150) NULL,
-    verified_on TIMESTAMP WITH TIME ZONE NULL,
+    verified_on TIMESTAMPTZ NULL,
     notes VARCHAR(1000) NULL,
-    screenshot VARCHAR(500) NULL,
+    screenshot TEXT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by VARCHAR(150) NULL,
-    modified_on TIMESTAMP WITH TIME ZONE NULL
+    modified_on TIMESTAMPTZ NULL
 );
-CREATE INDEX IF NOT EXISTS ix_payment_transactions_date_status ON payment_transactions(payment_date, status);
 
--- 5. Gallery Photos Table
+-- 16. Gallery Photos Table
 CREATE TABLE IF NOT EXISTS gallery_photos (
-    photo_id UUID PRIMARY KEY,
+    photo_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title VARCHAR(200) NOT NULL,
     event_name VARCHAR(200) NOT NULL,
-    category VARCHAR(100) NOT NULL,
+    category VARCHAR(100) NOT NULL DEFAULT 'Moments',
     image_url TEXT NOT NULL,
-    taken_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    taken_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     description VARCHAR(1000) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    created_by VARCHAR(150) NOT NULL DEFAULT 'System',
-    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by VARCHAR(150) NULL,
-    modified_on TIMESTAMP WITH TIME ZONE NULL
+    modified_on TIMESTAMPTZ NULL
 );
+
+-- 17. Budget Calculations Table
+CREATE TABLE IF NOT EXISTS budget_calculations (
+    budget_calculation_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    expense_item VARCHAR(150) NOT NULL,
+    rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+    category VARCHAR(100) NULL DEFAULT 'Birthday',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+-- 18. Ticket Types Table
+CREATE TABLE IF NOT EXISTS ticket_types (
+    ticket_type_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    type_name VARCHAR(150) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+-- 19. Statuses Table
+CREATE TABLE IF NOT EXISTS statuses (
+    status_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    status_name VARCHAR(100) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+-- 20. Work Types Table
+CREATE TABLE IF NOT EXISTS work_types (
+    work_type_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    work_type_name VARCHAR(100) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+-- ============================================================================
+-- 2. SCHEMA UPGRADES (ALTER TABLE IF EXISTS ... ADD COLUMN IF NOT EXISTS)
+-- ============================================================================
+
+-- Roles
+ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS default_contribution_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Event Types
+ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS base_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS event_types ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Users
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS profile_image VARCHAR(500) NULL;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS password_reset_otp VARCHAR(10) NULL;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS password_reset_otp_expiry TIMESTAMPTZ NULL;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Members
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS member_type VARCHAR(20) NOT NULL DEFAULT 'Office';
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS is_exited BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Events
+ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS base_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Event Participants
+ALTER TABLE IF EXISTS event_participants ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS event_participants ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS event_participants ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS event_participants ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS event_participants ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS event_participants ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS event_participants ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Contributions
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS cash_amount NUMERIC(12,2) NULL;
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS upi_amount NUMERIC(12,2) NULL;
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Role Rights
+ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS role_rights ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Expenses
+ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Support Tickets
+ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS attachment TEXT NULL;
+ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+ALTER TABLE IF EXISTS support_tickets ALTER COLUMN attachment TYPE TEXT;
+
+-- System Settings
+ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Payment Transactions
+ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS payment_transactions ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+ALTER TABLE IF EXISTS payment_transactions ALTER COLUMN screenshot TYPE TEXT;
+
+-- Gallery Photos
+ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS gallery_photos ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+ALTER TABLE IF EXISTS gallery_photos ALTER COLUMN image_url TYPE TEXT;
+
+-- Budget Calculations
+ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Ticket Types
+ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS ticket_types ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+ALTER TABLE IF EXISTS ticket_types DROP COLUMN IF EXISTS description;
+
+-- Statuses
+ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Work Types
+ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS work_types ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Device Details
+ALTER TABLE IF EXISTS device_details ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS device_details ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS device_details ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS device_details ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Device Login History
+ALTER TABLE IF EXISTS device_login_history ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS device_login_history ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS device_login_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS device_login_history ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS device_login_history ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- User MFA Devices
+ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) DEFAULT 'System';
+ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- ============================================================================
+-- 3. INDEXES
+-- ============================================================================
+
+CREATE INDEX IF NOT EXISTS ix_members_role_active ON members(role_id, is_active);
+CREATE INDEX IF NOT EXISTS ix_events_date_type ON events(event_date, event_type_id);
+CREATE INDEX IF NOT EXISTS ix_contributions_event_status ON contributions(event_id, payment_status);
+CREATE INDEX IF NOT EXISTS ix_expenses_date_status ON expenses(expense_date, status);
+CREATE INDEX IF NOT EXISTS ix_support_tickets_status_priority ON support_tickets(status, priority);
+CREATE INDEX IF NOT EXISTS ix_payment_transactions_date_status ON payment_transactions(payment_date, status);
 CREATE INDEX IF NOT EXISTS ix_gallery_photos_event_category ON gallery_photos(event_name, category);
-
-
-
-
-
--- ============================================================================
--- AUDIT COLUMNS PATCH FOR ALL SYSTEM TABLES
--- ============================================================================
-
--- 1. CONTRIBUTIONS
-ALTER TABLE public.contributions
-    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 2. DEVICE_DETAILS
-ALTER TABLE public.device_details
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 3. DEVICE_LOGIN_HISTORY
-ALTER TABLE public.device_login_history
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 4. EVENT_PARTICIPANTS
-ALTER TABLE public.event_participants
-    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 5. EVENT_TYPES
-ALTER TABLE public.event_types
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 6. EVENTS
-ALTER TABLE public.events
-    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 7. EXPENSES
-ALTER TABLE public.expenses
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- 8. GALLERY_PHOTOS
-ALTER TABLE public.gallery_photos
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- 9. MEMBERS
-ALTER TABLE public.members
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 10. PAYMENT_TRANSACTIONS
-ALTER TABLE public.payment_transactions
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- 11. ROLE_RIGHTS
-ALTER TABLE public.role_rights
-    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 12. ROLES
-ALTER TABLE public.roles
-    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 13. SUPPORT_TICKETS
-ALTER TABLE public.support_tickets
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- 14. SYSTEM_SETTINGS
-ALTER TABLE public.system_settings
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- 15. USER_MFA_DEVICES
-ALTER TABLE public.user_mfa_devices
-    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
-
--- 16. USERS
-ALTER TABLE public.users
-    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL,
-    ADD COLUMN IF NOT EXISTS modified_on TIMESTAMP WITH TIME ZONE NULL;
+CREATE INDEX IF NOT EXISTS ix_budget_calculations_expense_item ON budget_calculations(expense_item);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_role_rights_role_module_sub_module_page ON role_rights(role, module, sub_module, page);

@@ -11,7 +11,8 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// </summary>
 [ApiVersion("1.0")]
 [ApiController]
-[Route("api/v{version:apiVersion}/dashboard")]
+[Authorize]
+[Route(CommonRoutes.Dashboard.Base)]
 public class DashboardController : ControllerBase
 {
     private readonly IDashboardService _dashboardService;
@@ -27,8 +28,8 @@ public class DashboardController : ControllerBase
     /// <param name="month">Optional month filter.</param>
     /// <param name="year">Optional year filter.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getSummaryDashboardAsync")]
-    [ActionName("GetSummaryDashboardAsync")]
+    [HttpGet(CommonRoutes.Dashboard.GetSummary)]
+    [ActionName(nameof(GetSummaryDashboardAsync))]
     public async Task<ActionResult<ApiResponse<DashboardSummaryDto>>> GetSummaryDashboardAsync([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
     {
         var result = await _dashboardService.GetSummaryDashboardAsync(month, year, cancellationToken);

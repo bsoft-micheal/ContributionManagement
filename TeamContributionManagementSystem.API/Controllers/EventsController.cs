@@ -13,7 +13,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/events")]
+[Route(CommonRoutes.Events.Base)]
 public class EventsController : ControllerBase
 {
     private readonly IEventService _eventService;
@@ -29,8 +29,8 @@ public class EventsController : ControllerBase
     /// <param name="month">Optional month filter (1-12).</param>
     /// <param name="year">Optional year filter.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getAllEventAsync")]
-    [ActionName("GetAllEventAsync")]
+    [HttpGet(CommonRoutes.Events.GetAll)]
+    [ActionName(nameof(GetAllEventAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<EventSummaryDto>>>> GetAllEventAsync([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
     {
         var result = await _eventService.GetAllEventAsync(month, year, cancellationToken);
@@ -42,8 +42,8 @@ public class EventsController : ControllerBase
     /// </summary>
     /// <param name="id">The unique identifier of the event.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getEventAsyncById/{id:guid}")]
-    [ActionName("GetEventAsyncById")]
+    [HttpGet(CommonRoutes.Events.GetById)]
+    [ActionName(nameof(GetEventAsyncById))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> GetEventAsyncById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _eventService.GetEventAsyncById(id, cancellationToken);
@@ -55,13 +55,13 @@ public class EventsController : ControllerBase
     /// </summary>
     /// <param name="request">The event details and participant list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpPost("saveEventAsync")]
-    [ActionName("SaveEventAsync")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.Events.Create)]
+    [ActionName(nameof(SaveEventAsync))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> SaveEventAsync([FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException("User identity is not available.");
+            ?? throw new UnauthorizedAccessException(CommonMessages.General.UserIdentityNotAvailable);
 
         var eventItem = await _eventService.SaveEventAsync(Guid.Parse(userIdClaim), request, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<EventDetailsDto>.SuccessResult(eventItem, CommonMessages.Events.SaveSuccess, CommonStatusCodes.Status201Created));
@@ -73,9 +73,9 @@ public class EventsController : ControllerBase
     /// <param name="id">The unique identifier of the event to update.</param>
     /// <param name="request">The updated event details and participant list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpPut("updateEventAsyncById/{id:guid}")]
-    [ActionName("UpdateEventAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPut(CommonRoutes.Events.Update)]
+    [ActionName(nameof(UpdateEventAsyncById))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> UpdateEventAsyncById(Guid id, [FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
     {
         var eventItem = await _eventService.UpdateEventAsyncById(id, request, cancellationToken);
@@ -87,9 +87,9 @@ public class EventsController : ControllerBase
     /// </summary>
     /// <param name="id">The unique identifier of the event to delete.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("deleteEventAsyncById/{id:guid}")]
-    [ActionName("DeleteEventAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpDelete(CommonRoutes.Events.Delete)]
+    [ActionName(nameof(DeleteEventAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteEventAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _eventService.DeleteEventAsyncById(id, cancellationToken);

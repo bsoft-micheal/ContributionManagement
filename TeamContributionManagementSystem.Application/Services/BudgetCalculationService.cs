@@ -69,7 +69,7 @@ public class BudgetCalculationService : IBudgetCalculationService
                 BudgetCalculationId = Guid.NewGuid(),
                 ExpenseItem = request.ExpenseItem.Trim(),
                 Rate = request.Rate,
-                Category = string.IsNullOrWhiteSpace(request.Category) ? "Birthday" : request.Category.Trim(),
+                Category = request.Category?.Trim() ?? string.Empty,
                 IsActive = request.IsActive,
                 IsDeleted = false,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user,

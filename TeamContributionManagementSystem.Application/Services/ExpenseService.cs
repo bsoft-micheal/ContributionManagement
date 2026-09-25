@@ -64,7 +64,7 @@ public class ExpenseService : IExpenseService
                 Category = request.Category.Trim(),
                 Amount = request.Amount,
                 ExpenseDate = request.ExpenseDate,
-                Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status.Trim(),
+                Status = request.Status?.Trim() ?? string.Empty,
                 SubmittedBy = request.SubmittedBy.Trim(),
                 ApprovedBy = request.ApprovedBy?.Trim(),
                 Description = request.Description.Trim(),
