@@ -265,6 +265,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasOne(x => x.DeviceDetail)
                 .WithMany(x => x.LoginHistories)
                 .HasForeignKey(x => x.DeviceDetailId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

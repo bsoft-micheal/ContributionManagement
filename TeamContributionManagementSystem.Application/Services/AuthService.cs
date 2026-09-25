@@ -183,44 +183,76 @@ public class AuthService : IAuthService
 
         if (deviceInfo != null)
         {
-            var device = await _deviceSessionRepository.GetDeviceByDeviceIdAsync(user.UserId, deviceInfo.DeviceId, cancellationToken);
-            if (device == null)
+            TeamContributionManagementSystem.Domain.Entities.DeviceDetail? device = null;
+
+            // Mobile Login (DeviceType == 2)
+            if (deviceInfo.DeviceType == 2)
             {
-                device = new TeamContributionManagementSystem.Domain.Entities.DeviceDetail
+                // Validate required mobile fields
+                if (string.IsNullOrWhiteSpace(deviceInfo.DeviceId) ||
+                    string.IsNullOrWhiteSpace(deviceInfo.DeviceName) ||
+                    string.IsNullOrWhiteSpace(deviceInfo.Brand) ||
+                    string.IsNullOrWhiteSpace(deviceInfo.Model) ||
+                    string.IsNullOrWhiteSpace(deviceInfo.Os) ||
+                    string.IsNullOrWhiteSpace(deviceInfo.OsVersion) ||
+                    string.IsNullOrWhiteSpace(deviceInfo.SystemName) ||
+                    string.IsNullOrWhiteSpace(deviceInfo.SystemVersion) ||
+                    string.IsNullOrWhiteSpace(deviceInfo.AppVersion) ||
+                    !deviceInfo.TotalMemory.HasValue || deviceInfo.TotalMemory <= 0)
                 {
-                    UserId = user.UserId,
-                    DeviceId = deviceInfo.DeviceId,
-                    DeviceName = deviceInfo.DeviceName,
-                    Brand = deviceInfo.Brand,
-                    Model = deviceInfo.Model,
-                    Os = deviceInfo.Os,
-                    OsVersion = deviceInfo.OsVersion,
-                    SystemName = deviceInfo.SystemName,
-                    SystemVersion = deviceInfo.SystemVersion,
-                    DeviceType = deviceInfo.DeviceType,
-                    AppVersion = deviceInfo.AppVersion,
-                    TotalMemory = deviceInfo.TotalMemory,
-                    Browser = deviceInfo.Browser,
-                    BrowserVersion = deviceInfo.BrowserVersion,
-                    IsActive = true,
-                    LastSeenAt = DateTime.UtcNow,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                _deviceSessionRepository.Add(device);
-            }
-            else
-            {
-                device.LastSeenAt = DateTime.UtcNow;
-                device.UpdatedAt = DateTime.UtcNow;
-                device.IsActive = true;
-                _deviceSessionRepository.Update(device);
+                    throw new InvalidOperationException("Mobile device information is incomplete. Required fields: DeviceId, DeviceName, Brand, Model, OS, OsVersion, SystemName, SystemVersion, AppVersion, TotalMemory.");
+                }
+
+                device = await _deviceSessionRepository.GetDeviceByDeviceIdAsync(user.UserId, deviceInfo.DeviceId, cancellationToken);
+                if (device == null)
+                {
+                    device = new TeamContributionManagementSystem.Domain.Entities.DeviceDetail
+                    {
+                        UserId = user.UserId,
+                        DeviceId = deviceInfo.DeviceId,
+                        DeviceName = deviceInfo.DeviceName,
+                        Brand = deviceInfo.Brand,
+                        Model = deviceInfo.Model,
+                        Os = deviceInfo.Os,
+                        OsVersion = deviceInfo.OsVersion,
+                        SystemName = deviceInfo.SystemName,
+                        SystemVersion = deviceInfo.SystemVersion,
+                        DeviceType = deviceInfo.DeviceType,
+                        AppVersion = deviceInfo.AppVersion,
+                        TotalMemory = deviceInfo.TotalMemory,
+                        Browser = deviceInfo.Browser,
+                        BrowserVersion = deviceInfo.BrowserVersion,
+                        IsActive = true,
+                        LastSeenAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _deviceSessionRepository.Add(device);
+                }
+                else
+                {
+                    device.DeviceName = deviceInfo.DeviceName;
+                    device.Brand = deviceInfo.Brand;
+                    device.Model = deviceInfo.Model;
+                    device.Os = deviceInfo.Os;
+                    device.OsVersion = deviceInfo.OsVersion;
+                    device.SystemName = deviceInfo.SystemName;
+                    device.SystemVersion = deviceInfo.SystemVersion;
+                    device.AppVersion = deviceInfo.AppVersion;
+                    device.TotalMemory = deviceInfo.TotalMemory;
+                    device.LastSeenAt = DateTime.UtcNow;
+                    device.UpdatedAt = DateTime.UtcNow;
+                    device.IsActive = true;
+                    _deviceSessionRepository.Update(device);
+                }
             }
 
+            // Always create DeviceLoginHistory session tracking for both Web and Mobile
             var loginHistory = new TeamContributionManagementSystem.Domain.Entities.DeviceLoginHistory
             {
                 UserId = user.UserId,
                 DeviceDetail = device,
+                DeviceDetailId = device?.Id,
                 LoginTime = DateTime.UtcNow,
                 IsActive = true
             };
@@ -231,7 +263,7 @@ public class AuthService : IAuthService
         }
         else
         {
-             await _unitOfWork.SaveChangesAsync(cancellationToken); // To save OTP clear if applicable
+            await _unitOfWork.SaveChangesAsync(cancellationToken); // To save OTP clear if applicable
         }
 
         var response = _jwtTokenGenerator.GenerateToken(user, sessionId);

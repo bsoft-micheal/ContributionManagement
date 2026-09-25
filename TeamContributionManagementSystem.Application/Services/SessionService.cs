@@ -59,7 +59,7 @@ public class SessionService : ISessionService
             history.IsActive = false;
             history.LogoutTime = DateTime.UtcNow;
 
-            if (history.DeviceDetail != null)
+            if (history.DeviceDetail != null && history.DeviceDetail.DeviceType == 2)
             {
                 history.DeviceDetail.IsActive = false;
             }
