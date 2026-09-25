@@ -57,10 +57,10 @@ public class MemberRepository : IMemberRepository
         try
         {
             var ids = memberIds.ToList();
-        return await _context.Members
-            .Include(x => x.Role)
-            .Where(x => ids.Contains(x.MemberId) && !x.IsDeleted && x.IsActive)
-            .ToListAsync(cancellationToken);
+            return await _context.Members
+                .Include(x => x.Role)
+                .Where(x => ids.Contains(x.MemberId) && !x.IsDeleted)
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {

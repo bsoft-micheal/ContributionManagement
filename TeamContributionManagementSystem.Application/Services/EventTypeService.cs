@@ -52,6 +52,11 @@ public class EventTypeService : IEventTypeService
             EventTypeName = request.EventTypeName.Trim(),
             IsActive = request.IsActive,
             BaseAmount = request.BaseAmount,
+            HasTenureRule = request.HasTenureRule,
+            TenureThresholdYears = request.TenureThresholdYears > 0 ? request.TenureThresholdYears : 1.0m,
+            NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m,
+            StandardSharePercentage = request.StandardSharePercentage > 0 ? request.StandardSharePercentage : 100.0m,
+            RuleDescription = request.RuleDescription?.Trim(),
             CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user,
             CreatedAt = DateTime.UtcNow
         };
@@ -84,6 +89,11 @@ public class EventTypeService : IEventTypeService
         eventType.EventTypeName = request.EventTypeName.Trim();
         eventType.IsActive = request.IsActive;
         eventType.BaseAmount = request.BaseAmount;
+        eventType.HasTenureRule = request.HasTenureRule;
+        eventType.TenureThresholdYears = request.TenureThresholdYears > 0 ? request.TenureThresholdYears : 1.0m;
+        eventType.NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m;
+        eventType.StandardSharePercentage = request.StandardSharePercentage > 0 ? request.StandardSharePercentage : 100.0m;
+        eventType.RuleDescription = request.RuleDescription?.Trim();
         eventType.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user;
         eventType.ModifiedOn = DateTime.UtcNow;
 

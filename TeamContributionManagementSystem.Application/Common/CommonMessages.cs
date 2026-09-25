@@ -122,6 +122,8 @@ public static class CommonMessages
         public const string GetAllSuccess = "Payment transactions retrieved successfully.";
         public const string GetByIdSuccess = "Payment transaction retrieved successfully.";
         public const string SaveSuccess = "Payment transaction created successfully.";
+        public const string SubmitProofSuccess = "Payment proof submitted successfully. An administrator will verify it shortly.";
+        public const string GetContextSuccess = "Payment context loaded successfully.";
         public const string VerifySuccess = "Payment transaction verified successfully.";
         public const string DeleteSuccess = "Payment transaction deleted successfully.";
     }

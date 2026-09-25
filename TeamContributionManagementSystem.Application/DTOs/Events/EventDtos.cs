@@ -21,6 +21,14 @@ public class EventSummaryDto
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
+
+    // Calculation Rule Properties (inherited from EventType)
+    public bool HasTenureRule { get; set; }
+    public decimal TenureThresholdYears { get; set; }
+    public decimal NewEntrantSharePercentage { get; set; }
+    public decimal StandardSharePercentage { get; set; }
+    public string? RuleDescription { get; set; }
+
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }
 
