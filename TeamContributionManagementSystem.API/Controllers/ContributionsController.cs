@@ -13,7 +13,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/contributions")]
+[Route(CommonRoutes.Contributions.Base)]
 public class ContributionsController : ControllerBase
 {
     private readonly IContributionService _contributionService;
@@ -26,8 +26,8 @@ public class ContributionsController : ControllerBase
     /// <summary>
     /// Retrieves a list of all contributions across all events.
     /// </summary>
-    [HttpGet("getAllContributionAsync")]
-    [ActionName("GetAllContributionAsync")]
+    [HttpGet(CommonRoutes.Contributions.GetAll)]
+    [ActionName(nameof(GetAllContributionAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<ContributionDto>>>> GetAllContributionAsync(CancellationToken cancellationToken)
     {
         var result = await _contributionService.GetAllContributionAsync(cancellationToken);
@@ -39,8 +39,8 @@ public class ContributionsController : ControllerBase
     /// </summary>
     /// <param name="eventId">The unique identifier of the event.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getContributionAsyncByEvent/{eventId:guid}")]
-    [ActionName("GetContributionAsyncByEvent")]
+    [HttpGet(CommonRoutes.Contributions.GetByEvent)]
+    [ActionName(nameof(GetContributionAsyncByEvent))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<ContributionDto>>>> GetContributionAsyncByEvent(Guid eventId, CancellationToken cancellationToken)
     {
         var result = await _contributionService.GetContributionAsyncByEventId(eventId, cancellationToken);
@@ -51,8 +51,8 @@ public class ContributionsController : ControllerBase
     /// Retrieves a summary of the currently authenticated user's personal contributions (total paid, pending, etc.).
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getMySummaryAsync")]
-    [ActionName("GetMySummaryAsync")]
+    [HttpGet(CommonRoutes.Contributions.GetMySummary)]
+    [ActionName(nameof(GetMySummaryAsync))]
     public async Task<ActionResult<ApiResponse<MemberContributionSummaryDto>>> GetMySummaryAsync(CancellationToken cancellationToken)
     {
         var email = User.FindFirstValue(ClaimTypes.Email)
@@ -60,7 +60,7 @@ public class ContributionsController : ControllerBase
             ?? User.FindFirstValue("email");
 
         if (string.IsNullOrEmpty(email))
-            return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<MemberContributionSummaryDto>.FailureResult("Unable to determine current user identity.", CommonStatusCodes.Status401Unauthorized));
+            return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<MemberContributionSummaryDto>.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
 
         var summary = await _contributionService.GetMySummaryAsync(email, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<MemberContributionSummaryDto>.SuccessResult(summary, CommonMessages.Contributions.GetMySummarySuccess, CommonStatusCodes.Status200OK));
@@ -71,8 +71,8 @@ public class ContributionsController : ControllerBase
     /// </summary>
     /// <param name="request">The payment details (amount, event ID, etc.).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpPost("savePayContributionAsync")]
-    [ActionName("SavePayContributionAsync")]
+    [HttpPost(CommonRoutes.Contributions.Pay)]
+    [ActionName(nameof(SavePayContributionAsync))]
     public async Task<ActionResult<ApiResponse<ContributionDto>>> SavePayContributionAsync([FromBody] PayContributionRequestDto request, CancellationToken cancellationToken)
     {
         var result = await _contributionService.SavePayContributionAsync(request, cancellationToken);

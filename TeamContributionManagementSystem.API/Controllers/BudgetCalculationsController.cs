@@ -13,7 +13,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/budget-calculations")]
+[Route(CommonRoutes.BudgetCalculations.Base)]
 public class BudgetCalculationsController : ControllerBase
 {
     private readonly IBudgetCalculationService _budgetCalculationService;
@@ -26,8 +26,8 @@ public class BudgetCalculationsController : ControllerBase
     /// <summary>
     /// Retrieves all budget calculation items and rates.
     /// </summary>
-    [HttpGet("getAllBudgetCalculationAsync")]
-    [ActionName("GetAllBudgetCalculationAsync")]
+    [HttpGet(CommonRoutes.BudgetCalculations.GetAll)]
+    [ActionName(nameof(GetAllBudgetCalculationAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<BudgetCalculationDto>>>> GetAllBudgetCalculationAsync(CancellationToken cancellationToken)
     {
         var result = await _budgetCalculationService.GetAllBudgetCalculationAsync(cancellationToken);
@@ -37,8 +37,8 @@ public class BudgetCalculationsController : ControllerBase
     /// <summary>
     /// Retrieves a budget calculation item by ID.
     /// </summary>
-    [HttpGet("getBudgetCalculationAsyncById/{id:guid}")]
-    [ActionName("GetBudgetCalculationAsyncById")]
+    [HttpGet(CommonRoutes.BudgetCalculations.GetById)]
+    [ActionName(nameof(GetBudgetCalculationAsyncById))]
     public async Task<ActionResult<ApiResponse<BudgetCalculationDto>>> GetBudgetCalculationAsyncById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _budgetCalculationService.GetBudgetCalculationAsyncById(id, cancellationToken);
@@ -52,9 +52,9 @@ public class BudgetCalculationsController : ControllerBase
     /// <summary>
     /// Creates a new budget calculation item (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpPost("saveBudgetCalculationAsync")]
-    [ActionName("SaveBudgetCalculationAsync")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.BudgetCalculations.Create)]
+    [ActionName(nameof(SaveBudgetCalculationAsync))]
     public async Task<ActionResult<ApiResponse<BudgetCalculationDto>>> SaveBudgetCalculationAsync([FromBody] CreateBudgetCalculationRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -65,9 +65,9 @@ public class BudgetCalculationsController : ControllerBase
     /// <summary>
     /// Updates an existing budget calculation item (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpPut("updateBudgetCalculationAsyncById/{id:guid}")]
-    [ActionName("UpdateBudgetCalculationAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPut(CommonRoutes.BudgetCalculations.Update)]
+    [ActionName(nameof(UpdateBudgetCalculationAsyncById))]
     public async Task<ActionResult<ApiResponse<BudgetCalculationDto>>> UpdateBudgetCalculationAsyncById(Guid id, [FromBody] UpdateBudgetCalculationRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -78,9 +78,9 @@ public class BudgetCalculationsController : ControllerBase
     /// <summary>
     /// Deletes a budget calculation item (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("deleteBudgetCalculationAsyncById/{id:guid}")]
-    [ActionName("DeleteBudgetCalculationAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpDelete(CommonRoutes.BudgetCalculations.Delete)]
+    [ActionName(nameof(DeleteBudgetCalculationAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteBudgetCalculationAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _budgetCalculationService.DeleteBudgetCalculationAsyncById(id, cancellationToken);

@@ -12,8 +12,8 @@ public class SupportTicketDto
     public string TicketType { get; set; } = string.Empty;
     public string Subject { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string Status { get; set; } = "Open";
-    public string Priority { get; set; } = "Medium";
+    public string Status { get; set; } = string.Empty;
+    public string Priority { get; set; } = string.Empty;
     public string? AssignedTo { get; set; }
     public string? RefNo { get; set; }
     public string? Utr { get; set; }
@@ -41,7 +41,7 @@ public class CreateSupportTicketRequestDto
 
     [Required]
     [MaxLength(100)]
-    public string TicketType { get; set; } = "General Query";
+    public string TicketType { get; set; } = string.Empty;
 
     [Required]
     [MaxLength(300)]
@@ -52,7 +52,7 @@ public class CreateSupportTicketRequestDto
     public string Description { get; set; } = string.Empty;
 
     [MaxLength(50)]
-    public string Priority { get; set; } = "Medium";
+    public string Priority { get; set; } = string.Empty;
 
     [MaxLength(150)]
     public string? AssignedTo { get; set; }

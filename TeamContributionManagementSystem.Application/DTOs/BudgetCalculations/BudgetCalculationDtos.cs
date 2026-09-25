@@ -7,7 +7,7 @@ public class BudgetCalculationDto
     public Guid BudgetCalculationId { get; set; }
     public string ExpenseItem { get; set; } = string.Empty;
     public decimal Rate { get; set; }
-    public string? Category { get; set; } = "Birthday";
+    public string? Category { get; set; }
     public bool IsActive { get; set; }
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
@@ -26,7 +26,7 @@ public class CreateBudgetCalculationRequestDto
     public decimal Rate { get; set; }
 
     [MaxLength(100)]
-    public string? Category { get; set; } = "Birthday";
+    public string? Category { get; set; }
 
     public bool IsActive { get; set; } = true;
 }

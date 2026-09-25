@@ -13,7 +13,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/statuses")]
+[Route(CommonRoutes.Statuses.Base)]
 public class StatusesController : ControllerBase
 {
     private readonly IStatusService _statusService;
@@ -26,8 +26,8 @@ public class StatusesController : ControllerBase
     /// <summary>
     /// Retrieves all statuses.
     /// </summary>
-    [HttpGet("getAllStatusAsync")]
-    [ActionName("GetAllStatusAsync")]
+    [HttpGet(CommonRoutes.Statuses.GetAll)]
+    [ActionName(nameof(GetAllStatusAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<StatusDto>>>> GetAllStatusAsync([FromQuery] bool? activeOnly, CancellationToken cancellationToken)
     {
         var result = await _statusService.GetAllStatusAsync(activeOnly, cancellationToken);
@@ -37,8 +37,8 @@ public class StatusesController : ControllerBase
     /// <summary>
     /// Retrieves a status by ID.
     /// </summary>
-    [HttpGet("getStatusAsyncById/{id:guid}")]
-    [ActionName("GetStatusAsyncById")]
+    [HttpGet(CommonRoutes.Statuses.GetById)]
+    [ActionName(nameof(GetStatusAsyncById))]
     public async Task<ActionResult<ApiResponse<StatusDto>>> GetStatusAsyncById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _statusService.GetStatusAsyncById(id, cancellationToken);
@@ -52,9 +52,9 @@ public class StatusesController : ControllerBase
     /// <summary>
     /// Creates a new status (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpPost("saveStatusAsync")]
-    [ActionName("SaveStatusAsync")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.Statuses.Create)]
+    [ActionName(nameof(SaveStatusAsync))]
     public async Task<ActionResult<ApiResponse<StatusDto>>> SaveStatusAsync([FromBody] CreateStatusRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -65,9 +65,9 @@ public class StatusesController : ControllerBase
     /// <summary>
     /// Updates an existing status (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpPut("updateStatusAsyncById/{id:guid}")]
-    [ActionName("UpdateStatusAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPut(CommonRoutes.Statuses.Update)]
+    [ActionName(nameof(UpdateStatusAsyncById))]
     public async Task<ActionResult<ApiResponse<StatusDto>>> UpdateStatusAsyncById(Guid id, [FromBody] UpdateStatusRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -78,9 +78,9 @@ public class StatusesController : ControllerBase
     /// <summary>
     /// Deletes a status (Admin only).
     /// </summary>
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("deleteStatusAsyncById/{id:guid}")]
-    [ActionName("DeleteStatusAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpDelete(CommonRoutes.Statuses.Delete)]
+    [ActionName(nameof(DeleteStatusAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteStatusAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _statusService.DeleteStatusAsyncById(id, cancellationToken);

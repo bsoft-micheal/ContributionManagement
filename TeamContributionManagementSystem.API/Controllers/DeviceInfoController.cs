@@ -10,7 +10,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// Manages user login sessions, including tracking active devices and logging out remote sessions.
 /// </summary>
 [ApiController]
-[Route("api/v1/device-info")]
+[Route(CommonRoutes.DeviceInfo.Base)]
 [Authorize]
 public class DeviceInfoController : ControllerBase
 {
@@ -24,8 +24,8 @@ public class DeviceInfoController : ControllerBase
     /// <summary>
     /// Retrieves a list of all currently active sessions (devices) for the authenticated user.
     /// </summary>
-    [HttpGet("getActiveSessionAsync")]
-    [ActionName("GetActiveSessionAsync")]
+    [HttpGet(CommonRoutes.DeviceInfo.GetActiveSessions)]
+    [ActionName(nameof(GetActiveSessionAsync))]
     public async Task<ActionResult<ApiResponse<object>>> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         var userId = GetUserId();
@@ -36,8 +36,8 @@ public class DeviceInfoController : ControllerBase
     /// <summary>
     /// Retrieves the historical log of past and present logins for the authenticated user.
     /// </summary>
-    [HttpGet("getSessionHistoryAsync")]
-    [ActionName("GetSessionHistoryAsync")]
+    [HttpGet(CommonRoutes.DeviceInfo.GetSessionHistory)]
+    [ActionName(nameof(GetSessionHistoryAsync))]
     public async Task<ActionResult<ApiResponse<object>>> GetSessionHistoryAsync(CancellationToken cancellationToken)
     {
         var userId = GetUserId();
@@ -50,8 +50,8 @@ public class DeviceInfoController : ControllerBase
     /// </summary>
     /// <param name="historyId">The unique identifier of the session history record.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpDelete("logoutSessionAsync/{historyId:guid}")]
-    [ActionName("LogoutSessionAsync")]
+    [HttpDelete(CommonRoutes.DeviceInfo.LogoutSession)]
+    [ActionName(nameof(LogoutSessionAsync))]
     public async Task<ActionResult<ApiResponse>> LogoutSessionAsync(Guid historyId, CancellationToken cancellationToken)
     {
         var userId = GetUserId();
@@ -62,8 +62,8 @@ public class DeviceInfoController : ControllerBase
     /// <summary>
     /// Terminates the current active session (the device making this request).
     /// </summary>
-    [HttpPost("logoutCurrentSessionAsync")]
-    [ActionName("LogoutCurrentSessionAsync")]
+    [HttpPost(CommonRoutes.DeviceInfo.LogoutCurrentSession)]
+    [ActionName(nameof(LogoutCurrentSessionAsync))]
     public async Task<ActionResult<ApiResponse>> LogoutCurrentSessionAsync(CancellationToken cancellationToken)
     {
         var userId = GetUserId();
@@ -82,6 +82,6 @@ public class DeviceInfoController : ControllerBase
         {
             return userId;
         }
-        throw new UnauthorizedAccessException("Invalid user token.");
+        throw new UnauthorizedAccessException(CommonMessages.General.Unauthorized);
     }
 }

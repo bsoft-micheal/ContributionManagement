@@ -10,6 +10,12 @@ public static class CommonMessages
         public const string Success = "Operation completed successfully.";
         public const string Failure = "An unexpected error occurred.";
         public const string NotFound = "The requested record was not found.";
+        public const string InvalidRequestBody = "The request body is invalid or empty.";
+        public const string DeserializationFailed = "JSON deserialization failed.";
+        public const string NullOrEmptyRequestList = "The request body deserialized to null or empty list.";
+        public const string NullRequestItem = "One of the request items is null.";
+        public const string Unauthorized = "Unauthorized";
+        public const string UserIdentityNotAvailable = "User identity is not available.";
     }
 
     public static class Auth
@@ -19,6 +25,9 @@ public static class CommonMessages
         public const string ForgotPasswordOtpSentSuccess = "If the email is registered, a password reset OTP has been sent.";
         public const string ForgotPasswordOtpVerifiedSuccess = "OTP verified successfully. You may proceed to reset your password.";
         public const string PasswordResetSuccess = "Your password has been successfully reset. Please log in with your new credentials.";
+        public const string InvalidOrExpiredOtp = "Invalid or expired password reset OTP.";
+        public const string InvalidCredentials = "Invalid email or password.";
+        public const string UserNotFound = "User not found.";
     }
 
     public static class Events
@@ -134,6 +143,7 @@ public static class CommonMessages
         public const string VerifySetupSuccess = "MFA verification completed successfully.";
         public const string GetDevicesSuccess = "Registered MFA devices retrieved successfully.";
         public const string RemoveDeviceSuccess = "MFA device removed successfully.";
+        public const string InvalidOtpCode = "Invalid OTP code";
     }
 
     public static class Settings

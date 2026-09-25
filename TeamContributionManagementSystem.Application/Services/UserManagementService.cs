@@ -347,7 +347,7 @@ public class UserManagementService : IUserManagementService
             {
                 // If this user does not have a member record yet (e.g. system admin), create one so the profile is fully backed
                 var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
-                var defaultRole = allRoles.FirstOrDefault(r => r.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase)) 
+                var defaultRole = (user.RoleId.HasValue ? allRoles.FirstOrDefault(r => r.RoleId == user.RoleId) : null) 
                                   ?? allRoles.FirstOrDefault();
 
                 if (defaultRole != null)
@@ -359,7 +359,7 @@ public class UserManagementService : IUserManagementService
                         Email = newEmail,
                         Phone = request.Phone?.Trim() ?? string.Empty,
                         Gender = request.Gender?.Trim() ?? string.Empty,
-                        MemberType = string.IsNullOrWhiteSpace(request.MemberType) ? "Office" : request.MemberType.Trim(),
+                        MemberType = request.MemberType?.Trim() ?? string.Empty,
                         RoleId = defaultRole.RoleId,
                         DateOfBirth = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
                             ? request.DateOfBirth.Value.ToUniversalTime()

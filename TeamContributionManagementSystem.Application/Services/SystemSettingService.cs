@@ -139,6 +139,8 @@ public class SystemSettingService : ISystemSettingService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        EnsureGpayImageExists();
+
         return await GetSettingsAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -160,5 +162,30 @@ public class SystemSettingService : ISystemSettingService
             _logger.LogError(ex, "Error in ResetSettingsAsync");
             throw;
         }
+    }
+
+    private static void EnsureGpayImageExists()
+    {
+        try
+        {
+            var targetDir = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            var targetFile = Path.Combine(targetDir, "gpay.png");
+            if (!File.Exists(targetFile))
+            {
+                var candidateSources = new[]
+                {
+                    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "wwwroot", "gpay.png")),
+                    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "TeamContributionManagementSystem.API", "wwwroot", "gpay.png")),
+                    @"d:\ContributionManagement\backend\ContributionManagement\TeamContributionManagementSystem.API\wwwroot\gpay.png"
+                };
+                var source = candidateSources.FirstOrDefault(File.Exists);
+                if (source != null)
+                {
+                    Directory.CreateDirectory(targetDir);
+                    File.Copy(source, targetFile, true);
+                }
+            }
+        }
+        catch { }
     }
 }

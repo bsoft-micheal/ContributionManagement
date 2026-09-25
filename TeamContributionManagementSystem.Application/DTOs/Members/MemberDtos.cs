@@ -16,7 +16,7 @@ public class MemberDto
     public string Gender { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public bool IsExited { get; set; }
-    public string MemberType { get; set; } = "Office";
+    public string MemberType { get; set; } = string.Empty;
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
@@ -51,7 +51,7 @@ public class CreateMemberRequestDto
 
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
-    public string MemberType { get; set; } = "Office";
+    public string MemberType { get; set; } = string.Empty;
 }
 
 public class UpdateMemberRequestDto : CreateMemberRequestDto

@@ -12,7 +12,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// </summary>
 [ApiVersion("1.0")]
 [ApiController]
-[Route("api/v{version:apiVersion}/members")]
+[Route(CommonRoutes.Members.Base)]
 public class MembersController : ControllerBase
 {
     private readonly IMemberService _memberService;
@@ -25,8 +25,8 @@ public class MembersController : ControllerBase
     /// <summary>
     /// Retrieves a list of all active members.
     /// </summary>
-    [HttpGet("getAllMemberAsync")]
-    [ActionName("GetAllMemberAsync")]
+    [HttpGet(CommonRoutes.Members.GetAll)]
+    [ActionName(nameof(GetAllMemberAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<MemberDto>>>> GetAllMemberAsync(CancellationToken cancellationToken)
     {
         var result = await _memberService.GetAllMemberAsync(cancellationToken);
@@ -38,9 +38,9 @@ public class MembersController : ControllerBase
     /// </summary>
     /// <param name="request">The member details.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpPost("saveMemberAsync")]
-    [ActionName("SaveMemberAsync")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.Members.Create)]
+    [ActionName(nameof(SaveMemberAsync))]
     public async Task<ActionResult<ApiResponse<MemberDto>>> SaveMemberAsync([FromBody] CreateMemberRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -53,9 +53,9 @@ public class MembersController : ControllerBase
     /// </summary>
     /// <param name="jsonElement">A JSON array containing member details.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpPost("saveBulkMemberAsync")]
-    [ActionName("SaveBulkMemberAsync")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.Members.SaveBulk)]
+    [ActionName(nameof(SaveBulkMemberAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<MemberDto>>>> SaveBulkMemberAsync([FromBody] System.Text.Json.JsonElement jsonElement, CancellationToken cancellationToken)
     {
         try
@@ -70,7 +70,7 @@ public class MembersController : ControllerBase
             
             if (requests == null || requests.Count == 0)
             {
-                return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult("The request body deserialized to null or empty list.", CommonStatusCodes.Status400BadRequest));
+                return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult(CommonMessages.General.NullOrEmptyRequestList, CommonStatusCodes.Status400BadRequest));
             }
 
             var created = new List<MemberDto>();
@@ -78,7 +78,7 @@ public class MembersController : ControllerBase
             {
                 if (req == null)
                 {
-                    return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult("One of the member request items is null.", CommonStatusCodes.Status400BadRequest));
+                    return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult(CommonMessages.General.NullRequestItem, CommonStatusCodes.Status400BadRequest));
                 }
                 created.Add(await _memberService.SaveMemberAsync(req, currentUser, cancellationToken));
             }
@@ -86,7 +86,7 @@ public class MembersController : ControllerBase
         }
         catch (System.Text.Json.JsonException jsonEx)
         {
-            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult($"JSON deserialization failed: {jsonEx.Message}", CommonStatusCodes.Status400BadRequest));
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult($"{CommonMessages.General.DeserializationFailed}: {jsonEx.Message}", CommonStatusCodes.Status400BadRequest));
         }
         catch (Exception ex)
         {
@@ -100,9 +100,9 @@ public class MembersController : ControllerBase
     /// <param name="id">The unique identifier of the member.</param>
     /// <param name="request">The updated member details.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpPut("updateMemberAsyncById/{id:guid}")]
-    [ActionName("UpdateMemberAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPut(CommonRoutes.Members.Update)]
+    [ActionName(nameof(UpdateMemberAsyncById))]
     public async Task<ActionResult<ApiResponse<MemberDto>>> UpdateMemberAsyncById(Guid id, [FromBody] UpdateMemberRequestDto request, CancellationToken cancellationToken)
     {
         var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
@@ -115,9 +115,9 @@ public class MembersController : ControllerBase
     /// </summary>
     /// <param name="id">The unique identifier of the member to delete.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("deleteMemberAsyncById/{id:guid}")]
-    [ActionName("DeleteMemberAsyncById")]
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpDelete(CommonRoutes.Members.Delete)]
+    [ActionName(nameof(DeleteMemberAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteMemberAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _memberService.DeleteMemberAsyncById(id, cancellationToken);
