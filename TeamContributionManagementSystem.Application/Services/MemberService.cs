@@ -13,14 +13,22 @@ public class MemberService : IMemberService
     private readonly ILogger<MemberService> _logger;
     private readonly IMemberRepository _memberRepository;
     private readonly IRoleRepository _roleRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public MemberService(ILogger<MemberService> logger, IMemberRepository memberRepository, IRoleRepository roleRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public MemberService(
+        ILogger<MemberService> logger,
+        IMemberRepository memberRepository,
+        IRoleRepository roleRepository,
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        IMapper mapper)
     {
         _logger = logger;
         _memberRepository = memberRepository;
         _roleRepository = roleRepository;
+        _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
     }
@@ -30,7 +38,31 @@ public class MemberService : IMemberService
         try
         {
             var members = await _memberRepository.GetAllAsync(cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<MemberDto>>(members);
+            var dtos = _mapper.Map<List<MemberDto>>(members);
+
+            try
+            {
+                var users = await _userRepository.GetAllAsync(cancellationToken);
+                var userDict = users.ToDictionary(u => u.UserId.ToString(), u => u.FullName, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var dto in dtos)
+                {
+                    if (!string.IsNullOrWhiteSpace(dto.CreatedBy) && userDict.TryGetValue(dto.CreatedBy, out var createdByName))
+                    {
+                        dto.CreatedBy = createdByName;
+                    }
+                    if (!string.IsNullOrWhiteSpace(dto.ModifiedBy) && userDict.TryGetValue(dto.ModifiedBy, out var modByName))
+                    {
+                        dto.ModifiedBy = modByName;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not resolve user names for member audit fields");
+            }
+
+            return dtos;
         }
         catch (Exception ex)
         {
@@ -75,7 +107,13 @@ public class MemberService : IMemberService
                 ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
 
             _logger.LogInformation(CommonLogMessages.Members.MemberCreated, member.Name, member.MemberId);
-            return _mapper.Map<MemberDto>(created);
+            var resultDto = _mapper.Map<MemberDto>(created);
+            if (!string.IsNullOrWhiteSpace(resultDto.CreatedBy) && Guid.TryParse(resultDto.CreatedBy, out var cGuid))
+            {
+                var u = await _userRepository.GetByIdAsync(cGuid, cancellationToken);
+                if (u != null) resultDto.CreatedBy = u.FullName;
+            }
+            return resultDto;
         }
         catch (Exception ex)
         {
@@ -122,7 +160,18 @@ public class MemberService : IMemberService
                 ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
 
             _logger.LogInformation(CommonLogMessages.Members.MemberUpdated, member.MemberId);
-            return _mapper.Map<MemberDto>(updated);
+            var resultDto = _mapper.Map<MemberDto>(updated);
+            if (!string.IsNullOrWhiteSpace(resultDto.CreatedBy) && Guid.TryParse(resultDto.CreatedBy, out var cGuid))
+            {
+                var u = await _userRepository.GetByIdAsync(cGuid, cancellationToken);
+                if (u != null) resultDto.CreatedBy = u.FullName;
+            }
+            if (!string.IsNullOrWhiteSpace(resultDto.ModifiedBy) && Guid.TryParse(resultDto.ModifiedBy, out var mGuid))
+            {
+                var u = await _userRepository.GetByIdAsync(mGuid, cancellationToken);
+                if (u != null) resultDto.ModifiedBy = u.FullName;
+            }
+            return resultDto;
         }
         catch (Exception ex)
         {

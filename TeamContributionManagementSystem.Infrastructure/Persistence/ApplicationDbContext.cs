@@ -366,6 +366,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
 
     private void ApplyAuditInformation()
     {
+        var currentUserName = _currentUserService?.UserName ?? _currentUserService?.UserId;
         var currentUserId = _currentUserService?.UserId;
         var now = DateTime.UtcNow;
 
@@ -379,9 +380,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                     if (createdByProp.ClrType == typeof(string))
                     {
                         var existingValue = entry.Property("CreatedBy").CurrentValue as string;
-                        if (string.IsNullOrWhiteSpace(existingValue) && !string.IsNullOrWhiteSpace(currentUserId))
+                        if (string.IsNullOrWhiteSpace(existingValue) && !string.IsNullOrWhiteSpace(currentUserName))
                         {
-                            entry.Property("CreatedBy").CurrentValue = currentUserId;
+                            entry.Property("CreatedBy").CurrentValue = currentUserName;
                         }
                     }
                     else if (createdByProp.ClrType == typeof(Guid) || createdByProp.ClrType == typeof(Guid?))
@@ -425,9 +426,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 var modifiedByProp = entry.Metadata.FindProperty("ModifiedBy");
                 if (modifiedByProp != null)
                 {
-                    if (modifiedByProp.ClrType == typeof(string) && !string.IsNullOrWhiteSpace(currentUserId))
+                    if (modifiedByProp.ClrType == typeof(string) && !string.IsNullOrWhiteSpace(currentUserName))
                     {
-                        entry.Property("ModifiedBy").CurrentValue = currentUserId;
+                        entry.Property("ModifiedBy").CurrentValue = currentUserName;
                     }
                     else if ((modifiedByProp.ClrType == typeof(Guid) || modifiedByProp.ClrType == typeof(Guid?)) && !string.IsNullOrWhiteSpace(currentUserId) && Guid.TryParse(currentUserId, out var parsedGuid))
                     {
