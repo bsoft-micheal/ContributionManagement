@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
 namespace TeamContributionManagementSystem.API.Controllers;
@@ -26,11 +27,11 @@ public class DeviceInfoController : ControllerBase
     /// </summary>
     [HttpGet(CommonRoutes.DeviceInfo.GetActiveSessions)]
     [ActionName(nameof(GetActiveSessionAsync))]
-    public async Task<ActionResult<ApiResponse<object>>> GetActiveSessionAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<IEnumerable<DeviceSessionDto>>>> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         var userId = GetUserId();
         var sessions = await _sessionService.GetActiveSessionsAsync(userId, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(sessions, CommonMessages.DeviceInfo.GetActiveSessionsSuccess, CommonStatusCodes.Status200OK));
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IEnumerable<DeviceSessionDto>>.SuccessResult(sessions, CommonMessages.DeviceInfo.GetActiveSessionsSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
@@ -38,11 +39,11 @@ public class DeviceInfoController : ControllerBase
     /// </summary>
     [HttpGet(CommonRoutes.DeviceInfo.GetSessionHistory)]
     [ActionName(nameof(GetSessionHistoryAsync))]
-    public async Task<ActionResult<ApiResponse<object>>> GetSessionHistoryAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<IEnumerable<DeviceSessionDto>>>> GetSessionHistoryAsync(CancellationToken cancellationToken)
     {
         var userId = GetUserId();
         var history = await _sessionService.GetSessionHistoryAsync(userId, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(history, CommonMessages.DeviceInfo.GetSessionHistorySuccess, CommonStatusCodes.Status200OK));
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IEnumerable<DeviceSessionDto>>.SuccessResult(history, CommonMessages.DeviceInfo.GetSessionHistorySuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>

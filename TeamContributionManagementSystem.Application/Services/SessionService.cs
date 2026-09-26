@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
-using TeamContributionManagementSystem.Domain.Entities;
 
 namespace TeamContributionManagementSystem.Application.Services;
 
@@ -19,11 +19,29 @@ public class SessionService : ISessionService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<IEnumerable<DeviceDetail>> GetActiveSessionsAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<DeviceSessionDto>> GetActiveSessionsAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _deviceSessionRepository.GetActiveSessionsAsync(userId, cancellationToken);
+            var sessions = await _deviceSessionRepository.GetActiveSessionsAsync(userId, cancellationToken);
+            return sessions.Select(s => new DeviceSessionDto
+            {
+                Id = s.Id,
+                DeviceId = s.DeviceId,
+                DeviceName = s.DeviceName,
+                Brand = s.Brand,
+                Model = s.Model,
+                Os = s.Os,
+                OsVersion = s.OsVersion,
+                SystemName = s.SystemName,
+                SystemVersion = s.SystemVersion,
+                DeviceType = s.DeviceType,
+                AppVersion = s.AppVersion,
+                Browser = s.Browser,
+                BrowserVersion = s.BrowserVersion,
+                IsActive = s.IsActive,
+                CreatedAt = s.CreatedAt
+            });
         }
         catch (Exception ex)
         {
@@ -32,11 +50,29 @@ public class SessionService : ISessionService
         }
     }
 
-    public async Task<IEnumerable<DeviceDetail>> GetSessionHistoryAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<DeviceSessionDto>> GetSessionHistoryAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _deviceSessionRepository.GetSessionHistoryAsync(userId, cancellationToken);
+            var history = await _deviceSessionRepository.GetSessionHistoryAsync(userId, cancellationToken);
+            return history.Select(s => new DeviceSessionDto
+            {
+                Id = s.Id,
+                DeviceId = s.DeviceId,
+                DeviceName = s.DeviceName,
+                Brand = s.Brand,
+                Model = s.Model,
+                Os = s.Os,
+                OsVersion = s.OsVersion,
+                SystemName = s.SystemName,
+                SystemVersion = s.SystemVersion,
+                DeviceType = s.DeviceType,
+                AppVersion = s.AppVersion,
+                Browser = s.Browser,
+                BrowserVersion = s.BrowserVersion,
+                IsActive = s.IsActive,
+                CreatedAt = s.CreatedAt
+            });
         }
         catch (Exception ex)
         {

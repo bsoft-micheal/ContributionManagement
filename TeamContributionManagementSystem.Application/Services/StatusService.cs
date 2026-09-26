@@ -31,8 +31,7 @@ public class StatusService : IStatusService
     {
         try
         {
-            var entities = await _repository.GetAllAsync(activeOnly, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<StatusDto>>(entities);
+            return await _repository.GetAllAsync(activeOnly, cancellationToken);
         }
         catch (Exception ex)
         {

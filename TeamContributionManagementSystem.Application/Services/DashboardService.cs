@@ -33,26 +33,21 @@ public class DashboardService : IDashboardService
             return new DashboardSummaryDto
             {
                 MonthlyEventsCount = monthlyEvents.Count,
-                TotalContributions = monthlyEvents
-                    .SelectMany(x => x.Contributions)
-                    .Where(x => !x.IsDeleted && x.PaymentStatus == PaymentStatus.Paid)
-                    .Sum(x => x.Amount),
+                TotalContributions = monthlyEvents.Sum(x => x.TotalPaidAmount),
                 PendingPayments = pendingContributions.Count,
-                TotalPendingAmount = pendingContributions
-                    .Where(x => !x.IsDeleted)
-                    .Sum(x => x.Amount),
+                TotalPendingAmount = pendingContributions.Sum(x => x.Amount),
                 UpcomingEvents = monthlyEvents.Select(x => new UpcomingEventDto
                 {
                     EventId = x.EventId,
                     EventName = x.EventName,
-                    EventTypeName = x.EventType?.EventTypeName ?? string.Empty,
+                    EventTypeName = x.EventTypeName,
                     EventDate = x.EventDate,
-                    ExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
-                    CollectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
-                    PendingAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid).Sum(c => c.Amount),
-                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
-                    TotalContributionsCount = x.Contributions.Count(c => !c.IsDeleted),
-                    CreatedBy = x.CreatedByUser != null ? x.CreatedByUser.FullName : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
+                    ExpectedAmount = x.TotalExpectedAmount,
+                    CollectedAmount = x.TotalPaidAmount,
+                    PendingAmount = x.TotalExpectedAmount - x.TotalPaidAmount,
+                    PendingContributionsCount = 0,
+                    TotalContributionsCount = x.ParticipantCount,
+                    CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt
                 }).ToList()
             };

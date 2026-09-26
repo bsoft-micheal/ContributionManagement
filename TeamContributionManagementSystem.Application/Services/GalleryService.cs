@@ -27,8 +27,7 @@ public class GalleryService : IGalleryService
     {
         try
         {
-            var photos = await _galleryRepository.GetAllAsync(eventName, category, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<GalleryPhotoDto>>(photos);
+            return await _galleryRepository.GetAllAsync(eventName, category, cancellationToken);
         }
         catch (Exception ex)
         {

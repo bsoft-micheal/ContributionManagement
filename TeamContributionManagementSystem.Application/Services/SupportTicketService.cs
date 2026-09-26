@@ -27,8 +27,7 @@ public class SupportTicketService : ISupportTicketService
     {
         try
         {
-            var tickets = await _ticketRepository.GetAllAsync(status, ticketType, priority, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<SupportTicketDto>>(tickets);
+            return await _ticketRepository.GetAllAsync(status, ticketType, priority, cancellationToken);
         }
         catch (Exception ex)
         {

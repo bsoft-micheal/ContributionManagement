@@ -76,7 +76,7 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// Loads event & member context for the payment confirmation page.
+    /// Loads event &amp; member context for the payment confirmation page.
     /// </summary>
     [AllowAnonymous]
     [HttpGet(CommonRoutes.Payments.GetPaymentContext)]
@@ -87,6 +87,10 @@ public class PaymentsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _transactionService.GetPaymentContextAsync(eventId, memberId, cancellationToken);
+        if (result == null)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentContextDto>.FailureResult(CommonMessages.General.NotFound, CommonStatusCodes.Status404NotFound));
+        }
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentContextDto>.SuccessResult(result, CommonMessages.Payments.GetContextSuccess, CommonStatusCodes.Status200OK));
     }
 

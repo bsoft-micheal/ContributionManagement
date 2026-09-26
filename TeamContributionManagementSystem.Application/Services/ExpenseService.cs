@@ -27,8 +27,7 @@ public class ExpenseService : IExpenseService
     {
         try
         {
-            var expenses = await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<ExpenseDto>>(expenses);
+            return await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
         }
         catch (Exception ex)
         {

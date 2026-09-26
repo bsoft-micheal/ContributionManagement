@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -19,12 +20,25 @@ public class UserRepository : IUserRepository
         _logger = logger;
     }
 
-    public async Task<List<AppUser>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             return await _context.Users
                 .OrderBy(x => x.Username)
+                .Select(x => new UserDto
+                {
+                    UserId = x.UserId,
+                    Username = x.Username,
+                    FullName = x.FullName,
+                    Email = x.Email,
+                    RoleName = x.Role.ToString(),
+                    IsActive = x.IsActive,
+                    ProfileImage = x.ProfileImage,
+                    CreatedOn = x.CreatedOn,
+                    CreatedAt = x.CreatedAt,
+                    CreatedBy = x.CreatedBy
+                })
                 .ToListAsync(cancellationToken);
         }
         catch (Exception ex)

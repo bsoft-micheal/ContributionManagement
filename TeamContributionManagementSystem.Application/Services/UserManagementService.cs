@@ -67,26 +67,22 @@ public class UserManagementService : IUserManagementService
             var members = await _memberRepository.GetAllAsync(cancellationToken);
             var memberDict = members.ToDictionary(m => m.Email.Trim().ToLowerInvariant(), m => m);
 
-            var dtos = new List<UserDto>();
             foreach (var user in users)
             {
-                var dto = _mapper.Map<UserDto>(user);
                 if (memberDict.TryGetValue(user.Email.Trim().ToLowerInvariant(), out var member))
                 {
-                    user.Members = new List<Member> { member };
-                    dto.DateOfBirth = member.DateOfBirth;
-                    dto.JoiningDate = member.JoiningDate;
-                    dto.Gender = member.Gender;
-                    dto.Phone = member.Phone;
-                    dto.MemberType = member.MemberType;
-                    if (member.Role != null && !string.IsNullOrWhiteSpace(member.Role.RoleName))
+                    user.DateOfBirth = member.DateOfBirth;
+                    user.JoiningDate = member.JoiningDate;
+                    user.Gender = member.Gender;
+                    user.Phone = member.Phone;
+                    user.MemberType = member.MemberType;
+                    if (!string.IsNullOrWhiteSpace(member.RoleName))
                     {
-                        dto.RoleName = member.Role.RoleName;
+                        user.RoleName = member.RoleName;
                     }
                 }
-                dtos.Add(dto);
             }
-            return dtos;
+            return users;
         }
         catch (Exception ex)
         {

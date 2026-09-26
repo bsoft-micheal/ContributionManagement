@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Roles;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -18,11 +19,24 @@ public class RoleRepository : IRoleRepository
         _logger = logger;
     }
 
-    public async Task<List<Role>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<List<RoleDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _context.Roles.OrderBy(x => x.RoleName).ToListAsync(cancellationToken);
+            return await _context.Roles
+                .OrderBy(x => x.RoleName)
+                .Select(x => new RoleDto
+                {
+                    RoleId = x.RoleId,
+                    RoleName = x.RoleName,
+                    DefaultContributionAmount = x.DefaultContributionAmount,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedAt,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {

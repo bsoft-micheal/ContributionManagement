@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TeamContributionManagementSystem.Application.DTOs.WorkTypes;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -14,7 +15,7 @@ public class WorkTypeRepository : IWorkTypeRepository
         _context = context;
     }
 
-    public async Task<IReadOnlyCollection<WorkType>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<WorkTypeDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
         var query = _context.WorkTypes
             .AsNoTracking()
@@ -25,7 +26,20 @@ public class WorkTypeRepository : IWorkTypeRepository
             query = query.Where(x => x.IsActive);
         }
 
-        return await query.OrderBy(x => x.WorkTypeName).ToListAsync(cancellationToken);
+        return await query
+            .OrderBy(x => x.WorkTypeName)
+            .Select(x => new WorkTypeDto
+            {
+                WorkTypeId = x.WorkTypeId,
+                WorkTypeName = x.WorkTypeName,
+                IsActive = x.IsActive,
+                CreatedBy = x.CreatedBy,
+                CreatedAt = x.CreatedAt,
+                CreatedOn = x.CreatedOn,
+                ModifiedBy = x.ModifiedBy,
+                ModifiedOn = x.ModifiedOn
+            })
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<WorkType?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

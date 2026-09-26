@@ -31,8 +31,7 @@ public class WorkTypeService : IWorkTypeService
     {
         try
         {
-            var entities = await _repository.GetAllAsync(activeOnly, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<WorkTypeDto>>(entities);
+            return await _repository.GetAllAsync(activeOnly, cancellationToken);
         }
         catch (Exception ex)
         {

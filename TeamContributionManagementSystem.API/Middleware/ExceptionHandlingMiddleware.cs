@@ -38,9 +38,10 @@ public class ExceptionHandlingMiddleware
             statusCode = HttpStatusCode.BadRequest;
             payload = new
             {
+                success = false,
+                statusCode = (int)statusCode,
                 message = CommonMessages.Validation.ValidationFailed,
-                errors = valEx.Errors.Select(e => new { e.PropertyName, e.ErrorMessage }),
-                statusCode = (int)statusCode
+                data = valEx.Errors.Select(e => new { e.PropertyName, e.ErrorMessage })
             };
         }
         else
@@ -56,8 +57,10 @@ public class ExceptionHandlingMiddleware
 
             payload = new
             {
+                success = false,
+                statusCode = (int)statusCode,
                 message = exception.Message,
-                statusCode = (int)statusCode
+                data = (object?)null
             };
         }
 

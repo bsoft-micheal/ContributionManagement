@@ -44,8 +44,7 @@ public class PaymentTransactionService : IPaymentTransactionService
     {
         try
         {
-            var list = await _transactionRepository.GetAllAsync(eventName, mode, status, startDate, endDate, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<PaymentTransactionDto>>(list);
+            return await _transactionRepository.GetAllAsync(eventName, mode, status, startDate, endDate, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -258,36 +257,39 @@ public class PaymentTransactionService : IPaymentTransactionService
             try
             {
                 var allContributions = await _contributionRepository.GetAllAsync(cancellationToken);
-                var match = allContributions.FirstOrDefault(c =>
-                    !c.IsDeleted &&
-                    c.Member != null && !string.IsNullOrWhiteSpace(c.Member.Name) &&
-                    c.Member.Name.Trim().Equals(entity.MemberName.Trim(), StringComparison.OrdinalIgnoreCase) &&
-                    c.Event != null && !string.IsNullOrWhiteSpace(c.Event.EventName) &&
-                    c.Event.EventName.Trim().Equals(entity.EventName.Trim(), StringComparison.OrdinalIgnoreCase));
+                var matchDto = allContributions.FirstOrDefault(c =>
+                    !string.IsNullOrWhiteSpace(c.MemberName) &&
+                    c.MemberName.Trim().Equals(entity.MemberName.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(c.EventName) &&
+                    c.EventName.Trim().Equals(entity.EventName.Trim(), StringComparison.OrdinalIgnoreCase));
 
-                if (match != null)
+                if (matchDto != null)
                 {
-                    if (entity.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase))
+                    var match = await _contributionRepository.GetByEventAndMemberAsync(matchDto.EventId, matchDto.MemberId, cancellationToken);
+                    if (match != null)
                     {
-                        match.PaymentStatus = PaymentStatus.Paid;
-                        match.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
-                        match.PaymentMode = Enum.TryParse<PaymentMode>(entity.PaymentMode, true, out var pm) ? pm : PaymentMode.Upi;
-                        match.UpiAmount = entity.Amount;
-                        match.ModifiedBy = entity.VerifiedBy ?? user;
-                        match.ModifiedOn = DateTime.UtcNow;
-                        _contributionRepository.Update(match);
-                        _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Paid, entity.MemberName, entity.EventName);
-                    }
-                    else if (entity.Status.Equals(CommonConstants.PaymentStatuses.Pending, StringComparison.OrdinalIgnoreCase) || 
-                             entity.Status.Equals(CommonConstants.PaymentStatuses.Failed, StringComparison.OrdinalIgnoreCase) || 
-                             entity.Status.Equals(CommonConstants.PaymentStatuses.NeedsClarification, StringComparison.OrdinalIgnoreCase))
-                    {
-                        match.PaymentStatus = PaymentStatus.Pending;
-                        match.UpiAmount = 0;
-                        match.ModifiedBy = entity.VerifiedBy ?? user;
-                        match.ModifiedOn = DateTime.UtcNow;
-                        _contributionRepository.Update(match);
-                        _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Pending, entity.MemberName, entity.EventName);
+                        if (entity.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase))
+                        {
+                            match.PaymentStatus = PaymentStatus.Paid;
+                            match.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
+                            match.PaymentMode = Enum.TryParse<PaymentMode>(entity.PaymentMode, true, out var pm) ? pm : PaymentMode.Upi;
+                            match.UpiAmount = entity.Amount;
+                            match.ModifiedBy = entity.VerifiedBy ?? user;
+                            match.ModifiedOn = DateTime.UtcNow;
+                            _contributionRepository.Update(match);
+                            _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Paid, entity.MemberName, entity.EventName);
+                        }
+                        else if (entity.Status.Equals(CommonConstants.PaymentStatuses.Pending, StringComparison.OrdinalIgnoreCase) || 
+                                 entity.Status.Equals(CommonConstants.PaymentStatuses.Failed, StringComparison.OrdinalIgnoreCase) || 
+                                 entity.Status.Equals(CommonConstants.PaymentStatuses.NeedsClarification, StringComparison.OrdinalIgnoreCase))
+                        {
+                            match.PaymentStatus = PaymentStatus.Pending;
+                            match.UpiAmount = 0;
+                            match.ModifiedBy = entity.VerifiedBy ?? user;
+                            match.ModifiedOn = DateTime.UtcNow;
+                            _contributionRepository.Update(match);
+                            _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Pending, entity.MemberName, entity.EventName);
+                        }
                     }
                 }
             }

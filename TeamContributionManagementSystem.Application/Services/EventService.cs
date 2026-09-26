@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
+using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -51,8 +52,7 @@ public class EventService : IEventService
     {
         try
         {
-            var events = await _eventRepository.GetAllAsync(month, year, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<EventSummaryDto>>(events);
+            return await _eventRepository.GetAllAsync(month, year, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -65,10 +65,8 @@ public class EventService : IEventService
     {
         try
         {
-            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
+            return await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
-
-            return _mapper.Map<EventDetailsDto>(eventItem);
         }
         catch (Exception ex)
         {
@@ -228,7 +226,7 @@ public class EventService : IEventService
                             catch { }
                         }
 
-                        List<Member> targetCelebrants = new();
+                        List<MemberDto> targetCelebrants = new();
 
 
                         if (isBirthdayEvent)
@@ -628,7 +626,7 @@ public class EventService : IEventService
     {
         try
         {
-            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
+            var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
             var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
@@ -765,7 +763,7 @@ public class EventService : IEventService
     {
         try
         {
-            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
+            var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
             eventItem.IsDeleted = true;

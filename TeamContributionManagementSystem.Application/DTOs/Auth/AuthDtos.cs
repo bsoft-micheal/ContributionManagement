@@ -46,7 +46,7 @@ public class VerifyTwoFactorRequestDto
     [StringLength(6, MinimumLength = 6)]
     public string Otp { get; set; } = string.Empty;
 
-    public DeviceDetailPayloadDto DeviceInfo { get; set; }
+    public DeviceDetailPayloadDto? DeviceInfo { get; set; }
 }
 
 public class ForgotPasswordRequestDto

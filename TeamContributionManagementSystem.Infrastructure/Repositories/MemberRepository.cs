@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -18,14 +19,34 @@ public class MemberRepository : IMemberRepository
         _logger = logger;
     }
 
-    public async Task<List<Member>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<List<MemberDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             return await _context.Members
-                .Include(x => x.Role)
                 .Where(x => !x.IsDeleted)
                 .OrderBy(x => x.Name)
+                .Select(x => new MemberDto
+                {
+                    MemberId = x.MemberId,
+                    Name = x.Name,
+                    Email = x.Email,
+                    Phone = x.Phone,
+                    RoleId = x.RoleId,
+                    RoleName = x.Role != null ? x.Role.RoleName : string.Empty,
+                    DefaultContributionAmount = x.Role != null ? x.Role.DefaultContributionAmount : 0,
+                    DateOfBirth = x.DateOfBirth,
+                    JoiningDate = x.JoiningDate,
+                    Gender = x.Gender,
+                    IsActive = x.IsActive,
+                    IsExited = x.IsExited,
+                    MemberType = x.MemberType,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedOn,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
                 .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -35,14 +56,34 @@ public class MemberRepository : IMemberRepository
         }
     }
 
-    public async Task<List<Member>> GetAllActiveAsync(CancellationToken cancellationToken = default)
+    public async Task<List<MemberDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             return await _context.Members
-                .Include(x => x.Role)
                 .Where(x => !x.IsDeleted && x.IsActive)
                 .OrderBy(x => x.Name)
+                .Select(x => new MemberDto
+                {
+                    MemberId = x.MemberId,
+                    Name = x.Name,
+                    Email = x.Email,
+                    Phone = x.Phone,
+                    RoleId = x.RoleId,
+                    RoleName = x.Role != null ? x.Role.RoleName : string.Empty,
+                    DefaultContributionAmount = x.Role != null ? x.Role.DefaultContributionAmount : 0,
+                    DateOfBirth = x.DateOfBirth,
+                    JoiningDate = x.JoiningDate,
+                    Gender = x.Gender,
+                    IsActive = x.IsActive,
+                    IsExited = x.IsExited,
+                    MemberType = x.MemberType,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedOn,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
                 .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -99,14 +140,34 @@ public class MemberRepository : IMemberRepository
         }
     }
 
-    public async Task<List<Member>> GetActiveBirthdaysInMonthAsync(int month, CancellationToken cancellationToken = default)
+    public async Task<List<MemberDto>> GetActiveBirthdaysInMonthAsync(int month, CancellationToken cancellationToken = default)
     {
         try
         {
             return await _context.Members
-                .Include(x => x.Role)
                 .Where(x => !x.IsDeleted && x.IsActive && x.DateOfBirth.Month == month)
                 .OrderBy(x => x.DateOfBirth.Day)
+                .Select(x => new MemberDto
+                {
+                    MemberId = x.MemberId,
+                    Name = x.Name,
+                    Email = x.Email,
+                    Phone = x.Phone,
+                    RoleId = x.RoleId,
+                    RoleName = x.Role != null ? x.Role.RoleName : string.Empty,
+                    DefaultContributionAmount = x.Role != null ? x.Role.DefaultContributionAmount : 0,
+                    DateOfBirth = x.DateOfBirth,
+                    JoiningDate = x.JoiningDate,
+                    Gender = x.Gender,
+                    IsActive = x.IsActive,
+                    IsExited = x.IsExited,
+                    MemberType = x.MemberType,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedOn,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
                 .ToListAsync(cancellationToken);
         }
         catch (Exception ex)

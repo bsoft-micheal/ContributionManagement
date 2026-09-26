@@ -37,8 +37,7 @@ public class MemberService : IMemberService
     {
         try
         {
-            var members = await _memberRepository.GetAllAsync(cancellationToken);
-            var dtos = _mapper.Map<List<MemberDto>>(members);
+            var dtos = await _memberRepository.GetAllAsync(cancellationToken);
 
             try
             {
