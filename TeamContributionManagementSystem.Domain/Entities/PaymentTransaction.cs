@@ -1,5 +1,3 @@
-using TeamContributionManagementSystem.Domain.Common;
-
 namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class PaymentTransaction
@@ -10,9 +8,9 @@ public class PaymentTransaction
     public string EventName { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateTime PaymentDate { get; set; }
-    public string PaymentMode { get; set; } = DomainConstants.PaymentModes.Upi;
+    public string PaymentMode { get; set; } = string.Empty;
     public string? Utr { get; set; }
-    public string Status { get; set; } = DomainConstants.PaymentStatuses.Pending;
+    public string Status { get; set; } = string.Empty;
     public string? VerifiedBy { get; set; }
     public DateTime? VerifiedOn { get; set; }
     public string? Notes { get; set; }
