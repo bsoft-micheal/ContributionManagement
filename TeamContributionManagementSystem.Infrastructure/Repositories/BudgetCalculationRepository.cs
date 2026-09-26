@@ -48,12 +48,19 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         }
     }
 
-    public async Task<BudgetCalculation?> GetByNameAsync(string expenseItem, CancellationToken cancellationToken = default)
+    public async Task<BudgetCalculation?> GetByNameAsync(string expenseItem, string? category = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _context.BudgetCalculations
-                .FirstOrDefaultAsync(x => !x.IsDeleted && x.ExpenseItem.ToLower() == expenseItem.ToLower(), cancellationToken);
+            var query = _context.BudgetCalculations
+                .Where(x => !x.IsDeleted && x.ExpenseItem.ToLower() == expenseItem.ToLower());
+
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                query = query.Where(x => x.Category != null && x.Category.ToLower() == category.ToLower());
+            }
+
+            return await query.FirstOrDefaultAsync(cancellationToken);
         }
         catch (Exception ex)
         {
