@@ -10,7 +10,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// Provides reporting functionalities for exporting and summarizing contribution data.
 /// </summary>
 [ApiController]
-[Authorize(Roles = CommonRoles.Admin)]
+[Authorize]
 [ApiVersion("1.0")]
 [Route(CommonRoutes.Reports.Base)]
 public class ReportsController : ControllerBase
