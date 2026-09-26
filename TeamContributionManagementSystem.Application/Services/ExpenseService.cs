@@ -12,15 +12,22 @@ public class ExpenseService : IExpenseService
 {
     private readonly ILogger<ExpenseService> _logger;
     private readonly IExpenseRepository _expenseRepository;
+    private readonly IStatusRepository? _statusRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public ExpenseService(ILogger<ExpenseService> logger, IExpenseRepository expenseRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public ExpenseService(
+        ILogger<ExpenseService> logger,
+        IExpenseRepository expenseRepository,
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        IStatusRepository? statusRepository = null)
     {
         _logger = logger;
         _expenseRepository = expenseRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _statusRepository = statusRepository;
     }
 
     public async Task<IReadOnlyCollection<ExpenseDto>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
@@ -57,6 +64,15 @@ public class ExpenseService : IExpenseService
         {
             var savedFilePath = await ProcessAttachmentAsync(request.FileName, request.FileData, null, cancellationToken);
 
+            var status = request.Status?.Trim();
+            if (string.IsNullOrWhiteSpace(status) && _statusRepository != null)
+            {
+                var dbStatuses = await _statusRepository.GetAllAsync(true, cancellationToken);
+                status = dbStatuses.FirstOrDefault(s => s.StatusName.Equals("Pending", StringComparison.OrdinalIgnoreCase))?.StatusName
+                    ?? dbStatuses.FirstOrDefault()?.StatusName
+                    ?? string.Empty;
+            }
+
             var expense = new Expense
             {
                 ExpenseId = Guid.NewGuid(),
@@ -64,7 +80,7 @@ public class ExpenseService : IExpenseService
                 Category = request.Category.Trim(),
                 Amount = request.Amount,
                 ExpenseDate = request.ExpenseDate,
-                Status = request.Status?.Trim() ?? string.Empty,
+                Status = status ?? string.Empty,
                 SubmittedBy = request.SubmittedBy.Trim(),
                 ApprovedBy = request.ApprovedBy?.Trim(),
                 Description = request.Description.Trim(),

@@ -270,6 +270,18 @@ public static class CommonMessages
         public const string NotFoundFormat = "Work type with ID '{0}' was not found.";
     }
 
+    public static class Priorities
+    {
+        public const string GetAllSuccess = "Priorities retrieved successfully.";
+        public const string GetByIdSuccess = "Priority details retrieved successfully.";
+        public const string SaveSuccess = "Priority created successfully.";
+        public const string UpdateSuccess = "Priority updated successfully.";
+        public const string DeleteSuccess = "Priority deleted successfully.";
+        public const string NotFound = "Priority not found.";
+        public const string AlreadyExistsFormat = "Priority '{0}' already exists.";
+        public const string NotFoundFormat = "Priority with ID '{0}' was not found.";
+    }
+
     public static class Emails
     {
         public const string DailyLimitReached = "Daily email sending limit (500) has been reached. Please try again tomorrow.";

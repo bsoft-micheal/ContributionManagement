@@ -38,6 +38,8 @@ public static class CommonValidationMessages
     public const string TicketTypeNameMaxLength = "Ticket Type name cannot exceed 150 characters.";
     public const string StatusNameRequired = "Status name is required.";
     public const string StatusNameMaxLength = "Status name cannot exceed 100 characters.";
+    public const string PriorityNameRequired = "Priority name is required.";
+    public const string PriorityNameMaxLength = "Priority name cannot exceed 100 characters.";
     public const string ExpenseItemRequired = "Expense Item is required.";
     public const string RateRange = "Rate must be between 0 and 1,000,000.";
 

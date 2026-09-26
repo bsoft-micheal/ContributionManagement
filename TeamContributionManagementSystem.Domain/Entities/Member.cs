@@ -15,7 +15,7 @@ public class Member : IAuditableEntity
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
     public bool IsDeleted { get; set; }
-    public string MemberType { get; set; } = DomainConstants.MemberTypes.Office;
+    public string MemberType { get; set; } = string.Empty;
 
     public Role? Role { get; set; }
     public ICollection<EventParticipant> EventParticipants { get; set; } = new List<EventParticipant>();

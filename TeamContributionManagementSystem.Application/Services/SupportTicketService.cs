@@ -12,15 +12,28 @@ public class SupportTicketService : ISupportTicketService
 {
     private readonly ILogger<SupportTicketService> _logger;
     private readonly ISupportTicketRepository _ticketRepository;
+    private readonly IStatusRepository? _statusRepository;
+    private readonly ITicketTypeRepository? _ticketTypeRepository;
+    private readonly IPriorityRepository? _priorityRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public SupportTicketService(ILogger<SupportTicketService> logger, ISupportTicketRepository ticketRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public SupportTicketService(
+        ILogger<SupportTicketService> logger,
+        ISupportTicketRepository ticketRepository,
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        IStatusRepository? statusRepository = null,
+        ITicketTypeRepository? ticketTypeRepository = null,
+        IPriorityRepository? priorityRepository = null)
     {
         _logger = logger;
         _ticketRepository = ticketRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _statusRepository = statusRepository;
+        _ticketTypeRepository = ticketTypeRepository;
+        _priorityRepository = priorityRepository;
     }
 
     public async Task<IReadOnlyCollection<SupportTicketDto>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default)
@@ -59,6 +72,39 @@ public class SupportTicketService : ISupportTicketService
             var nextNumber = all.Count + 1;
             var ticketNo = $"{CommonConstants.Defaults.TicketPrefix}-{DateTime.UtcNow.Year}-{nextNumber:D3}";
 
+            var ticketType = request.TicketType?.Trim();
+            if (string.IsNullOrWhiteSpace(ticketType) && _ticketTypeRepository != null)
+            {
+                var dbTicketTypes = await _ticketTypeRepository.GetAllAsync(true, cancellationToken);
+                ticketType = dbTicketTypes.FirstOrDefault()?.TypeName ?? string.Empty;
+            }
+
+            var status = request.Status?.Trim();
+            if (string.IsNullOrWhiteSpace(status) && _statusRepository != null)
+            {
+                var dbStatuses = await _statusRepository.GetAllAsync(true, cancellationToken);
+                status = dbStatuses.FirstOrDefault(s => s.StatusName.Equals("Open", StringComparison.OrdinalIgnoreCase))?.StatusName
+                    ?? dbStatuses.FirstOrDefault()?.StatusName
+                    ?? "Open";
+            }
+            else if (string.IsNullOrWhiteSpace(status))
+            {
+                status = "Open";
+            }
+
+            var priority = request.Priority?.Trim();
+            if (string.IsNullOrWhiteSpace(priority) && _priorityRepository != null)
+            {
+                var dbPriorities = await _priorityRepository.GetAllAsync(true, cancellationToken);
+                priority = dbPriorities.FirstOrDefault(p => p.PriorityName.Equals("Medium", StringComparison.OrdinalIgnoreCase))?.PriorityName
+                    ?? dbPriorities.FirstOrDefault()?.PriorityName
+                    ?? "Medium";
+            }
+            else if (string.IsNullOrWhiteSpace(priority))
+            {
+                priority = "Medium";
+            }
+
             var ticket = new SupportTicket
             {
                 TicketId = Guid.NewGuid(),
@@ -66,11 +112,11 @@ public class SupportTicketService : ISupportTicketService
                 MemberName = request.MemberName.Trim(),
                 MemberId = request.MemberId?.Trim(),
                 RelatedEvent = request.RelatedEvent?.Trim(),
-                TicketType = request.TicketType.Trim(),
+                TicketType = ticketType ?? string.Empty,
                 Subject = request.Subject.Trim(),
                 Description = request.Description.Trim(),
-                Status = string.IsNullOrWhiteSpace(request.Status) ? CommonConstants.TicketStatuses.Open : request.Status.Trim(),
-                Priority = string.IsNullOrWhiteSpace(request.Priority) ? CommonConstants.TicketPriorities.Medium : request.Priority.Trim(),
+                Status = status,
+                Priority = priority,
                 AssignedTo = request.AssignedTo?.Trim(),
                 RefNo = request.RefNo?.Trim() ?? $"REF-{DateTime.UtcNow:yyyyMMdd}-{nextNumber:D3}",
                 Utr = request.Utr?.Trim(),

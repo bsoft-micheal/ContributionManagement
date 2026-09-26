@@ -1,11 +1,9 @@
 namespace TeamContributionManagementSystem.Domain.Entities;
 
-public class BudgetCalculation
+public class Priority
 {
-    public Guid BudgetCalculationId { get; set; }
-    public string ExpenseItem { get; set; } = string.Empty;
-    public decimal Rate { get; set; }
-    public string? Category { get; set; }
+    public Guid PriorityId { get; set; }
+    public string PriorityName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
 

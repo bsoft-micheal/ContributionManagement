@@ -203,4 +203,14 @@ public static class CommonRoutes
         public const string Update = "updateWorkTypeAsyncById/{id:guid}";
         public const string Delete = "deleteWorkTypeAsyncById/{id:guid}";
     }
+
+    public static class Priorities
+    {
+        public const string Base = $"{ApiBase}/priorities";
+        public const string GetAll = "getAllPriorityAsync";
+        public const string GetById = "getPriorityAsyncById/{id:guid}";
+        public const string Create = "savePriorityAsync";
+        public const string Update = "updatePriorityAsyncById/{id:guid}";
+        public const string Delete = "deletePriorityAsyncById/{id:guid}";
+    }
 }

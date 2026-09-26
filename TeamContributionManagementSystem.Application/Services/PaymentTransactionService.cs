@@ -17,6 +17,7 @@ public class PaymentTransactionService : IPaymentTransactionService
     private readonly IEventRepository _eventRepository;
     private readonly IMemberRepository _memberRepository;
     private readonly ISystemSettingService _settingService;
+    private readonly IStatusRepository? _statusRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
@@ -28,7 +29,8 @@ public class PaymentTransactionService : IPaymentTransactionService
         IMemberRepository memberRepository,
         ISystemSettingService settingService,
         IUnitOfWork unitOfWork,
-        IMapper mapper)
+        IMapper mapper,
+        IStatusRepository? statusRepository = null)
     {
         _logger = logger;
         _transactionRepository = transactionRepository;
@@ -38,6 +40,7 @@ public class PaymentTransactionService : IPaymentTransactionService
         _settingService = settingService;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _statusRepository = statusRepository;
     }
 
     public async Task<IReadOnlyCollection<PaymentTransactionDto>> GetAllAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
@@ -76,6 +79,19 @@ public class PaymentTransactionService : IPaymentTransactionService
             var nextNum = 1250 + all.Count + 1;
             var txnNumber = $"{CommonConstants.Defaults.TxnPrefix}{nextNum:D6}";
 
+            var status = request.Status?.Trim();
+            if (string.IsNullOrWhiteSpace(status) && _statusRepository != null)
+            {
+                var dbStatuses = await _statusRepository.GetAllAsync(true, cancellationToken);
+                status = dbStatuses.FirstOrDefault(s => s.StatusName.Equals("Pending", StringComparison.OrdinalIgnoreCase))?.StatusName
+                    ?? dbStatuses.FirstOrDefault()?.StatusName
+                    ?? "Pending";
+            }
+            else if (string.IsNullOrWhiteSpace(status))
+            {
+                status = "Pending";
+            }
+
             var entity = new PaymentTransaction
             {
                 TransactionId = Guid.NewGuid(),
@@ -84,9 +100,9 @@ public class PaymentTransactionService : IPaymentTransactionService
                 EventName = request.EventName.Trim(),
                 Amount = request.Amount,
                 PaymentDate = request.PaymentDate,
-                PaymentMode = request.PaymentMode?.Trim() ?? CommonConstants.PaymentModes.Upi,
+                PaymentMode = request.PaymentMode?.Trim() ?? "UPI",
                 Utr = request.Utr?.Trim(),
-                Status = string.IsNullOrWhiteSpace(request.Status) ? CommonConstants.PaymentStatuses.Pending : request.Status.Trim(),
+                Status = status,
                 Notes = request.Notes?.Trim(),
                 Screenshot = request.Screenshot?.Trim(),
                 IsActive = true,
