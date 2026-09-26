@@ -59,7 +59,7 @@ public class BudgetCalculationService : IBudgetCalculationService
     {
         try
         {
-            var existing = await _repository.GetByNameAsync(request.ExpenseItem.Trim(), cancellationToken);
+            var existing = await _repository.GetByNameAsync(request.ExpenseItem.Trim(), request.Category?.Trim(), cancellationToken);
             if (existing is not null)
             {
                 throw new InvalidOperationException(string.Format(CommonMessages.BudgetCalculations.AlreadyExistsFormat, request.ExpenseItem.Trim()));
@@ -97,7 +97,7 @@ public class BudgetCalculationService : IBudgetCalculationService
             var item = await _repository.GetByIdAsync(budgetCalculationId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.BudgetCalculations.NotFound);
 
-            var duplicate = await _repository.GetByNameAsync(request.ExpenseItem.Trim(), cancellationToken);
+            var duplicate = await _repository.GetByNameAsync(request.ExpenseItem.Trim(), request.Category?.Trim(), cancellationToken);
             if (duplicate is not null && duplicate.BudgetCalculationId != budgetCalculationId)
             {
                 throw new InvalidOperationException(string.Format(CommonMessages.BudgetCalculations.AlreadyExistsFormat, request.ExpenseItem.Trim()));
