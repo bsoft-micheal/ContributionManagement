@@ -38,6 +38,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<TicketType> TicketTypes => Set<TicketType>();
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<WorkType> WorkTypes => Set<WorkType>();
+    public DbSet<Priority> Priorities => Set<Priority>();
     public DbSet<NavigationMenu> NavigationMenus => Set<NavigationMenu>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -58,7 +59,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.Phone).HasMaxLength(20).IsRequired();
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => new { x.RoleId, x.IsActive });
-            entity.Property(x => x.MemberType).HasMaxLength(20).HasDefaultValue("Office");
+            entity.Property(x => x.MemberType).HasMaxLength(20);
             entity.HasOne(x => x.Role)
                 .WithMany(x => x.Members)
                 .HasForeignKey(x => x.RoleId)
@@ -316,6 +317,15 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.WorkTypeName).IsUnique();
+        });
+
+        modelBuilder.Entity<Priority>(entity =>
+        {
+            entity.HasKey(x => x.PriorityId);
+            entity.Property(x => x.PriorityName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.PriorityName).IsUnique();
         });
 
         modelBuilder.ApplySnakeCaseNames();

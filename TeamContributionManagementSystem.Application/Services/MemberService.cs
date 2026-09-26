@@ -14,6 +14,7 @@ public class MemberService : IMemberService
     private readonly IMemberRepository _memberRepository;
     private readonly IRoleRepository _roleRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IWorkTypeRepository? _workTypeRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
@@ -23,7 +24,8 @@ public class MemberService : IMemberService
         IRoleRepository roleRepository,
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
-        IMapper mapper)
+        IMapper mapper,
+        IWorkTypeRepository? workTypeRepository = null)
     {
         _logger = logger;
         _memberRepository = memberRepository;
@@ -31,6 +33,7 @@ public class MemberService : IMemberService
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _workTypeRepository = workTypeRepository;
     }
 
     public async Task<IReadOnlyCollection<MemberDto>> GetAllAsync(CancellationToken cancellationToken = default)
@@ -84,6 +87,13 @@ public class MemberService : IMemberService
             var role = await _roleRepository.GetByIdAsync(request.RoleId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Roles.NotFound);
 
+            var memberType = request.MemberType?.Trim();
+            if (string.IsNullOrWhiteSpace(memberType) && _workTypeRepository != null)
+            {
+                var dbWorkTypes = await _workTypeRepository.GetAllAsync(true, cancellationToken);
+                memberType = dbWorkTypes.FirstOrDefault()?.WorkTypeName ?? string.Empty;
+            }
+
             var member = new Member
             {
                 MemberId = Guid.NewGuid(),
@@ -96,7 +106,7 @@ public class MemberService : IMemberService
                 Gender = request.Gender,
                 IsActive = request.IsActive,
                 IsExited = request.IsExited,
-                MemberType = request.MemberType?.Trim() ?? string.Empty,
+                MemberType = memberType ?? string.Empty,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim()
             };
 
