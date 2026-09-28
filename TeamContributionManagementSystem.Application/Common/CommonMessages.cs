@@ -282,6 +282,18 @@ public static class CommonMessages
         public const string NotFoundFormat = "Priority with ID '{0}' was not found.";
     }
 
+    public static class PaymentModes
+    {
+        public const string GetAllSuccess = "Payment modes retrieved successfully.";
+        public const string GetByIdSuccess = "Payment mode details retrieved successfully.";
+        public const string SaveSuccess = "Payment mode created successfully.";
+        public const string UpdateSuccess = "Payment mode updated successfully.";
+        public const string DeleteSuccess = "Payment mode deleted successfully.";
+        public const string NotFound = "Payment mode not found.";
+        public const string AlreadyExistsFormat = "Payment mode '{0}' already exists.";
+        public const string NotFoundFormat = "Payment mode with ID '{0}' was not found.";
+    }
+
     public static class Emails
     {
         public const string DailyLimitReached = "Daily email sending limit (500) has been reached. Please try again tomorrow.";

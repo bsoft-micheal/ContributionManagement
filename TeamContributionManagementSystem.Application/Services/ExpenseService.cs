@@ -1,3 +1,5 @@
+using System.IO;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
@@ -167,24 +169,57 @@ public class ExpenseService : IExpenseService
         }
     }
 
-    private Task<string?> ProcessAttachmentAsync(string? originalFileName, string? fileData, string? existingFilePath, CancellationToken cancellationToken)
+    private async Task<string?> ProcessAttachmentAsync(string? originalFileName, string? fileData, string? existingFilePath, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(fileData) && (fileData.StartsWith(CommonConstants.Defaults.DataUriPrefix, StringComparison.OrdinalIgnoreCase) || fileData.Length > 100))
-        {
-            return Task.FromResult<string?>(fileData);
-        }
+        var rawData = !string.IsNullOrWhiteSpace(fileData) ? fileData : originalFileName;
 
-        if (!string.IsNullOrWhiteSpace(originalFileName) && (originalFileName.StartsWith(CommonConstants.Defaults.DataUriPrefix, StringComparison.OrdinalIgnoreCase) || originalFileName.Length > 100))
+        if (!string.IsNullOrWhiteSpace(rawData) && rawData.StartsWith(CommonConstants.Defaults.DataUriPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            return Task.FromResult<string?>(originalFileName);
+            try
+            {
+                var commaIndex = rawData.IndexOf(CommonConstants.Defaults.Comma);
+                var base64Data = commaIndex >= 0 ? rawData.Substring(commaIndex + 1) : rawData;
+                var fileBytes = Convert.FromBase64String(base64Data);
+
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, "expense_attachments");
+                if (!Directory.Exists(folderPath))
+                {
+                    Directory.CreateDirectory(folderPath);
+                }
+
+                var extension = "png";
+                if (rawData.Contains("image/jpeg", StringComparison.OrdinalIgnoreCase) || rawData.Contains("image/jpg", StringComparison.OrdinalIgnoreCase))
+                {
+                    extension = "jpg";
+                }
+                else if (rawData.Contains("application/pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    extension = "pdf";
+                }
+                else if (!string.IsNullOrWhiteSpace(originalFileName) && originalFileName.Contains("."))
+                {
+                    extension = originalFileName.Split('.').Last().ToLowerInvariant();
+                }
+
+                var dateStr = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+                var uniqueId = Guid.NewGuid().ToString("N")[..8];
+                var fileName = $"{dateStr}_{uniqueId}.{extension}";
+                var filePath = Path.Combine(folderPath, fileName);
+
+                await File.WriteAllBytesAsync(filePath, fileBytes, cancellationToken);
+                return $"/expense_attachments/{fileName}";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to save expense attachment to disk");
+            }
         }
 
         if (string.IsNullOrWhiteSpace(originalFileName) && string.IsNullOrWhiteSpace(fileData))
         {
-            return Task.FromResult<string?>(null);
+            return existingFilePath;
         }
 
-        var result = !string.IsNullOrWhiteSpace(originalFileName) ? originalFileName : existingFilePath;
-        return Task.FromResult<string?>(result);
+        return !string.IsNullOrWhiteSpace(originalFileName) ? originalFileName : existingFilePath;
     }
 }

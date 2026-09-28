@@ -288,7 +288,7 @@ public class AuthService : IAuthService
             response.DateOfBirth = member.DateOfBirth;
             response.JoiningDate = member.JoiningDate;
             response.Gender = member.Gender;
-            response.MemberType = member.MemberType;
+            response.WorkType = member.WorkType;
             if (member.Role != null && !string.IsNullOrWhiteSpace(member.Role.RoleName))
             {
                 response.Role = member.Role.RoleName;

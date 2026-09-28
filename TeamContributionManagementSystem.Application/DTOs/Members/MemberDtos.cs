@@ -17,7 +17,6 @@ public class MemberDto
     public bool IsActive { get; set; }
     public bool IsExited { get; set; }
     public string WorkType { get; set; } = string.Empty;
-    public string MemberType { get => WorkType; set => WorkType = value; }
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
@@ -54,7 +53,6 @@ public class CreateMemberRequestDto
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
     public string WorkType { get; set; } = string.Empty;
-    public string MemberType { get => WorkType; set => WorkType = value; }
 }
 
 public class UpdateMemberRequestDto : CreateMemberRequestDto
