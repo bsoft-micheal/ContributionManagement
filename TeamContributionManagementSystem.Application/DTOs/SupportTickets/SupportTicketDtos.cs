@@ -10,11 +10,10 @@ public class SupportTicketDto
     public string? MemberId { get; set; }
     public string? RelatedEvent { get; set; }
     public string TicketType { get; set; } = string.Empty;
-    public string Subject { get; set; } = string.Empty;
+    public string? Subject { get; set; }
     public string Description { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string Priority { get; set; } = string.Empty;
-    public string? AssignedTo { get; set; }
     public string? RefNo { get; set; }
     public string? Utr { get; set; }
     public string? Attachment { get; set; }
@@ -44,10 +43,6 @@ public class CreateSupportTicketRequestDto
     public string TicketType { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(300)]
-    public string Subject { get; set; } = string.Empty;
-
-    [Required]
     [MaxLength(2000)]
     public string Description { get; set; } = string.Empty;
 
@@ -57,15 +52,13 @@ public class CreateSupportTicketRequestDto
     [MaxLength(50)]
     public string Priority { get; set; } = string.Empty;
 
-    [MaxLength(150)]
-    public string? AssignedTo { get; set; }
-
     [MaxLength(100)]
     public string? RefNo { get; set; }
 
     [MaxLength(100)]
     public string? Utr { get; set; }
 
+    [Required(ErrorMessage = "Attachment is required.")]
     public string? Attachment { get; set; }
 }
 
@@ -94,9 +87,6 @@ public class UpdateSupportTicketRequestDto
 
     [MaxLength(50)]
     public string? Priority { get; set; }
-
-    [MaxLength(150)]
-    public string? AssignedTo { get; set; }
 
     [MaxLength(100)]
     public string? RefNo { get; set; }

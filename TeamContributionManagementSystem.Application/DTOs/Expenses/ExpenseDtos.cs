@@ -41,7 +41,7 @@ public class CreateExpenseRequestDto
     public DateTime ExpenseDate { get; set; } = DateTime.UtcNow;
 
     [MaxLength(50)]
-    public string Status { get; set; } = string.Empty;
+    public string? Status { get; set; }
 
     [Required]
     [MaxLength(150)]

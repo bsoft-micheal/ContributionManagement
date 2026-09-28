@@ -197,7 +197,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.MemberId).HasMaxLength(100);
             entity.Property(x => x.RelatedEvent).HasMaxLength(200);
             entity.Property(x => x.TicketType).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.Subject).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.Subject).HasMaxLength(300).IsRequired(false).HasDefaultValue("");
             entity.Property(x => x.Description).HasMaxLength(2000).IsRequired();
             entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
             entity.Property(x => x.Priority).HasMaxLength(50).IsRequired();

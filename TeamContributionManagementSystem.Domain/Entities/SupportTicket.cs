@@ -8,7 +8,7 @@ public class SupportTicket
     public string? MemberId { get; set; }
     public string? RelatedEvent { get; set; }
     public string TicketType { get; set; } = string.Empty;
-    public string Subject { get; set; } = string.Empty;
+    public string? Subject { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string Priority { get; set; } = string.Empty;

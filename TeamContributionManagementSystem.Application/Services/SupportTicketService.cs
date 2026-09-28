@@ -113,11 +113,11 @@ public class SupportTicketService : ISupportTicketService
                 MemberId = request.MemberId?.Trim(),
                 RelatedEvent = request.RelatedEvent?.Trim(),
                 TicketType = ticketType ?? string.Empty,
-                Subject = request.Subject.Trim(),
+                Subject = string.Empty,
                 Description = request.Description.Trim(),
                 Status = status,
                 Priority = priority,
-                AssignedTo = request.AssignedTo?.Trim(),
+                AssignedTo = null,
                 RefNo = request.RefNo?.Trim() ?? $"REF-{DateTime.UtcNow:yyyyMMdd}-{nextNumber:D3}",
                 Utr = request.Utr?.Trim(),
                 Attachment = request.Attachment?.Trim(),
@@ -186,11 +186,6 @@ public class SupportTicketService : ISupportTicketService
             if (!string.IsNullOrWhiteSpace(request.Priority))
             {
                 ticket.Priority = request.Priority.Trim();
-            }
-
-            if (request.AssignedTo != null)
-            {
-                ticket.AssignedTo = string.IsNullOrWhiteSpace(request.AssignedTo) ? null : request.AssignedTo.Trim();
             }
 
             if (request.RefNo != null)
