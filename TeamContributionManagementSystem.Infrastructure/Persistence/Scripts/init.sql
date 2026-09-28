@@ -605,6 +605,9 @@ ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS created_at TIMES
 ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
 ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
 
+-- Members: Allow role_id to be nullable
+ALTER TABLE IF EXISTS members ALTER COLUMN role_id DROP NOT NULL;
+
 -- ============================================================================
 -- 3. INDEXES
 -- ============================================================================

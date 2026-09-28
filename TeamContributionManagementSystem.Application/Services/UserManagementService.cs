@@ -113,7 +113,22 @@ public class UserManagementService : IUserManagementService
     {
         try
         {
-            var emailExists = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+            Member? member = null;
+            if (request.MemberId.HasValue && request.MemberId.Value != Guid.Empty)
+            {
+                member = await _memberRepository.GetByIdAsync(request.MemberId.Value, cancellationToken)
+                    ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
+
+                var existingUserForMember = await _userRepository.GetByEmailAsync(member.Email.Trim(), cancellationToken);
+                if (existingUserForMember != null)
+                {
+                    throw new InvalidOperationException("A user account already exists for this member.");
+                }
+            }
+
+            var emailToUse = member != null ? member.Email.Trim().ToLowerInvariant() : request.Email.Trim().ToLowerInvariant();
+
+            var emailExists = await _userRepository.GetByEmailAsync(emailToUse, cancellationToken);
             if (emailExists is not null)
                 throw new InvalidOperationException(CommonMessages.Users.EmailExists);
 
@@ -124,14 +139,18 @@ public class UserManagementService : IUserManagementService
             if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
                 throw new InvalidOperationException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
 
+            var fullName = member != null && !string.IsNullOrWhiteSpace(member.Name) 
+                ? member.Name.Trim() 
+                : request.Username.Trim();
+
             var appUser = new AppUser
             {
                 UserId       = Guid.NewGuid(),
                 Username     = request.Username.Trim(),
-                Email        = request.Email.Trim().ToLowerInvariant(),
+                Email        = emailToUse,
                 PasswordHash = _passwordHasher.HashPassword(request.Password),
                 Role         = role,
-                FullName     = request.Username.Trim(),
+                FullName     = fullName,
                 IsActive     = request.IsActive,
                 CreatedBy    = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
                 CreatedAt    = DateTime.UtcNow,
@@ -139,6 +158,18 @@ public class UserManagementService : IUserManagementService
             };
 
             await _userRepository.AddAsync(appUser, cancellationToken);
+
+            if (member != null)
+            {
+                var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
+                var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName, StringComparison.OrdinalIgnoreCase));
+                if (matchedRole != null)
+                {
+                    member.RoleId = matchedRole.RoleId;
+                    _memberRepository.Update(member);
+                }
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var created = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
@@ -175,8 +206,10 @@ public class UserManagementService : IUserManagementService
 
             var oldEmail = appUser.Email;
             var newEmail = request.Email.Trim().ToLowerInvariant();
+            var oldUsername = appUser.Username;
+            var newUsername = request.Username.Trim();
 
-            appUser.Username = request.Username.Trim();
+            appUser.Username = newUsername;
             appUser.Email    = newEmail;
             appUser.Role     = role;
             appUser.IsActive = request.IsActive;
@@ -199,6 +232,11 @@ public class UserManagementService : IUserManagementService
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (!string.Equals(oldUsername, newUsername, StringComparison.OrdinalIgnoreCase))
+            {
+                await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldUsername, newUsername, cancellationToken);
+            }
 
             var updated = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
@@ -248,7 +286,10 @@ public class UserManagementService : IUserManagementService
             if (emailOwner is not null && emailOwner.UserId != userId)
                 throw new InvalidOperationException(CommonMessages.Users.EmailExists);
 
-            user.FullName = request.FullName.Trim();
+            var oldFullName = user.FullName;
+            var newFullName = request.FullName.Trim();
+
+            user.FullName = newFullName;
             user.Email    = newEmail;
 
             if (!string.IsNullOrWhiteSpace(request.Password))
@@ -365,6 +406,11 @@ public class UserManagementService : IUserManagementService
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(oldFullName) && !string.Equals(oldFullName, newFullName, StringComparison.OrdinalIgnoreCase))
+            {
+                await _userRepository.CascadeUpdateCreatorDisplayNameAsync(user.UserId, oldFullName, newFullName, cancellationToken);
+            }
 
             var updated = await _userRepository.GetByIdAsync(user.UserId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);

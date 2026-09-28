@@ -59,10 +59,12 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.Phone).HasMaxLength(20).IsRequired();
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => new { x.RoleId, x.IsActive });
-            entity.Property(x => x.MemberType).HasMaxLength(20);
+            entity.Property(x => x.WorkType).HasColumnName("member_type").HasMaxLength(20);
+            entity.Ignore(x => x.MemberType);
             entity.HasOne(x => x.Role)
                 .WithMany(x => x.Members)
                 .HasForeignKey(x => x.RoleId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

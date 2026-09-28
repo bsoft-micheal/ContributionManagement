@@ -21,9 +21,6 @@ public class CreateMemberRequestValidator : AbstractValidator<CreateMemberReques
             .NotEmpty().WithMessage(CommonValidationMessages.PhoneRequired)
             .MaximumLength(20).WithMessage(CommonValidationMessages.PhoneMaxLength);
 
-        RuleFor(x => x.RoleId)
-            .NotEmpty().WithMessage(CommonValidationMessages.RoleRequired);
-
         RuleFor(x => x.DateOfBirth)
             .NotEmpty().WithMessage(CommonValidationMessages.DateOfBirthRequired)
             .LessThan(DateTime.UtcNow).WithMessage(CommonValidationMessages.DateOfBirthPast);

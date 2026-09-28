@@ -13,6 +13,18 @@ public class PriorityDto
     public DateTime? CreatedOn { get; set; }
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
+
+    public string? UpdatedBy
+    {
+        get => ModifiedBy;
+        set => ModifiedBy = value;
+    }
+
+    public DateTime? UpdatedOn
+    {
+        get => ModifiedOn;
+        set => ModifiedOn = value;
+    }
 }
 
 public class CreatePriorityRequestDto

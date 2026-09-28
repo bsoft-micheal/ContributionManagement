@@ -5,6 +5,7 @@ namespace TeamContributionManagementSystem.Application.Interfaces.Services;
 public interface IMemberService
 {
     Task<IReadOnlyCollection<MemberDto>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<MemberDto>> GetMembersWithoutUserAccountAsync(CancellationToken cancellationToken = default);
     Task<MemberDto> CreateAsync(CreateMemberRequestDto request, string? user = null, CancellationToken cancellationToken = default);
     Task<MemberDto> UpdateAsync(Guid memberId, UpdateMemberRequestDto request, string? user = null, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid memberId, CancellationToken cancellationToken = default);

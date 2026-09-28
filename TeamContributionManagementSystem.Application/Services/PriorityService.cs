@@ -14,17 +14,20 @@ public class PriorityService : IPriorityService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly ILogger<PriorityService> _logger;
+    private readonly IUserRepository? _userRepository;
 
     public PriorityService(
         IPriorityRepository repository,
         IUnitOfWork unitOfWork,
         IMapper mapper,
-        ILogger<PriorityService> logger)
+        ILogger<PriorityService> logger,
+        IUserRepository? userRepository = null)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _logger = logger;
+        _userRepository = userRepository;
     }
 
     public async Task<IReadOnlyCollection<PriorityDto>> GetAllPriorityAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
@@ -32,7 +35,41 @@ public class PriorityService : IPriorityService
         try
         {
             var entities = await _repository.GetAllAsync(activeOnly, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<PriorityDto>>(entities);
+            var dtos = _mapper.Map<List<PriorityDto>>(entities);
+
+            if (_userRepository != null)
+            {
+                try
+                {
+                    var users = await _userRepository.GetAllAsync(cancellationToken);
+                    var userDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var u in users)
+                    {
+                        var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username;
+                        userDict[u.UserId.ToString()] = displayName;
+                        if (!string.IsNullOrWhiteSpace(u.Username)) userDict[u.Username] = displayName;
+                        if (!string.IsNullOrWhiteSpace(u.FullName)) userDict[u.FullName] = displayName;
+                    }
+
+                    foreach (var dto in dtos)
+                    {
+                        if (!string.IsNullOrWhiteSpace(dto.CreatedBy) && userDict.TryGetValue(dto.CreatedBy, out var createdByName))
+                        {
+                            dto.CreatedBy = createdByName;
+                        }
+                        if (!string.IsNullOrWhiteSpace(dto.ModifiedBy) && userDict.TryGetValue(dto.ModifiedBy, out var updatedByName))
+                        {
+                            dto.ModifiedBy = updatedByName;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve user names for priorities");
+                }
+            }
+
+            return dtos;
         }
         catch (Exception ex)
         {

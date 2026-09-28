@@ -11,6 +11,7 @@ public interface IMemberRepository
     Task<Member?> GetByIdAsync(Guid memberId, CancellationToken cancellationToken = default);
     Task<Member?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
     Task<List<MemberDto>> GetActiveBirthdaysInMonthAsync(int month, CancellationToken cancellationToken = default);
+    Task<List<MemberDto>> GetMembersWithoutUserAccountAsync(CancellationToken cancellationToken = default);
     Task AddAsync(Member member, CancellationToken cancellationToken = default);
     void Update(Member member);
 

@@ -8,7 +8,7 @@ public class MemberDto
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
-    public Guid RoleId { get; set; }
+    public Guid? RoleId { get; set; }
     public string RoleName { get; set; } = string.Empty;
     public decimal DefaultContributionAmount { get; set; }
     public DateTime DateOfBirth { get; set; }
@@ -16,7 +16,8 @@ public class MemberDto
     public string Gender { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public bool IsExited { get; set; }
-    public string MemberType { get; set; } = string.Empty;
+    public string WorkType { get; set; } = string.Empty;
+    public string MemberType { get => WorkType; set => WorkType = value; }
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
@@ -38,8 +39,7 @@ public class CreateMemberRequestDto
     [MaxLength(20)]
     public string Phone { get; set; } = string.Empty;
 
-    [Required]
-    public Guid RoleId { get; set; }
+    public Guid? RoleId { get; set; }
 
     [Required]
     public DateTime DateOfBirth { get; set; }
@@ -53,7 +53,8 @@ public class CreateMemberRequestDto
 
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
-    public string MemberType { get; set; } = string.Empty;
+    public string WorkType { get; set; } = string.Empty;
+    public string MemberType { get => WorkType; set => WorkType = value; }
 }
 
 public class UpdateMemberRequestDto : CreateMemberRequestDto
