@@ -32,6 +32,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591;1573</NoWarn>
+    <UserSecretsId>a5946548-7e99-4cab-9090-42a171d4760a</UserSecretsId>
   </PropertyGroup>
 
 </Project>
