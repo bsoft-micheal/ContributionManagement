@@ -45,6 +45,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IStatusRepository, StatusRepository>();
         services.AddScoped<IWorkTypeRepository, WorkTypeRepository>();
         services.AddScoped<IPriorityRepository, PriorityRepository>();
+        services.AddScoped<IPaymentModeRepository, PaymentModeRepository>();
 
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IRoleService, RoleService>();
@@ -69,6 +70,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IStatusService, StatusService>();
         services.AddScoped<IWorkTypeService, WorkTypeService>();
         services.AddScoped<IPriorityService, PriorityService>();
+        services.AddScoped<IPaymentModeService, PaymentModeService>();
 
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();

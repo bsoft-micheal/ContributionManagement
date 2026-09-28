@@ -49,7 +49,7 @@ public class UserManagementService : IUserManagementService
             dto.JoiningDate = member.JoiningDate;
             dto.Gender = member.Gender;
             dto.Phone = member.Phone;
-            dto.MemberType = member.MemberType;
+            dto.WorkType = member.WorkType;
             if (member.Role != null && !string.IsNullOrWhiteSpace(member.Role.RoleName))
             {
                 dto.RoleName = member.Role.RoleName;
@@ -75,7 +75,7 @@ public class UserManagementService : IUserManagementService
                     user.JoiningDate = member.JoiningDate;
                     user.Gender = member.Gender;
                     user.Phone = member.Phone;
-                    user.MemberType = member.MemberType;
+                    user.WorkType = member.WorkType;
                     if (!string.IsNullOrWhiteSpace(member.RoleName))
                     {
                         user.RoleName = member.RoleName;
@@ -366,8 +366,8 @@ public class UserManagementService : IUserManagementService
                     member.Phone = request.Phone.Trim();
                 if (!string.IsNullOrWhiteSpace(request.Gender))
                     member.Gender = request.Gender.Trim();
-                if (!string.IsNullOrWhiteSpace(request.MemberType))
-                    member.MemberType = request.MemberType.Trim();
+                if (!string.IsNullOrWhiteSpace(request.WorkType))
+                    member.WorkType = request.WorkType.Trim();
                 if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
                     member.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
                 if (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
@@ -391,7 +391,7 @@ public class UserManagementService : IUserManagementService
                         Email = newEmail,
                         Phone = request.Phone?.Trim() ?? string.Empty,
                         Gender = request.Gender?.Trim() ?? string.Empty,
-                        MemberType = request.MemberType?.Trim() ?? string.Empty,
+                        WorkType = request.WorkType?.Trim() ?? string.Empty,
                         RoleId = defaultRole.RoleId,
                         DateOfBirth = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
                             ? request.DateOfBirth.Value.ToUniversalTime()

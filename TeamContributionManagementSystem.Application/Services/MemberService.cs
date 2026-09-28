@@ -105,7 +105,7 @@ public class MemberService : IMemberService
 
             var workType = !string.IsNullOrWhiteSpace(request.WorkType)
                 ? request.WorkType.Trim()
-                : (!string.IsNullOrWhiteSpace(request.MemberType) ? request.MemberType.Trim() : string.Empty);
+                : string.Empty;
 
             if (string.IsNullOrWhiteSpace(workType) && _workTypeRepository != null)
             {
@@ -126,7 +126,6 @@ public class MemberService : IMemberService
                 IsActive = request.IsActive,
                 IsExited = request.IsExited,
                 WorkType = workType ?? string.Empty,
-                MemberType = workType ?? string.Empty,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim()
             };
 
@@ -179,11 +178,10 @@ public class MemberService : IMemberService
             member.Gender = request.Gender;
             member.IsActive = request.IsActive;
             member.IsExited = request.IsExited;
-            var updatedWorkType = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : request.MemberType?.Trim();
+            var updatedWorkType = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : null;
             if (!string.IsNullOrWhiteSpace(updatedWorkType))
             {
                 member.WorkType = updatedWorkType;
-                member.MemberType = updatedWorkType;
             }
             if (!string.IsNullOrWhiteSpace(user))
             {

@@ -213,4 +213,14 @@ public static class CommonRoutes
         public const string Update = "updatePriorityAsyncById/{id:guid}";
         public const string Delete = "deletePriorityAsyncById/{id:guid}";
     }
+
+    public static class PaymentModes
+    {
+        public const string Base = $"{ApiBase}/payment-modes";
+        public const string GetAll = "getAllPaymentModeAsync";
+        public const string GetById = "getPaymentModeAsyncById/{id:guid}";
+        public const string Create = "savePaymentModeAsync";
+        public const string Update = "updatePaymentModeAsyncById/{id:guid}";
+        public const string Delete = "deletePaymentModeAsyncById/{id:guid}";
+    }
 }

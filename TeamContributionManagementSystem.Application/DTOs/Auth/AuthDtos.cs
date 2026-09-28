@@ -33,7 +33,7 @@ public class AuthResponseDto
     public DateTime? DateOfBirth { get; set; }
     public DateTime? JoiningDate { get; set; }
     public string? Gender { get; set; }
-    public string? MemberType { get; set; }
+    public string? WorkType { get; set; }
 }
 
 public class VerifyTwoFactorRequestDto

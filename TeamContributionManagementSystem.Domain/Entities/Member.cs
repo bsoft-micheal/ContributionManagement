@@ -16,7 +16,6 @@ public class Member : IAuditableEntity
     public bool IsExited { get; set; }
     public bool IsDeleted { get; set; }
     public string WorkType { get; set; } = string.Empty;
-    public string MemberType { get => WorkType; set => WorkType = value; }
 
     public Role? Role { get; set; }
     public ICollection<EventParticipant> EventParticipants { get; set; } = new List<EventParticipant>();

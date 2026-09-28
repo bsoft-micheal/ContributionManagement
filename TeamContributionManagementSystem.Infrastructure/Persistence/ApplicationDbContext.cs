@@ -39,6 +39,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<WorkType> WorkTypes => Set<WorkType>();
     public DbSet<Priority> Priorities => Set<Priority>();
+    public DbSet<PaymentModeItem> PaymentModes => Set<PaymentModeItem>();
     public DbSet<NavigationMenu> NavigationMenus => Set<NavigationMenu>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -60,7 +61,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => new { x.RoleId, x.IsActive });
             entity.Property(x => x.WorkType).HasColumnName("member_type").HasMaxLength(20);
-            entity.Ignore(x => x.MemberType);
             entity.HasOne(x => x.Role)
                 .WithMany(x => x.Members)
                 .HasForeignKey(x => x.RoleId)
@@ -328,6 +328,16 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.PriorityName).IsUnique();
+        });
+
+        modelBuilder.Entity<PaymentModeItem>(entity =>
+        {
+            entity.ToTable("payment_modes");
+            entity.HasKey(x => x.PaymentModeId);
+            entity.Property(x => x.PaymentModeName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.CreatedBy).HasMaxLength(150);
+            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
+            entity.HasIndex(x => x.PaymentModeName).IsUnique();
         });
 
         modelBuilder.ApplySnakeCaseNames();

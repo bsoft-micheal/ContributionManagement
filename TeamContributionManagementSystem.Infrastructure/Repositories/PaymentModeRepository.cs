@@ -1,0 +1,60 @@
+using Microsoft.EntityFrameworkCore;
+using TeamContributionManagementSystem.Application.Interfaces.Repositories;
+using TeamContributionManagementSystem.Domain.Entities;
+using TeamContributionManagementSystem.Infrastructure.Persistence;
+
+namespace TeamContributionManagementSystem.Infrastructure.Repositories;
+
+public class PaymentModeRepository : IPaymentModeRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public PaymentModeRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<IReadOnlyCollection<PaymentModeItem>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    {
+        var query = _context.PaymentModes
+            .Where(x => !x.IsDeleted)
+            .AsNoTracking();
+
+        if (activeOnly.HasValue && activeOnly.Value)
+        {
+            query = query.Where(x => x.IsActive);
+        }
+
+        return await query
+            .OrderBy(x => x.PaymentModeName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PaymentModeItem?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _context.PaymentModes
+            .FirstOrDefaultAsync(x => x.PaymentModeId == id && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task<PaymentModeItem?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
+    {
+        return await _context.PaymentModes
+            .FirstOrDefaultAsync(x => x.PaymentModeName.ToLower() == name.ToLower() && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task AddAsync(PaymentModeItem paymentMode, CancellationToken cancellationToken = default)
+    {
+        await _context.PaymentModes.AddAsync(paymentMode, cancellationToken);
+    }
+
+    public void Update(PaymentModeItem paymentMode)
+    {
+        _context.PaymentModes.Update(paymentMode);
+    }
+
+    public void Delete(PaymentModeItem paymentMode)
+    {
+        paymentMode.IsDeleted = true;
+        _context.PaymentModes.Update(paymentMode);
+    }
+}
