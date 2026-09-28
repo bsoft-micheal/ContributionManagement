@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Mail;
 using System.Net.Mime;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
@@ -10,13 +10,13 @@ namespace TeamContributionManagementSystem.Infrastructure.Services;
 
 public class EmailService : IEmailService
 {
-    private readonly IConfiguration _configuration;
+    private readonly SmtpSettings _smtpSettings;
     private readonly ILogger<EmailService> _logger;
     private static readonly object _lock = new();
 
-    public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+    public EmailService(IOptions<SmtpSettings> smtpOptions, ILogger<EmailService> logger)
     {
-        _configuration = configuration;
+        _smtpSettings = smtpOptions?.Value ?? new SmtpSettings();
         _logger = logger;
     }
 
@@ -84,31 +84,17 @@ public class EmailService : IEmailService
         var inlineImageList = inlineImages?.Where(image => !string.IsNullOrWhiteSpace(image.ContentId) && !string.IsNullOrWhiteSpace(image.FilePath)).ToList()
             ?? new List<InlineEmailImage>();
 
-        var smtpSection = _configuration.GetSection(CommonConstants.ConfigSections.Smtp);
-        var host = smtpSection[CommonConstants.ConfigKeys.Host];
-        
-        int.TryParse(smtpSection[CommonConstants.ConfigKeys.Port], out var port);
-        if (port == 0) port = 587;
-        
-        var username = smtpSection[CommonConstants.ConfigKeys.Username];
-        var password = smtpSection[CommonConstants.ConfigKeys.Password];
-        
-        if (!bool.TryParse(smtpSection[CommonConstants.ConfigKeys.EnableSsl], out var enableSsl))
-        {
-            enableSsl = true;
-        }
-        
-        var fromAddress = smtpSection[CommonConstants.ConfigKeys.FromAddress];
-        if (string.IsNullOrWhiteSpace(fromAddress))
-        {
-            fromAddress = username ?? CommonConstants.Defaults.DefaultFromAddress;
-        }
-        
-        var fromName = smtpSection[CommonConstants.ConfigKeys.FromName];
-        if (string.IsNullOrWhiteSpace(fromName))
-        {
-            fromName = CommonConstants.Defaults.DefaultFromName;
-        }
+        var host = _smtpSettings.Host;
+        var port = _smtpSettings.Port > 0 ? _smtpSettings.Port : 587;
+        var username = _smtpSettings.Username;
+        var password = _smtpSettings.Password;
+        var enableSsl = _smtpSettings.EnableSsl;
+        var fromAddress = !string.IsNullOrWhiteSpace(_smtpSettings.FromAddress)
+            ? _smtpSettings.FromAddress
+            : (!string.IsNullOrWhiteSpace(username) ? username : CommonConstants.Defaults.DefaultFromAddress);
+        var fromName = !string.IsNullOrWhiteSpace(_smtpSettings.FromName)
+            ? _smtpSettings.FromName
+            : CommonConstants.Defaults.DefaultFromName;
 
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
         {
