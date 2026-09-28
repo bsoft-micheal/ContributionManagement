@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Gallery;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -18,7 +19,7 @@ public class GalleryRepository : IGalleryRepository
         _logger = logger;
     }
 
-    public async Task<List<GalleryPhoto>> GetAllAsync(string? eventName = null, string? category = null, CancellationToken cancellationToken = default)
+    public async Task<List<GalleryPhotoDto>> GetAllAsync(string? eventName = null, string? category = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -34,7 +35,25 @@ public class GalleryRepository : IGalleryRepository
                 query = query.Where(x => x.Category.ToLower() == category.ToLower());
             }
 
-            return await query.OrderByDescending(x => x.TakenDate).ToListAsync(cancellationToken);
+            return await query
+                .OrderByDescending(x => x.TakenDate)
+                .Select(x => new GalleryPhotoDto
+                {
+                    PhotoId = x.PhotoId,
+                    Title = x.Title,
+                    EventName = x.EventName,
+                    Category = x.Category,
+                    ImageUrl = x.ImageUrl,
+                    TakenDate = x.TakenDate,
+                    Description = x.Description,
+                    IsActive = x.IsActive,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedAt,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {

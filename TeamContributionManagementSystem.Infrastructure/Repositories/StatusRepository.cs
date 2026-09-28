@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TeamContributionManagementSystem.Application.DTOs.Statuses;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -14,7 +15,7 @@ public class StatusRepository : IStatusRepository
         _context = context;
     }
 
-    public async Task<IReadOnlyCollection<Status>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
         var query = _context.Statuses
             .Where(x => !x.IsDeleted)
@@ -27,6 +28,17 @@ public class StatusRepository : IStatusRepository
 
         return await query
             .OrderBy(x => x.StatusName)
+            .Select(x => new StatusDto
+            {
+                StatusId = x.StatusId,
+                StatusName = x.StatusName,
+                IsActive = x.IsActive,
+                CreatedBy = x.CreatedBy,
+                CreatedAt = x.CreatedAt,
+                CreatedOn = x.CreatedOn,
+                ModifiedBy = x.ModifiedBy,
+                ModifiedOn = x.ModifiedOn
+            })
             .ToListAsync(cancellationToken);
     }
 

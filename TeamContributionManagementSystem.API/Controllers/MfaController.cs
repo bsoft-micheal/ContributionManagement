@@ -27,32 +27,33 @@ public class MfaController : ControllerBase
     /// </summary>
     [HttpGet(CommonRoutes.Mfa.Setup)]
     [ActionName(nameof(SetupMfaAsync))]
-    public async Task<ActionResult<ApiResponse<object>>> SetupMfaAsync()
+    public async Task<ActionResult<ApiResponse<MfaSetupResponseDto>>> SetupMfaAsync(CancellationToken cancellationToken)
     {
         var email = User.FindFirstValue(ClaimTypes.Email);
-        if (string.IsNullOrEmpty(email)) return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<object>.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
+        if (string.IsNullOrEmpty(email)) return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<MfaSetupResponseDto>.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
 
-        var result = await _mfaService.GenerateMfaSetupAsync(email);
-        var data = new
+        var result = await _mfaService.GenerateMfaSetupAsync(email, cancellationToken);
+        var data = new MfaSetupResponseDto
         {
             SecretKey = result.SecretKey,
             QrCodeUri = result.QrCodeUri
         };
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(data, CommonMessages.Mfa.SetupSuccess, CommonStatusCodes.Status200OK));
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<MfaSetupResponseDto>.SuccessResult(data, CommonMessages.Mfa.SetupSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
     /// Verifies the first 6-digit code from the Authenticator App and saves the Secret Key if valid.
     /// </summary>
     /// <param name="request">The Secret Key, device label, and 6-digit OTP to verify.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpPost(CommonRoutes.Mfa.VerifySetup)]
     [ActionName(nameof(VerifySetupMfaAsync))]
-    public async Task<ActionResult<ApiResponse>> VerifySetupMfaAsync([FromBody] MfaSetupVerifyRequestDto request)
+    public async Task<ActionResult<ApiResponse>> VerifySetupMfaAsync([FromBody] MfaSetupVerifyRequestDto request, CancellationToken cancellationToken)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(userIdString, out Guid userId)) return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
 
-        var success = await _mfaService.VerifyAndSaveMfaDeviceAsync(userId, request.SecretKey, request.DeviceLabel, request.Otp);
+        var success = await _mfaService.VerifyAndSaveMfaDeviceAsync(userId, request.SecretKey, request.DeviceLabel, request.Otp, cancellationToken);
         if (success)
         {
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Mfa.VerifySetupSuccess, CommonStatusCodes.Status200OK));
@@ -65,33 +66,28 @@ public class MfaController : ControllerBase
     /// </summary>
     [HttpGet(CommonRoutes.Mfa.GetDevices)]
     [ActionName(nameof(GetDevicesMfaAsync))]
-    public async Task<ActionResult<ApiResponse<object>>> GetDevicesMfaAsync()
+    public async Task<ActionResult<ApiResponse<IEnumerable<UserMfaDeviceDto>>>> GetDevicesMfaAsync(CancellationToken cancellationToken)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(userIdString, out Guid userId)) return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<object>.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
+        if (!Guid.TryParse(userIdString, out Guid userId)) return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<IEnumerable<UserMfaDeviceDto>>.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
 
-        var devices = await _mfaService.GetUserMfaDevicesAsync(userId);
-        var result = devices.Select(d => new
-        {
-            d.Id,
-            d.DeviceLabel,
-            d.DateAdded
-        });
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(result, CommonMessages.Mfa.GetDevicesSuccess, CommonStatusCodes.Status200OK));
+        var devices = await _mfaService.GetUserMfaDevicesAsync(userId, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IEnumerable<UserMfaDeviceDto>>.SuccessResult(devices, CommonMessages.Mfa.GetDevicesSuccess, CommonStatusCodes.Status200OK));
     }
 
     /// <summary>
     /// Deletes a specific MFA device from the user's account.
     /// </summary>
     /// <param name="id">The unique identifier of the MFA device.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpDelete(CommonRoutes.Mfa.RemoveDevice)]
     [ActionName(nameof(RemoveDeviceMfaAsync))]
-    public async Task<ActionResult<ApiResponse>> RemoveDeviceMfaAsync(Guid id)
+    public async Task<ActionResult<ApiResponse>> RemoveDeviceMfaAsync(Guid id, CancellationToken cancellationToken)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(userIdString, out Guid userId)) return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
 
-        await _mfaService.RemoveMfaDeviceAsync(userId, id);
+        await _mfaService.RemoveMfaDeviceAsync(userId, id, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Mfa.RemoveDeviceSuccess, CommonStatusCodes.Status200OK));
     }
 }

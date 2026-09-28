@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TeamContributionManagementSystem.Application.DTOs.TicketTypes;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -14,7 +15,7 @@ public class TicketTypeRepository : ITicketTypeRepository
         _context = context;
     }
 
-    public async Task<IReadOnlyCollection<TicketType>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<TicketTypeDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
         var query = _context.TicketTypes
             .AsNoTracking()
@@ -25,7 +26,20 @@ public class TicketTypeRepository : ITicketTypeRepository
             query = query.Where(x => x.IsActive);
         }
 
-        return await query.OrderBy(x => x.TypeName).ToListAsync(cancellationToken);
+        return await query
+            .OrderBy(x => x.TypeName)
+            .Select(x => new TicketTypeDto
+            {
+                TicketTypeId = x.TicketTypeId,
+                TypeName = x.TypeName,
+                IsActive = x.IsActive,
+                CreatedBy = x.CreatedBy,
+                CreatedAt = x.CreatedAt,
+                CreatedOn = x.CreatedOn,
+                ModifiedBy = x.ModifiedBy,
+                ModifiedOn = x.ModifiedOn
+            })
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<TicketType?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

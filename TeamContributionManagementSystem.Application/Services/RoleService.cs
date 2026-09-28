@@ -27,8 +27,7 @@ public class RoleService : IRoleService
     {
         try
         {
-            var roles = await _roleRepository.GetAllAsync(cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<RoleDto>>(roles);
+            return await _roleRepository.GetAllAsync(cancellationToken);
         }
         catch (Exception ex)
         {

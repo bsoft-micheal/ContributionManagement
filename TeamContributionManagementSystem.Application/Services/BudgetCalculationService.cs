@@ -31,8 +31,7 @@ public class BudgetCalculationService : IBudgetCalculationService
     {
         try
         {
-            var list = await _repository.GetAllAsync(cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<BudgetCalculationDto>>(list);
+            return await _repository.GetAllAsync(cancellationToken);
         }
         catch (Exception ex)
         {

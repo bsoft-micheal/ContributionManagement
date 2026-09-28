@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Expenses;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -18,7 +19,7 @@ public class ExpenseRepository : IExpenseRepository
         _logger = logger;
     }
 
-    public async Task<List<Expense>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
+    public async Task<List<ExpenseDto>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -49,7 +50,29 @@ public class ExpenseRepository : IExpenseRepository
                 query = query.Where(x => x.ExpenseDate <= endDate.Value);
             }
 
-            return await query.OrderByDescending(x => x.ExpenseDate).ToListAsync(cancellationToken);
+            return await query
+                .OrderByDescending(x => x.ExpenseDate)
+                .Select(x => new ExpenseDto
+                {
+                    ExpenseId = x.ExpenseId,
+                    EventName = x.EventName,
+                    Category = x.Category,
+                    Amount = x.Amount,
+                    ExpenseDate = x.ExpenseDate,
+                    Status = x.Status,
+                    SubmittedBy = x.SubmittedBy,
+                    ApprovedBy = x.ApprovedBy,
+                    Description = x.Description,
+                    FileName = x.FileName,
+                    FileUrl = x.FileName,
+                    IsActive = x.IsActive,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedAt,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {

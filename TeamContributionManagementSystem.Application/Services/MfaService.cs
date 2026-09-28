@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
+using TeamContributionManagementSystem.Application.DTOs.Mfa;
 using TeamContributionManagementSystem.Domain.Entities;
 using OtpNet;
 
@@ -67,11 +68,17 @@ public class MfaService : IMfaService
         }
     }
 
-    public async Task<IEnumerable<UserMfaDevice>> GetUserMfaDevicesAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<UserMfaDeviceDto>> GetUserMfaDevicesAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _mfaDeviceRepository.GetByUserIdAsync(userId, cancellationToken);
+            var devices = await _mfaDeviceRepository.GetByUserIdAsync(userId, cancellationToken);
+            return devices.Select(d => new UserMfaDeviceDto
+            {
+                Id = d.Id,
+                DeviceLabel = d.DeviceLabel,
+                DateAdded = d.DateAdded
+            });
         }
         catch (Exception ex)
         {

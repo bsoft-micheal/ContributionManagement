@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.BudgetCalculations;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -18,13 +19,26 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         _logger = logger;
     }
 
-    public async Task<List<BudgetCalculation>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<List<BudgetCalculationDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             return await _context.BudgetCalculations
                 .Where(x => !x.IsDeleted)
                 .OrderBy(x => x.CreatedAt)
+                .Select(x => new BudgetCalculationDto
+                {
+                    BudgetCalculationId = x.BudgetCalculationId,
+                    ExpenseItem = x.ExpenseItem,
+                    Rate = x.Rate,
+                    Category = x.Category,
+                    IsActive = x.IsActive,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedOn,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
                 .ToListAsync(cancellationToken);
         }
         catch (Exception ex)

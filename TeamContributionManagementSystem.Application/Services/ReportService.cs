@@ -38,7 +38,7 @@ public class ReportService : IReportService
 
             var events = await _eventRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
             var pendingDues = await _contributionRepository.GetPendingAsync(targetMonth, targetYear, cancellationToken);
-            var contributions = events.SelectMany(x => x.Contributions.Where(c => !c.IsDeleted)).ToList();
+            var contributions = await _contributionRepository.GetAllAsync(cancellationToken);
 
             // Date filtering for expenses & payments
             DateTime? startDate = null;
@@ -60,29 +60,29 @@ public class ReportService : IReportService
             // 1. Event Collections Report
             var eventCollections = events.Select(x =>
             {
-                var expected = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount);
-                var paid = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount);
-                var pending = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid).Sum(c => c.Amount);
+                var expected = x.TotalExpectedAmount;
+                var paid = x.TotalPaidAmount;
+                var pending = expected - paid;
                 var rate = expected > 0 ? Math.Round((paid / expected) * 100, 1) : 0;
 
                 return new EventCollectionReportDto
                 {
                     EventId = x.EventId,
                     EventName = x.EventName,
-                    EventTypeName = x.EventType?.EventTypeName ?? string.Empty,
+                    EventTypeName = x.EventTypeName,
                     EventDate = x.EventDate,
                     ExpectedAmount = expected,
                     PaidAmount = paid,
                     PendingAmount = pending,
                     CollectionRate = rate,
-                    CreatedBy = x.CreatedByUser != null ? x.CreatedByUser.FullName : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
+                    CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt
                 };
             }).OrderByDescending(x => x.EventDate).ToList();
 
             // 2. Member Contributions History Report
             var memberHistory = contributions
-                .GroupBy(x => new { x.MemberId, MemberName = x.Member?.Name ?? string.Empty })
+                .GroupBy(x => new { x.MemberId, MemberName = x.MemberName })
                 .Select(group =>
                 {
                     var expected = group.Sum(x => x.Amount);
@@ -99,8 +99,8 @@ public class ReportService : IReportService
                         PaidEventsCount = group.Count(x => x.PaymentStatus == PaymentStatus.Paid),
                         PendingEventsCount = group.Count(x => x.PaymentStatus != PaymentStatus.Paid),
                         CompletionRate = completion,
-                        CreatedBy = firstItem?.Member?.CreatedBy ?? firstItem?.CreatedBy,
-                        CreatedAt = firstItem?.Member?.CreatedAt ?? firstItem?.CreatedAt
+                        CreatedBy = firstItem?.CreatedBy,
+                        CreatedAt = firstItem?.CreatedAt
                     };
                 })
                 .OrderBy(x => x.MemberName)
@@ -109,8 +109,8 @@ public class ReportService : IReportService
             // 3. Pending Dues & Defaulters Report
             var pendingDuesReport = pendingDues.Select(x =>
             {
-                var days = x.Event?.EventDate != null 
-                    ? Math.Max(0, (DateTime.UtcNow - x.Event.EventDate).Days)
+                var days = (x.CreatedOn.HasValue || x.CreatedAt.HasValue) 
+                    ? Math.Max(0, (DateTime.UtcNow - (x.CreatedOn ?? x.CreatedAt!.Value)).Days)
                     : 0;
                 var aging = days > 30 
                     ? CommonConstants.AgingCategories.Critical 
@@ -120,24 +120,24 @@ public class ReportService : IReportService
                 {
                     ContributionId = x.ContributionId,
                     MemberId = x.MemberId,
-                    MemberName = x.Member?.Name ?? string.Empty,
-                    Phone = x.Member?.Phone ?? string.Empty,
-                    EventName = x.Event?.EventName ?? string.Empty,
-                    EventDate = x.Event?.EventDate ?? DateTime.MinValue,
+                    MemberName = x.MemberName,
+                    Phone = string.Empty,
+                    EventName = x.EventName,
+                    EventDate = DateTime.MinValue,
                     Amount = x.Amount,
                     DaysOverdue = days,
                     AgingCategory = aging,
-                    CreatedBy = x.CreatedBy ?? (x.Event?.CreatedByUser != null ? x.Event.CreatedByUser.FullName : (x.Event?.CreatedBy != Guid.Empty ? x.Event?.CreatedBy.ToString() : null)),
-                    CreatedAt = x.CreatedAt ?? x.Event?.CreatedAt
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt ?? x.CreatedOn
                 };
             }).OrderByDescending(x => x.DaysOverdue).ToList();
 
             // 4. Event Financials (Budget vs Actual Expenses)
             var eventFinancials = events.Select(x =>
             {
-                var collections = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount);
+                var collections = x.TotalPaidAmount;
                 var expenses = allExpenses
-                    .Where(e => !e.IsDeleted && !string.IsNullOrWhiteSpace(e.EventName) && e.EventName.Trim().Equals(x.EventName.Trim(), StringComparison.OrdinalIgnoreCase))
+                    .Where(e => !string.IsNullOrWhiteSpace(e.EventName) && e.EventName.Trim().Equals(x.EventName.Trim(), StringComparison.OrdinalIgnoreCase))
                     .Sum(e => e.Amount);
                 var net = collections - expenses;
                 var savingsRate = collections > 0 ? Math.Round((net / collections) * 100, 1) : 0;
@@ -146,14 +146,14 @@ public class ReportService : IReportService
                 {
                     EventId = x.EventId,
                     EventName = x.EventName,
-                    EventTypeName = x.EventType?.EventTypeName ?? string.Empty,
+                    EventTypeName = x.EventTypeName,
                     EventDate = x.EventDate,
                     TotalCollections = collections,
                     TotalExpenses = expenses,
                     NetBalance = net,
                     Status = net >= 0 ? CommonConstants.FinancialStatus.Surplus : CommonConstants.FinancialStatus.Deficit,
                     SavingsRatePercent = savingsRate,
-                    CreatedBy = x.CreatedByUser != null ? x.CreatedByUser.FullName : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
+                    CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt
                 };
             }).OrderByDescending(x => x.EventDate).ToList();
@@ -225,7 +225,7 @@ public class ReportService : IReportService
             // High-Level Financial Summary KPIs
             var totalExpected = contributions.Sum(c => c.Amount);
             var totalCollected = paidContributions.Sum(c => c.Amount);
-            var totalExp = allExpenses.Where(e => !e.IsDeleted).Sum(e => e.Amount);
+            var totalExp = allExpenses.Sum(e => e.Amount);
             var totalPending = pendingDues.Sum(p => p.Amount);
             var defaulters = pendingDues.Select(p => p.MemberId).Distinct().Count();
 

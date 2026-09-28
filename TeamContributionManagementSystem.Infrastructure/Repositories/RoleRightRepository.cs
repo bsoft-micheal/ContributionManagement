@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -19,7 +20,7 @@ public class RoleRightRepository : IRoleRightRepository
         _logger = logger;
     }
 
-    public async Task<List<RoleRight>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<List<RoleRightDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -29,7 +30,7 @@ public class RoleRightRepository : IRoleRightRepository
 
             var parentMap = navMenus.Where(m => m.ParentID == 0).ToDictionary(m => m.FeatureID);
 
-            var result = new List<RoleRight>();
+            var result = new List<RoleRightDto>();
             foreach (var role in Enum.GetValues<UserRole>())
             {
                 result.AddRange(BuildRightsFromNavigation(role, navMenus, parentMap, rightsMap));
@@ -44,7 +45,7 @@ public class RoleRightRepository : IRoleRightRepository
         }
     }
 
-    public async Task<List<RoleRight>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
+    public async Task<List<RoleRightDto>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -63,13 +64,13 @@ public class RoleRightRepository : IRoleRightRepository
         }
     }
 
-    private static List<RoleRight> BuildRightsFromNavigation(
+    private static List<RoleRightDto> BuildRightsFromNavigation(
         UserRole role,
         List<NavigationMenu> navMenus,
         Dictionary<int, NavigationMenu> parentMap,
         Dictionary<string, RoleRight> rightsMap)
     {
-        var result = new List<RoleRight>();
+        var result = new List<RoleRightDto>();
 
         foreach (var menu in navMenus)
         {
@@ -99,18 +100,19 @@ public class RoleRightRepository : IRoleRightRepository
             RoleRight? existing = null;
             if (rightsMap.TryGetValue(mapKey, out existing) || rightsMap.TryGetValue(key, out existing))
             {
-                result.Add(new RoleRight
+                result.Add(new RoleRightDto
                 {
                     RoleRightId = existing.RoleRightId,
-                    Role = role,
+                    Role = role.ToString(),
                     FeatureID = menu.FeatureID,
                     Module = moduleName,
                     SubModule = subModuleName,
                     Page = pageName,
                     Access = existing.Access,
-                    AccessType = (int)existing.AccessType > 0 ? existing.AccessType : (existing.Access == "deny" ? AccessType.Deny : (existing.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite)),
+                    AccessType = (int)existing.AccessType > 0 ? (int)existing.AccessType : (existing.Access == "deny" ? (int)AccessType.Deny : (existing.Access == "readOnly" ? (int)AccessType.ReadOnly : (int)AccessType.ReadWrite)),
                     CreatedBy = existing.CreatedBy,
-                    CreatedAt = existing.CreatedAt
+                    CreatedAt = existing.CreatedAt,
+                    CreatedOn = existing.CreatedAt
                 });
             }
             else
@@ -118,16 +120,16 @@ public class RoleRightRepository : IRoleRightRepository
                 // Default access fallback if not yet stored in DB
                 AccessType defaultAccessType = (role == UserRole.Admin || role == UserRole.Organizer) ? AccessType.ReadWrite : AccessType.ReadOnly;
                 string defaultAccess = defaultAccessType == AccessType.ReadWrite ? "readWrite" : "readOnly";
-                result.Add(new RoleRight
+                result.Add(new RoleRightDto
                 {
                     RoleRightId = Guid.NewGuid(),
-                    Role = role,
+                    Role = role.ToString(),
                     FeatureID = menu.FeatureID,
                     Module = moduleName,
                     SubModule = subModuleName,
                     Page = pageName,
                     Access = defaultAccess,
-                    AccessType = defaultAccessType
+                    AccessType = (int)defaultAccessType
                 });
             }
         }

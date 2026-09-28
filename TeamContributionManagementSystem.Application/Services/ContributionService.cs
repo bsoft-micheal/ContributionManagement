@@ -28,8 +28,7 @@ public class ContributionService : IContributionService
     {
         try
         {
-            var contributions = await _contributionRepository.GetAllAsync(cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<ContributionDto>>(contributions);
+            return await _contributionRepository.GetAllAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -42,8 +41,7 @@ public class ContributionService : IContributionService
     {
         try
         {
-            var contributions = await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<ContributionDto>>(contributions);
+            return await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -89,27 +87,34 @@ public class ContributionService : IContributionService
                  request.PaymentScope.Equals(CommonConstants.PaymentScopes.AllOutstanding, StringComparison.OrdinalIgnoreCase)))
             {
                 var allContributions = await _contributionRepository.GetAllAsync(cancellationToken);
-                var memberContributions = allContributions
-                    .Where(c => c.MemberId == request.MemberId && !c.IsDeleted)
+                var memberDtos = allContributions
+                    .Where(c => c.MemberId == request.MemberId)
                     .ToList();
 
-                List<Contribution> pendingToPay;
+                List<ContributionDto> pendingDtos;
 
                 if (request.PaymentScope.Equals(CommonConstants.PaymentScopes.PreviousArrears, StringComparison.OrdinalIgnoreCase))
                 {
-                    pendingToPay = memberContributions
+                    pendingDtos = memberDtos
                         .Where(c => c.EventId != request.EventId && c.PaymentStatus != PaymentStatus.Paid)
-                        .OrderBy(c => c.Event != null ? c.Event.EventDate : DateTime.MinValue)
                         .ToList();
                 }
                 else
                 {
-                    // AllOutstanding: previous arrears first, then current event
-                    pendingToPay = memberContributions
+                    pendingDtos = memberDtos
                         .Where(c => c.PaymentStatus != PaymentStatus.Paid)
                         .OrderBy(c => c.EventId == request.EventId ? 1 : 0)
-                        .ThenBy(c => c.Event != null ? c.Event.EventDate : DateTime.MinValue)
                         .ToList();
+                }
+
+                List<Contribution> pendingToPay = new();
+                foreach (var dto in pendingDtos)
+                {
+                    var entity = await _contributionRepository.GetByEventAndMemberAsync(dto.EventId, dto.MemberId, cancellationToken);
+                    if (entity != null)
+                    {
+                        pendingToPay.Add(entity);
+                    }
                 }
 
                 decimal remainingAllocation = targetAmount;
@@ -207,11 +212,11 @@ public class ContributionService : IContributionService
                 };
             }
 
-            var member = contributions.First().Member!;
+            var firstContribution = contributions.First();
             var paidContributions = contributions.Where(c => c.PaymentStatus == PaymentStatus.Paid).ToList();
 
             var categoryBreakdown = paidContributions
-                .GroupBy(c => c.Event?.EventType?.EventTypeName ?? CommonConstants.Defaults.Uncategorized)
+                .GroupBy(c => !string.IsNullOrWhiteSpace(c.CategoryName) ? c.CategoryName : CommonConstants.Defaults.Uncategorized)
                 .Select(g =>
                 {
                     var first = g.FirstOrDefault();
@@ -220,8 +225,8 @@ public class ContributionService : IContributionService
                         CategoryName = g.Key,
                         TotalPaid = g.Sum(c => c.Amount),
                         EventCount = g.Select(c => c.EventId).Distinct().Count(),
-                        CreatedBy = first?.CreatedBy ?? member.CreatedBy,
-                        CreatedAt = first?.CreatedAt ?? member.CreatedAt
+                        CreatedBy = first?.CreatedBy ?? firstContribution.CreatedBy,
+                        CreatedAt = first?.CreatedAt ?? firstContribution.CreatedAt
                     };
                 })
                 .OrderByDescending(x => x.TotalPaid)
@@ -230,20 +235,20 @@ public class ContributionService : IContributionService
             var eventBreakdown = contributions
                 .Select(c => new ContributionEventBreakdownDto
                 {
-                    EventName = c.Event?.EventName ?? CommonConstants.Defaults.UnknownEvent,
-                    CategoryName = c.Event?.EventType?.EventTypeName ?? CommonConstants.Defaults.Uncategorized,
+                    EventName = !string.IsNullOrWhiteSpace(c.EventName) ? c.EventName : CommonConstants.Defaults.UnknownEvent,
+                    CategoryName = !string.IsNullOrWhiteSpace(c.CategoryName) ? c.CategoryName : CommonConstants.Defaults.Uncategorized,
                     Amount = c.Amount,
                     PaymentStatus = c.PaymentStatus.ToString(),
                     PaymentDate = c.PaymentDate,
-                    CreatedBy = c.CreatedBy ?? (c.Event?.CreatedByUser != null ? c.Event.CreatedByUser.FullName : null),
+                    CreatedBy = c.CreatedBy,
                     CreatedAt = c.CreatedAt
                 })
                 .ToList();
 
             return new MemberContributionSummaryDto
             {
-                MemberId = member.MemberId,
-                MemberName = member.Name,
+                MemberId = firstContribution.MemberId,
+                MemberName = firstContribution.MemberName,
                 TotalPaidAmount = paidContributions.Sum(c => c.Amount),
                 TotalPendingAmount = contributions.Where(c => c.PaymentStatus != PaymentStatus.Paid).Sum(c => c.Amount),
                 CategoryBreakdown = categoryBreakdown,

@@ -31,8 +31,7 @@ public class TicketTypeService : ITicketTypeService
     {
         try
         {
-            var entities = await _repository.GetAllAsync(activeOnly, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<TicketTypeDto>>(entities);
+            return await _repository.GetAllAsync(activeOnly, cancellationToken);
         }
         catch (Exception ex)
         {

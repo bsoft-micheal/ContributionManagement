@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -18,7 +19,7 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         _logger = logger;
     }
 
-    public async Task<List<PaymentTransaction>> GetAllAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
+    public async Task<List<PaymentTransactionDto>> GetAllAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -49,7 +50,31 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
                 query = query.Where(x => x.PaymentDate <= endDate.Value);
             }
 
-            return await query.OrderByDescending(x => x.PaymentDate).ToListAsync(cancellationToken);
+            return await query
+                .OrderByDescending(x => x.PaymentDate)
+                .Select(x => new PaymentTransactionDto
+                {
+                    TransactionId = x.TransactionId,
+                    TxnNumber = x.TxnNumber,
+                    MemberName = x.MemberName,
+                    EventName = x.EventName,
+                    Amount = x.Amount,
+                    PaymentDate = x.PaymentDate,
+                    PaymentMode = x.PaymentMode,
+                    Utr = x.Utr,
+                    Status = x.Status,
+                    VerifiedBy = x.VerifiedBy,
+                    VerifiedOn = x.VerifiedOn,
+                    Notes = x.Notes,
+                    Screenshot = x.Screenshot,
+                    IsActive = x.IsActive,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedAt,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {

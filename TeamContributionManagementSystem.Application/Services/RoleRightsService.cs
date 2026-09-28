@@ -31,8 +31,7 @@ public class RoleRightsService : IRoleRightsService
     {
         try
         {
-            var rights = await _roleRightRepository.GetAllAsync(cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
+            return await _roleRightRepository.GetAllAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -50,8 +49,7 @@ public class RoleRightsService : IRoleRightsService
                 throw new ArgumentException(string.Format(CommonMessages.Roles.InvalidRoleFormat, roleName));
             }
 
-            var rights = await _roleRightRepository.GetByRoleAsync(role, cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
+            return await _roleRightRepository.GetByRoleAsync(role, cancellationToken);
         }
         catch (Exception ex)
         {

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
@@ -18,7 +19,7 @@ public class SupportTicketRepository : ISupportTicketRepository
         _logger = logger;
     }
 
-    public async Task<List<SupportTicket>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default)
+    public async Task<List<SupportTicketDto>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -39,7 +40,33 @@ public class SupportTicketRepository : ISupportTicketRepository
                 query = query.Where(x => x.Priority.ToLower() == priority.ToLower());
             }
 
-            return await query.OrderByDescending(x => x.CreatedAt).ToListAsync(cancellationToken);
+            return await query
+                .OrderByDescending(x => x.CreatedAt)
+                .Select(x => new SupportTicketDto
+                {
+                    TicketId = x.TicketId,
+                    TicketNo = x.TicketNo,
+                    MemberName = x.MemberName,
+                    MemberId = x.MemberId,
+                    RelatedEvent = x.RelatedEvent,
+                    TicketType = x.TicketType,
+                    Subject = x.Subject,
+                    Description = x.Description,
+                    Status = x.Status,
+                    Priority = x.Priority,
+                    AssignedTo = x.AssignedTo,
+                    RefNo = x.RefNo,
+                    Utr = x.Utr,
+                    Attachment = x.Attachment,
+                    ResolutionNotes = x.ResolutionNotes,
+                    IsActive = x.IsActive,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedAt,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
+                .ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
