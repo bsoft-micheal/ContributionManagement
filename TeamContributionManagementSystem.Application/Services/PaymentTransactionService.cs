@@ -343,51 +343,16 @@ public class PaymentTransactionService : IPaymentTransactionService
         }
     }
 
-    private async Task<string?> SaveScreenshotAsync(string? screenshotInput, string txnNumber, CancellationToken cancellationToken)
+    private Task<string?> SaveScreenshotAsync(string? screenshotInput, string txnNumber, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(screenshotInput))
         {
-            return null;
+            return Task.FromResult<string?>(null);
         }
 
+        // Store screenshot/receipt data directly in the database (Base64 data URI)
         var trimmed = screenshotInput.Trim();
-        if (trimmed.StartsWith(CommonConstants.Defaults.DataImagePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                var commaIndex = trimmed.IndexOf(CommonConstants.Defaults.Comma);
-                var base64Data = commaIndex >= 0 ? trimmed.Substring(commaIndex + 1) : trimmed;
-                var imageBytes = Convert.FromBase64String(base64Data);
-
-                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, "payment_proofs");
-                if (!Directory.Exists(folderPath))
-                {
-                    Directory.CreateDirectory(folderPath);
-                }
-
-                var extension = CommonConstants.Defaults.ExtPng;
-                if (trimmed.Contains(CommonConstants.Defaults.ImageJpeg, StringComparison.OrdinalIgnoreCase) || 
-                    trimmed.Contains(CommonConstants.Defaults.ImageJpg, StringComparison.OrdinalIgnoreCase))
-                {
-                    extension = CommonConstants.Defaults.ExtJpg;
-                }
-
-                var dateStr = DateTime.UtcNow.ToString(CommonConstants.Defaults.DateFormatYmd);
-                var cleanTxn = txnNumber.Replace(" ", "_").ToLowerInvariant();
-                var fileName = $"{dateStr}_{cleanTxn}.{extension}";
-                var filePath = Path.Combine(folderPath, fileName);
-
-                await File.WriteAllBytesAsync(filePath, imageBytes, cancellationToken);
-                return $"/payment_proofs/{fileName}";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to save screenshot image to disk, falling back to input value");
-                return trimmed;
-            }
-        }
-
-        return trimmed;
+        return Task.FromResult<string?>(trimmed);
     }
 }
 

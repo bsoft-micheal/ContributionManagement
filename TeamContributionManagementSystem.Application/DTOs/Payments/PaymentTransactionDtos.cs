@@ -55,7 +55,6 @@ public class CreatePaymentTransactionRequestDto
     [MaxLength(1000)]
     public string? Notes { get; set; }
 
-    [MaxLength(500)]
     public string? Screenshot { get; set; }
 }
 

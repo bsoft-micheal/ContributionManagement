@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -74,6 +75,7 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.Configure<SmtpSettings>(configuration.GetSection(CommonConstants.ConfigSections.Smtp));
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<ApplicationDbContextSeeder>();
 
