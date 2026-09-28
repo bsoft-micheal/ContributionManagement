@@ -1,26 +1,26 @@
 using AutoMapper;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
-using TeamContributionManagementSystem.Application.DTOs.Priorities;
+using TeamContributionManagementSystem.Application.DTOs.PaymentModes;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
 
 namespace TeamContributionManagementSystem.Application.Services;
 
-public class PriorityService : IPriorityService
+public class PaymentModeService : IPaymentModeService
 {
-    private readonly IPriorityRepository _repository;
+    private readonly IPaymentModeRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
-    private readonly ILogger<PriorityService> _logger;
+    private readonly ILogger<PaymentModeService> _logger;
     private readonly IUserRepository? _userRepository;
 
-    public PriorityService(
-        IPriorityRepository repository,
+    public PaymentModeService(
+        IPaymentModeRepository repository,
         IUnitOfWork unitOfWork,
         IMapper mapper,
-        ILogger<PriorityService> logger,
+        ILogger<PaymentModeService> logger,
         IUserRepository? userRepository = null)
     {
         _repository = repository;
@@ -30,12 +30,12 @@ public class PriorityService : IPriorityService
         _userRepository = userRepository;
     }
 
-    public async Task<IReadOnlyCollection<PriorityDto>> GetAllPriorityAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<PaymentModeDto>> GetAllPaymentModeAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var entities = await _repository.GetAllAsync(activeOnly, cancellationToken);
-            var dtos = _mapper.Map<List<PriorityDto>>(entities);
+            var dtos = _mapper.Map<List<PaymentModeDto>>(entities);
 
             if (_userRepository != null)
             {
@@ -65,7 +65,7 @@ public class PriorityService : IPriorityService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to resolve user names for priorities");
+                    _logger.LogWarning(ex, "Failed to resolve user names for payment modes");
                 }
             }
 
@@ -73,40 +73,40 @@ public class PriorityService : IPriorityService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllPriorityAsync));
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllPaymentModeAsync));
             throw;
         }
     }
 
-    public async Task<PriorityDto?> GetPriorityAsyncById(Guid id, CancellationToken cancellationToken = default)
+    public async Task<PaymentModeDto?> GetPaymentModeAsyncById(Guid id, CancellationToken cancellationToken = default)
     {
         try
         {
             var entity = await _repository.GetByIdAsync(id, cancellationToken);
-            return entity == null ? null : _mapper.Map<PriorityDto>(entity);
+            return entity == null ? null : _mapper.Map<PaymentModeDto>(entity);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetPriorityAsyncById));
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetPaymentModeAsyncById));
             throw;
         }
     }
 
-    public async Task<PriorityDto> SavePriorityAsync(CreatePriorityRequestDto request, string? user = null, CancellationToken cancellationToken = default)
+    public async Task<PaymentModeDto> SavePaymentModeAsync(CreatePaymentModeRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            var trimmedName = request.PriorityName.Trim();
+            var trimmedName = request.PaymentModeName.Trim();
             var existing = await _repository.GetByNameAsync(trimmedName, cancellationToken);
             if (existing != null)
             {
-                throw new InvalidOperationException(string.Format(CommonMessages.Priorities.AlreadyExistsFormat, trimmedName));
+                throw new InvalidOperationException(string.Format(CommonMessages.PaymentModes.AlreadyExistsFormat, trimmedName));
             }
 
-            var entity = new Priority
+            var entity = new PaymentModeItem
             {
-                PriorityId = Guid.NewGuid(),
-                PriorityName = trimmedName,
+                PaymentModeId = Guid.NewGuid(),
+                PaymentModeName = trimmedName,
                 IsActive = request.IsActive,
                 IsDeleted = false,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
@@ -117,30 +117,30 @@ public class PriorityService : IPriorityService
             await _repository.AddAsync(entity, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return _mapper.Map<PriorityDto>(entity);
+            return _mapper.Map<PaymentModeDto>(entity);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(SavePriorityAsync));
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(SavePaymentModeAsync));
             throw;
         }
     }
 
-    public async Task<PriorityDto> UpdatePriorityAsyncById(Guid id, UpdatePriorityRequestDto request, string? user = null, CancellationToken cancellationToken = default)
+    public async Task<PaymentModeDto> UpdatePaymentModeAsyncById(Guid id, UpdatePaymentModeRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var entity = await _repository.GetByIdAsync(id, cancellationToken)
-                ?? throw new KeyNotFoundException(string.Format(CommonMessages.Priorities.NotFoundFormat, id));
+                ?? throw new KeyNotFoundException(string.Format(CommonMessages.PaymentModes.NotFoundFormat, id));
 
-            var trimmedName = request.PriorityName.Trim();
+            var trimmedName = request.PaymentModeName.Trim();
             var existing = await _repository.GetByNameAsync(trimmedName, cancellationToken);
-            if (existing != null && existing.PriorityId != id)
+            if (existing != null && existing.PaymentModeId != id)
             {
-                throw new InvalidOperationException(string.Format(CommonMessages.Priorities.AlreadyExistsFormat, trimmedName));
+                throw new InvalidOperationException(string.Format(CommonMessages.PaymentModes.AlreadyExistsFormat, trimmedName));
             }
 
-            entity.PriorityName = trimmedName;
+            entity.PaymentModeName = trimmedName;
             entity.IsActive = request.IsActive;
             entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             entity.ModifiedOn = DateTime.UtcNow;
@@ -148,28 +148,28 @@ public class PriorityService : IPriorityService
             _repository.Update(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return _mapper.Map<PriorityDto>(entity);
+            return _mapper.Map<PaymentModeDto>(entity);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdatePriorityAsyncById));
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdatePaymentModeAsyncById));
             throw;
         }
     }
 
-    public async Task DeletePriorityAsyncById(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeletePaymentModeAsyncById(Guid id, CancellationToken cancellationToken = default)
     {
         try
         {
             var entity = await _repository.GetByIdAsync(id, cancellationToken)
-                ?? throw new KeyNotFoundException(string.Format(CommonMessages.Priorities.NotFoundFormat, id));
+                ?? throw new KeyNotFoundException(string.Format(CommonMessages.PaymentModes.NotFoundFormat, id));
 
             _repository.Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeletePriorityAsyncById));
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeletePaymentModeAsyncById));
             throw;
         }
     }

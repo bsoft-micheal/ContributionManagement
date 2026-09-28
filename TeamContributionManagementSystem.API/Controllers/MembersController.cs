@@ -34,6 +34,17 @@ public class MembersController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves members who do not have an associated user account yet.
+    /// </summary>
+    [HttpGet("getMembersWithoutUserAccountAsync")]
+    [ActionName(nameof(GetMembersWithoutUserAccountAsync))]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<MemberDto>>>> GetMembersWithoutUserAccountAsync(CancellationToken cancellationToken)
+    {
+        var result = await _memberService.GetMembersWithoutUserAccountAsync(cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<MemberDto>>.SuccessResult(result, CommonMessages.Members.GetAllSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
     /// Creates a single new member record (Admin only).
     /// </summary>
     /// <param name="request">The member details.</param>

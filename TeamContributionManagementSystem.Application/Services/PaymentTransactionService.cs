@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
@@ -104,7 +105,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 Utr = request.Utr?.Trim(),
                 Status = status,
                 Notes = request.Notes?.Trim(),
-                Screenshot = request.Screenshot?.Trim(),
+                Screenshot = await SaveScreenshotAsync(request.Screenshot, txnNumber, cancellationToken),
                 IsActive = true,
                 IsDeleted = false,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
@@ -164,7 +165,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 Utr = request.Utr?.Trim(),
                 Status = CommonConstants.PaymentStatuses.Pending,
                 Notes = request.Notes?.Trim(),
-                Screenshot = request.Screenshot?.Trim(),
+                Screenshot = await SaveScreenshotAsync(request.Screenshot, txnNumber, cancellationToken),
                 IsActive = true,
                 IsDeleted = false,
                 CreatedBy = resolvedMemberName,
@@ -340,6 +341,53 @@ public class PaymentTransactionService : IPaymentTransactionService
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
+    }
+
+    private async Task<string?> SaveScreenshotAsync(string? screenshotInput, string txnNumber, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(screenshotInput))
+        {
+            return null;
+        }
+
+        var trimmed = screenshotInput.Trim();
+        if (trimmed.StartsWith(CommonConstants.Defaults.DataImagePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var commaIndex = trimmed.IndexOf(CommonConstants.Defaults.Comma);
+                var base64Data = commaIndex >= 0 ? trimmed.Substring(commaIndex + 1) : trimmed;
+                var imageBytes = Convert.FromBase64String(base64Data);
+
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, "payment_proofs");
+                if (!Directory.Exists(folderPath))
+                {
+                    Directory.CreateDirectory(folderPath);
+                }
+
+                var extension = CommonConstants.Defaults.ExtPng;
+                if (trimmed.Contains(CommonConstants.Defaults.ImageJpeg, StringComparison.OrdinalIgnoreCase) || 
+                    trimmed.Contains(CommonConstants.Defaults.ImageJpg, StringComparison.OrdinalIgnoreCase))
+                {
+                    extension = CommonConstants.Defaults.ExtJpg;
+                }
+
+                var dateStr = DateTime.UtcNow.ToString(CommonConstants.Defaults.DateFormatYmd);
+                var cleanTxn = txnNumber.Replace(" ", "_").ToLowerInvariant();
+                var fileName = $"{dateStr}_{cleanTxn}.{extension}";
+                var filePath = Path.Combine(folderPath, fileName);
+
+                await File.WriteAllBytesAsync(filePath, imageBytes, cancellationToken);
+                return $"/payment_proofs/{fileName}";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to save screenshot image to disk, falling back to input value");
+                return trimmed;
+            }
+        }
+
+        return trimmed;
     }
 }
 

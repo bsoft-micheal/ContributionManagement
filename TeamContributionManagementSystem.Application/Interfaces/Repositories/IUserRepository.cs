@@ -14,6 +14,8 @@ public interface IUserRepository
     void Update(AppUser user);
     void Delete(AppUser user);
 
+    Task CascadeUpdateCreatorDisplayNameAsync(Guid userId, string oldName, string newName, CancellationToken cancellationToken = default);
+
     // Standardized naming
     Task<List<UserDto>> GetAllUserAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
     Task<AppUser?> GetUserAsyncById(Guid userId, CancellationToken cancellationToken = default) => GetByIdAsync(userId, cancellationToken);

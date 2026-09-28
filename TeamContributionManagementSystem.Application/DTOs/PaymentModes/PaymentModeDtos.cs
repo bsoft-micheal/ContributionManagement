@@ -1,12 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using TeamContributionManagementSystem.Application.Common;
 
-namespace TeamContributionManagementSystem.Application.DTOs.Priorities;
+namespace TeamContributionManagementSystem.Application.DTOs.PaymentModes;
 
-public class PriorityDto
+public class PaymentModeDto
 {
-    public Guid PriorityId { get; set; }
-    public string PriorityName { get; set; } = string.Empty;
+    public Guid PaymentModeId { get; set; }
+    public string PaymentModeName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
@@ -27,15 +27,15 @@ public class PriorityDto
     }
 }
 
-public class CreatePriorityRequestDto
+public class CreatePaymentModeRequestDto
 {
-    [Required(ErrorMessage = CommonValidationMessages.PriorityNameRequired)]
-    [MaxLength(100, ErrorMessage = CommonValidationMessages.PriorityNameMaxLength)]
-    public string PriorityName { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Payment mode name is required.")]
+    [MaxLength(100, ErrorMessage = "Payment mode name cannot exceed 100 characters.")]
+    public string PaymentModeName { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
 }
 
-public class UpdatePriorityRequestDto : CreatePriorityRequestDto
+public class UpdatePaymentModeRequestDto : CreatePaymentModeRequestDto
 {
 }

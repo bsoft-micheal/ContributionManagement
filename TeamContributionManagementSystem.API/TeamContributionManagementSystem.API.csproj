@@ -26,6 +26,10 @@
     <Content Update="wwwroot\**" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="wwwroot\" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>

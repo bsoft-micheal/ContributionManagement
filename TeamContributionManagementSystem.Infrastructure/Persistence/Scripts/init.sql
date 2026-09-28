@@ -385,6 +385,20 @@ CREATE TABLE IF NOT EXISTS priorities (
     modified_on TIMESTAMPTZ NULL
 );
 
+-- 22. Payment Modes Table
+CREATE TABLE IF NOT EXISTS payment_modes (
+    payment_mode_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_mode_name VARCHAR(100) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(150) NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by VARCHAR(150) NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+
+
 -- ============================================================================
 -- 2. SCHEMA UPGRADES (ALTER TABLE IF EXISTS ... ADD COLUMN IF NOT EXISTS)
 -- ============================================================================
@@ -584,6 +598,16 @@ ALTER TABLE IF EXISTS priorities ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ
 ALTER TABLE IF EXISTS priorities ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
 ALTER TABLE IF EXISTS priorities ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
 
+-- Payment Modes
+ALTER TABLE IF EXISTS payment_modes ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS payment_modes ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS payment_modes ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS payment_modes ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS payment_modes ADD COLUMN IF NOT EXISTS created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS payment_modes ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
+ALTER TABLE IF EXISTS payment_modes ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+
 -- Device Details
 ALTER TABLE IF EXISTS device_details ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE IF EXISTS device_details ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NULL;
@@ -605,6 +629,9 @@ ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS created_at TIMES
 ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
 ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
 
+-- Members: Allow role_id to be nullable
+ALTER TABLE IF EXISTS members ALTER COLUMN role_id DROP NOT NULL;
+
 -- ============================================================================
 -- 3. INDEXES
 -- ============================================================================
@@ -618,3 +645,7 @@ CREATE INDEX IF NOT EXISTS ix_payment_transactions_date_status ON payment_transa
 CREATE INDEX IF NOT EXISTS ix_gallery_photos_event_category ON gallery_photos(event_name, category);
 CREATE INDEX IF NOT EXISTS ix_budget_calculations_expense_item ON budget_calculations(expense_item);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_role_rights_role_module_sub_module_page ON role_rights(role, module, sub_module, page);
+CREATE INDEX IF NOT EXISTS ix_payment_modes_active ON payment_modes(is_active, is_deleted);
+
+
+

@@ -20,11 +20,13 @@ public class UserDto
     public DateTime? JoiningDate { get; set; }
     public string? Gender { get; set; }
     public string? Phone { get; set; }
-    public string? MemberType { get; set; }
+    public string? WorkType { get; set; }
 }
 
 public class CreateUserRequestDto
 {
+    public Guid? MemberId { get; set; }
+
     [Required]
     [MaxLength(100)]
     public string Username { get; set; } = string.Empty;
@@ -96,5 +98,5 @@ public class UpdateProfileRequestDto
     public string RoleName { get; set; } = string.Empty;
 
     [MaxLength(50)]
-    public string MemberType { get; set; } = string.Empty;
+    public string WorkType { get; set; } = string.Empty;
 }
