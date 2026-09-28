@@ -143,4 +143,189 @@ public class UserRepository : IUserRepository
             throw;
         }
     }
+
+    public async Task CascadeUpdateCreatorDisplayNameAsync(Guid userId, string oldName, string newName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var userIdStr = userId.ToString();
+            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
+            var username = user?.Username ?? string.Empty;
+
+            var oldLower = (oldName ?? string.Empty).Trim().ToLowerInvariant();
+            var userLower = username.Trim().ToLowerInvariant();
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE gallery_photos 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE gallery_photos 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE expenses 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE expenses 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE members 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE members 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE support_tickets 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE support_tickets 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE priorities 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE priorities 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE statuses 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE statuses 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE ticket_types 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE ticket_types 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE work_types 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE work_types 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE budget_calculations 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE budget_calculations 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE event_types 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(event_types.created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE event_types 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(event_types.modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE roles 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(roles.created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE roles 
+                SET modified_by = {newName} 
+                WHERE modified_by = {userIdStr} 
+                   OR LOWER(modified_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(roles.modified_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE contributions 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(contributions.created_by) = {userLower})", cancellationToken);
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE payment_transactions 
+                SET created_by = {newName} 
+                WHERE created_by = {userIdStr} 
+                   OR LOWER(created_by) = {oldLower} 
+                   OR ({userLower} <> '' AND LOWER(payment_transactions.created_by) = {userLower})", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to cascade update creator display name");
+        }
+    }
 }

@@ -52,8 +52,12 @@ public class EventRepository : IEventRepository
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
-                    CreatedByName = x.CreatedByUser != null ? x.CreatedByUser.FullName : null,
-                    CreatedBy = x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null,
+                    CreatedByName = x.CreatedByUser != null 
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                        : null,
+                    CreatedBy = x.CreatedByUser != null 
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                        : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
                     HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,
@@ -99,8 +103,12 @@ public class EventRepository : IEventRepository
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
-                    CreatedByName = x.CreatedByUser != null ? x.CreatedByUser.FullName : null,
-                    CreatedBy = x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null,
+                    CreatedByName = x.CreatedByUser != null 
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                        : null,
+                    CreatedBy = x.CreatedByUser != null 
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                        : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
                     HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,
@@ -157,8 +165,12 @@ public class EventRepository : IEventRepository
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
-                    CreatedByName = x.CreatedByUser != null ? x.CreatedByUser.FullName : null,
-                    CreatedBy = x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null,
+                    CreatedByName = x.CreatedByUser != null 
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                        : null,
+                    CreatedBy = x.CreatedByUser != null 
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                        : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
                     HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,

@@ -14,20 +14,103 @@ public class GalleryService : IGalleryService
     private readonly IGalleryRepository _galleryRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly IUserRepository? _userRepository;
 
-    public GalleryService(ILogger<GalleryService> logger, IGalleryRepository galleryRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public GalleryService(
+        ILogger<GalleryService> logger, 
+        IGalleryRepository galleryRepository, 
+        IUnitOfWork unitOfWork, 
+        IMapper mapper,
+        IUserRepository? userRepository = null)
     {
         _logger = logger;
         _galleryRepository = galleryRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _userRepository = userRepository;
     }
 
     public async Task<IReadOnlyCollection<GalleryPhotoDto>> GetAllAsync(string? eventName = null, string? category = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _galleryRepository.GetAllAsync(eventName, category, cancellationToken);
+            var dtos = (await _galleryRepository.GetAllAsync(eventName, category, cancellationToken)).ToList();
+            if (_userRepository != null)
+            {
+                try
+                {
+                    var users = await _userRepository.GetAllAsync(cancellationToken);
+                    var userDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var u in users)
+                    {
+                        var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username;
+                        userDict[u.UserId.ToString()] = displayName;
+                        userDict[u.Username] = displayName;
+                        if (!string.IsNullOrWhiteSpace(u.FullName))
+                        {
+                            userDict[u.FullName] = displayName;
+                        }
+                    }
+
+                    foreach (var dto in dtos)
+                    {
+                        if (!string.IsNullOrWhiteSpace(dto.CreatedBy))
+                        {
+                            if (userDict.TryGetValue(dto.CreatedBy, out var currentName))
+                            {
+                                dto.CreatedBy = currentName;
+                            }
+                            else
+                            {
+                                var matched = users.FirstOrDefault(u =>
+                                    (!string.IsNullOrWhiteSpace(u.FullName) && (u.FullName.StartsWith(dto.CreatedBy, StringComparison.OrdinalIgnoreCase) || dto.CreatedBy.StartsWith(u.FullName, StringComparison.OrdinalIgnoreCase))) ||
+                                    (!string.IsNullOrWhiteSpace(u.Username) && (u.Username.StartsWith(dto.CreatedBy, StringComparison.OrdinalIgnoreCase) || dto.CreatedBy.StartsWith(u.Username, StringComparison.OrdinalIgnoreCase))));
+
+                                if (matched != null)
+                                {
+                                    var resolved = !string.IsNullOrWhiteSpace(matched.FullName) ? matched.FullName : matched.Username;
+                                    var staleName = dto.CreatedBy;
+                                    dto.CreatedBy = resolved;
+
+                                    _ = Task.Run(async () =>
+                                    {
+                                        try
+                                        {
+                                            await _userRepository.CascadeUpdateCreatorDisplayNameAsync(matched.UserId, staleName, resolved);
+                                        }
+                                        catch { }
+                                    });
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(dto.ModifiedBy))
+                        {
+                            if (userDict.TryGetValue(dto.ModifiedBy, out var modName))
+                            {
+                                dto.ModifiedBy = modName;
+                            }
+                            else
+                            {
+                                var matched = users.FirstOrDefault(u =>
+                                    (!string.IsNullOrWhiteSpace(u.FullName) && (u.FullName.StartsWith(dto.ModifiedBy, StringComparison.OrdinalIgnoreCase) || dto.ModifiedBy.StartsWith(u.FullName, StringComparison.OrdinalIgnoreCase))) ||
+                                    (!string.IsNullOrWhiteSpace(u.Username) && (u.Username.StartsWith(dto.ModifiedBy, StringComparison.OrdinalIgnoreCase) || dto.ModifiedBy.StartsWith(u.Username, StringComparison.OrdinalIgnoreCase))));
+
+                                if (matched != null)
+                                {
+                                    dto.ModifiedBy = !string.IsNullOrWhiteSpace(matched.FullName) ? matched.FullName : matched.Username;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve user names for gallery photos");
+                }
+            }
+
+            return dtos;
         }
         catch (Exception ex)
         {
@@ -40,6 +123,24 @@ public class GalleryService : IGalleryService
     {
         try
         {
+            var creator = user?.Trim();
+            if (_userRepository != null && !string.IsNullOrWhiteSpace(creator))
+            {
+                try
+                {
+                    var users = await _userRepository.GetAllAsync(cancellationToken);
+                    var matched = users.FirstOrDefault(u =>
+                        string.Equals(u.UserId.ToString(), creator, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(u.Username, creator, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(u.FullName, creator, StringComparison.OrdinalIgnoreCase));
+                    if (matched != null && !string.IsNullOrWhiteSpace(matched.FullName))
+                    {
+                        creator = matched.FullName;
+                    }
+                }
+                catch { }
+            }
+
             var photo = new GalleryPhoto
             {
                 PhotoId = Guid.NewGuid(),
@@ -51,7 +152,7 @@ public class GalleryService : IGalleryService
                 Description = request.Description?.Trim(),
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = string.IsNullOrWhiteSpace(creator) ? null : creator,
                 CreatedAt = DateTime.UtcNow
             };
 

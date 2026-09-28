@@ -73,6 +73,19 @@ public class MemberService : IMemberService
         }
     }
 
+    public async Task<IReadOnlyCollection<MemberDto>> GetMembersWithoutUserAccountAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _memberRepository.GetMembersWithoutUserAccountAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetMembersWithoutUserAccountAsync));
+            throw;
+        }
+    }
+
     public async Task<MemberDto> CreateAsync(CreateMemberRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
@@ -83,14 +96,21 @@ public class MemberService : IMemberService
                 throw new InvalidOperationException(CommonMessages.Members.EmailExists);
             }
 
-            var role = await _roleRepository.GetByIdAsync(request.RoleId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Roles.NotFound);
+            Guid? roleId = null;
+            if (request.RoleId.HasValue && request.RoleId.Value != Guid.Empty)
+            {
+                var role = await _roleRepository.GetByIdAsync(request.RoleId.Value, cancellationToken);
+                if (role != null) roleId = role.RoleId;
+            }
 
-            var memberType = request.MemberType?.Trim();
-            if (string.IsNullOrWhiteSpace(memberType) && _workTypeRepository != null)
+            var workType = !string.IsNullOrWhiteSpace(request.WorkType)
+                ? request.WorkType.Trim()
+                : (!string.IsNullOrWhiteSpace(request.MemberType) ? request.MemberType.Trim() : string.Empty);
+
+            if (string.IsNullOrWhiteSpace(workType) && _workTypeRepository != null)
             {
                 var dbWorkTypes = await _workTypeRepository.GetAllAsync(true, cancellationToken);
-                memberType = dbWorkTypes.FirstOrDefault()?.WorkTypeName ?? string.Empty;
+                workType = dbWorkTypes.FirstOrDefault()?.WorkTypeName ?? string.Empty;
             }
 
             var member = new Member
@@ -99,13 +119,14 @@ public class MemberService : IMemberService
                 Name = request.Name.Trim(),
                 Email = request.Email.Trim().ToLowerInvariant(),
                 Phone = request.Phone.Trim(),
-                RoleId = role.RoleId,
+                RoleId = roleId,
                 DateOfBirth = request.DateOfBirth.Date,
                 JoiningDate = request.JoiningDate.Date,
                 Gender = request.Gender,
                 IsActive = request.IsActive,
                 IsExited = request.IsExited,
-                MemberType = memberType ?? string.Empty,
+                WorkType = workType ?? string.Empty,
+                MemberType = workType ?? string.Empty,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim()
             };
 
@@ -144,19 +165,26 @@ public class MemberService : IMemberService
                 throw new InvalidOperationException(CommonMessages.Members.EmailExists);
             }
 
-            var role = await _roleRepository.GetByIdAsync(request.RoleId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Roles.NotFound);
+            if (request.RoleId.HasValue && request.RoleId.Value != Guid.Empty)
+            {
+                var role = await _roleRepository.GetByIdAsync(request.RoleId.Value, cancellationToken);
+                if (role != null) member.RoleId = role.RoleId;
+            }
 
             member.Name = request.Name.Trim();
             member.Email = request.Email.Trim().ToLowerInvariant();
             member.Phone = request.Phone.Trim();
-            member.RoleId = role.RoleId;
             member.DateOfBirth = request.DateOfBirth.Date;
             member.JoiningDate = request.JoiningDate.Date;
             member.Gender = request.Gender;
             member.IsActive = request.IsActive;
             member.IsExited = request.IsExited;
-            member.MemberType = !string.IsNullOrWhiteSpace(request.MemberType) ? request.MemberType.Trim() : member.MemberType;
+            var updatedWorkType = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : request.MemberType?.Trim();
+            if (!string.IsNullOrWhiteSpace(updatedWorkType))
+            {
+                member.WorkType = updatedWorkType;
+                member.MemberType = updatedWorkType;
+            }
             if (!string.IsNullOrWhiteSpace(user))
             {
                 member.ModifiedBy = user.Trim();

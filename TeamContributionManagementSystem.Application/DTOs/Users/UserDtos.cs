@@ -25,6 +25,8 @@ public class UserDto
 
 public class CreateUserRequestDto
 {
+    public Guid? MemberId { get; set; }
+
     [Required]
     [MaxLength(100)]
     public string Username { get; set; } = string.Empty;

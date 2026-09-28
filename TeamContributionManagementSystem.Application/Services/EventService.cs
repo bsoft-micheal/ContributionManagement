@@ -52,7 +52,34 @@ public class EventService : IEventService
     {
         try
         {
-            return await _eventRepository.GetAllAsync(month, year, cancellationToken);
+            var events = await _eventRepository.GetAllAsync(month, year, cancellationToken);
+            try
+            {
+                var users = await _userRepository.GetAllAsync(cancellationToken);
+                var userDict = users.ToDictionary(
+                    u => u.UserId.ToString(),
+                    u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username,
+                    StringComparer.OrdinalIgnoreCase);
+
+                foreach (var ev in events)
+                {
+                    if (string.IsNullOrWhiteSpace(ev.CreatedByName) && !string.IsNullOrWhiteSpace(ev.CreatedBy) && userDict.TryGetValue(ev.CreatedBy, out var userName))
+                    {
+                        ev.CreatedByName = userName;
+                        ev.CreatedBy = userName;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(ev.CreatedByName))
+                    {
+                        ev.CreatedBy = ev.CreatedByName;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve user names for events");
+            }
+
+            return events;
         }
         catch (Exception ex)
         {
@@ -65,8 +92,33 @@ public class EventService : IEventService
     {
         try
         {
-            return await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
+            var eventDetails = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
+
+            if (string.IsNullOrWhiteSpace(eventDetails.CreatedByName) && !string.IsNullOrWhiteSpace(eventDetails.CreatedBy))
+            {
+                try
+                {
+                    var users = await _userRepository.GetAllAsync(cancellationToken);
+                    var user = users.FirstOrDefault(u => u.UserId.ToString().Equals(eventDetails.CreatedBy, StringComparison.OrdinalIgnoreCase));
+                    if (user != null)
+                    {
+                        var name = !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.Username;
+                        eventDetails.CreatedByName = name;
+                        eventDetails.CreatedBy = name;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve user name for event details");
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(eventDetails.CreatedByName))
+            {
+                eventDetails.CreatedBy = eventDetails.CreatedByName;
+            }
+
+            return eventDetails;
         }
         catch (Exception ex)
         {

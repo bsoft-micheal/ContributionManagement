@@ -40,7 +40,8 @@ public class MemberRepository : IMemberRepository
                     Gender = x.Gender,
                     IsActive = x.IsActive,
                     IsExited = x.IsExited,
-                    MemberType = x.MemberType,
+                    WorkType = x.WorkType,
+                    MemberType = x.WorkType,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,
@@ -77,7 +78,8 @@ public class MemberRepository : IMemberRepository
                     Gender = x.Gender,
                     IsActive = x.IsActive,
                     IsExited = x.IsExited,
-                    MemberType = x.MemberType,
+                    WorkType = x.WorkType,
+                    MemberType = x.WorkType,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,
@@ -161,7 +163,8 @@ public class MemberRepository : IMemberRepository
                     Gender = x.Gender,
                     IsActive = x.IsActive,
                     IsExited = x.IsExited,
-                    MemberType = x.MemberType,
+                    WorkType = x.WorkType,
+                    MemberType = x.WorkType,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,
@@ -177,10 +180,66 @@ public class MemberRepository : IMemberRepository
         }
     }
 
+    public async Task<List<MemberDto>> GetMembersWithoutUserAccountAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var userEmails = _context.Users
+                .Where(u => !u.IsDeleted)
+                .Select(u => u.Email.ToLower());
+
+            return await _context.Members
+                .Where(m => !m.IsDeleted && m.IsActive && !userEmails.Contains(m.Email.ToLower()))
+                .OrderBy(m => m.Name)
+                .Select(x => new MemberDto
+                {
+                    MemberId = x.MemberId,
+                    Name = x.Name,
+                    Email = x.Email,
+                    Phone = x.Phone,
+                    RoleId = x.RoleId,
+                    RoleName = x.Role != null ? x.Role.RoleName : string.Empty,
+                    DefaultContributionAmount = x.Role != null ? x.Role.DefaultContributionAmount : 0,
+                    DateOfBirth = x.DateOfBirth,
+                    JoiningDate = x.JoiningDate,
+                    Gender = x.Gender,
+                    IsActive = x.IsActive,
+                    IsExited = x.IsExited,
+                    WorkType = x.WorkType,
+                    MemberType = x.WorkType,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedOn,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedOn = x.ModifiedOn
+                })
+                .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetMembersWithoutUserAccountAsync));
+            throw;
+        }
+    }
+
+    private static bool _roleColumnAltered = false;
+
     public async Task AddAsync(Member member, CancellationToken cancellationToken = default)
     {
         try
         {
+            if (!_roleColumnAltered)
+            {
+                try
+                {
+                    await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN role_id DROP NOT NULL;", cancellationToken);
+                    _roleColumnAltered = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not execute ALTER TABLE to drop NOT NULL on role_id");
+                }
+            }
             await _context.Members.AddAsync(member, cancellationToken);
         }
         catch (Exception ex)

@@ -21,6 +21,12 @@ public class ApplicationDbContextSeeder
 
         // Execute init.pgsql / init.sql script to ensure all tables, columns, and indexes are applied from SQL
         await ExecuteInitSqlScriptAsync(cancellationToken);
+
+        try
+        {
+            await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN role_id DROP NOT NULL;", cancellationToken);
+        }
+        catch { }
     }
 
     private async Task ExecuteInitSqlScriptAsync(CancellationToken cancellationToken)
