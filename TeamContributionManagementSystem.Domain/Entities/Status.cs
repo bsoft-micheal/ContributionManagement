@@ -4,6 +4,7 @@ public class Status
 {
     public Guid StatusId { get; set; }
     public string StatusName { get; set; } = string.Empty;
+    public string? Module { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
 

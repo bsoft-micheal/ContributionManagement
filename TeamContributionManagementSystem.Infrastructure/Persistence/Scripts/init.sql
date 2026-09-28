@@ -349,7 +349,8 @@ CREATE TABLE IF NOT EXISTS ticket_types (
 -- 19. Statuses Table
 CREATE TABLE IF NOT EXISTS statuses (
     status_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    status_name VARCHAR(100) NOT NULL UNIQUE,
+    status_name VARCHAR(100) NOT NULL,
+    module VARCHAR(100) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_by VARCHAR(150) NULL,

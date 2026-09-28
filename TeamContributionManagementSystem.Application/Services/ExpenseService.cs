@@ -64,7 +64,9 @@ public class ExpenseService : IExpenseService
     {
         try
         {
-            var savedFilePath = await ProcessAttachmentAsync(request.FileName, request.FileData, null, cancellationToken);
+            var attachment = !string.IsNullOrWhiteSpace(request.FileData)
+                ? request.FileData.Trim()
+                : request.FileName?.Trim();
 
             var status = request.Status?.Trim();
             if (string.IsNullOrWhiteSpace(status) && _statusRepository != null)
@@ -72,7 +74,11 @@ public class ExpenseService : IExpenseService
                 var dbStatuses = await _statusRepository.GetAllAsync(true, cancellationToken);
                 status = dbStatuses.FirstOrDefault(s => s.StatusName.Equals("Pending", StringComparison.OrdinalIgnoreCase))?.StatusName
                     ?? dbStatuses.FirstOrDefault()?.StatusName
-                    ?? string.Empty;
+                    ?? "Pending";
+            }
+            else if (string.IsNullOrWhiteSpace(status))
+            {
+                status = "Pending";
             }
 
             var expense = new Expense
@@ -82,11 +88,11 @@ public class ExpenseService : IExpenseService
                 Category = request.Category.Trim(),
                 Amount = request.Amount,
                 ExpenseDate = request.ExpenseDate,
-                Status = status ?? string.Empty,
+                Status = status ?? "Pending",
                 SubmittedBy = request.SubmittedBy.Trim(),
                 ApprovedBy = request.ApprovedBy?.Trim(),
                 Description = request.Description.Trim(),
-                FileName = savedFilePath,
+                FileName = attachment,
                 IsActive = true,
                 IsDeleted = false,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
@@ -118,7 +124,9 @@ public class ExpenseService : IExpenseService
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
 
-            var savedFilePath = await ProcessAttachmentAsync(request.FileName, request.FileData, expense.FileName, cancellationToken);
+            var attachment = !string.IsNullOrWhiteSpace(request.FileData)
+                ? request.FileData.Trim()
+                : (!string.IsNullOrWhiteSpace(request.FileName) ? request.FileName.Trim() : expense.FileName);
 
             expense.EventName = request.EventName.Trim();
             expense.Category = request.Category.Trim();
@@ -126,15 +134,17 @@ public class ExpenseService : IExpenseService
             expense.ExpenseDate = request.ExpenseDate;
             expense.Status = string.IsNullOrWhiteSpace(request.Status) ? expense.Status : request.Status.Trim();
             expense.SubmittedBy = request.SubmittedBy.Trim();
-            expense.ApprovedBy = request.ApprovedBy?.Trim();
+            expense.ApprovedBy = string.IsNullOrWhiteSpace(request.ApprovedBy) || request.ApprovedBy == "-" 
+                ? (string.IsNullOrWhiteSpace(user) ? expense.ApprovedBy : user.Trim()) 
+                : request.ApprovedBy.Trim();
             expense.Description = request.Description.Trim();
-            expense.FileName = savedFilePath;
+            expense.FileName = attachment;
             expense.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             expense.ModifiedOn = DateTime.UtcNow;
 
-            if (expense.Status == CommonConstants.ExpenseStatuses.Approved && string.IsNullOrWhiteSpace(expense.ApprovedBy))
+            if (string.IsNullOrWhiteSpace(expense.ApprovedBy) && !string.IsNullOrWhiteSpace(user))
             {
-                expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+                expense.ApprovedBy = user.Trim();
             }
 
             _expenseRepository.Update(expense);
@@ -167,59 +177,5 @@ public class ExpenseService : IExpenseService
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
-    }
-
-    private async Task<string?> ProcessAttachmentAsync(string? originalFileName, string? fileData, string? existingFilePath, CancellationToken cancellationToken)
-    {
-        var rawData = !string.IsNullOrWhiteSpace(fileData) ? fileData : originalFileName;
-
-        if (!string.IsNullOrWhiteSpace(rawData) && rawData.StartsWith(CommonConstants.Defaults.DataUriPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                var commaIndex = rawData.IndexOf(CommonConstants.Defaults.Comma);
-                var base64Data = commaIndex >= 0 ? rawData.Substring(commaIndex + 1) : rawData;
-                var fileBytes = Convert.FromBase64String(base64Data);
-
-                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, "expense_attachments");
-                if (!Directory.Exists(folderPath))
-                {
-                    Directory.CreateDirectory(folderPath);
-                }
-
-                var extension = "png";
-                if (rawData.Contains("image/jpeg", StringComparison.OrdinalIgnoreCase) || rawData.Contains("image/jpg", StringComparison.OrdinalIgnoreCase))
-                {
-                    extension = "jpg";
-                }
-                else if (rawData.Contains("application/pdf", StringComparison.OrdinalIgnoreCase))
-                {
-                    extension = "pdf";
-                }
-                else if (!string.IsNullOrWhiteSpace(originalFileName) && originalFileName.Contains("."))
-                {
-                    extension = originalFileName.Split('.').Last().ToLowerInvariant();
-                }
-
-                var dateStr = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-                var uniqueId = Guid.NewGuid().ToString("N")[..8];
-                var fileName = $"{dateStr}_{uniqueId}.{extension}";
-                var filePath = Path.Combine(folderPath, fileName);
-
-                await File.WriteAllBytesAsync(filePath, fileBytes, cancellationToken);
-                return $"/expense_attachments/{fileName}";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to save expense attachment to disk");
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(originalFileName) && string.IsNullOrWhiteSpace(fileData))
-        {
-            return existingFilePath;
-        }
-
-        return !string.IsNullOrWhiteSpace(originalFileName) ? originalFileName : existingFilePath;
     }
 }

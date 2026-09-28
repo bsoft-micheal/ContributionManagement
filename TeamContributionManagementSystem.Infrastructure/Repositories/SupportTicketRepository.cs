@@ -54,7 +54,6 @@ public class SupportTicketRepository : ISupportTicketRepository
                     Description = x.Description,
                     Status = x.Status,
                     Priority = x.Priority,
-                    AssignedTo = x.AssignedTo,
                     RefNo = x.RefNo,
                     Utr = x.Utr,
                     Attachment = x.Attachment,

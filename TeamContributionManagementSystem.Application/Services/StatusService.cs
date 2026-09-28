@@ -27,15 +27,33 @@ public class StatusService : IStatusService
         _logger = logger;
     }
 
-    public async Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly = null, string? module = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _repository.GetAllAsync(activeOnly, cancellationToken);
+            return await _repository.GetAllAsync(activeOnly, module, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllStatusAsync));
+            throw;
+        }
+    }
+
+    public Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly, CancellationToken cancellationToken)
+    {
+        return GetAllStatusAsync(activeOnly, null, cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _repository.GetModulesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetModulesAsync));
             throw;
         }
     }
@@ -59,16 +77,18 @@ public class StatusService : IStatusService
         try
         {
             var trimmedName = request.StatusName.Trim();
-            var existing = await _repository.GetByNameAsync(trimmedName, cancellationToken);
+            var trimmedModule = string.IsNullOrWhiteSpace(request.Module) ? "General" : request.Module.Trim();
+            var existing = await _repository.GetByNameAndModuleAsync(trimmedName, trimmedModule, cancellationToken);
             if (existing != null)
             {
-                throw new InvalidOperationException(string.Format(CommonMessages.Statuses.AlreadyExistsFormat, trimmedName));
+                throw new InvalidOperationException($"Status '{trimmedName}' already exists for module '{trimmedModule}'.");
             }
 
             var entity = new Status
             {
                 StatusId = Guid.NewGuid(),
                 StatusName = trimmedName,
+                Module = trimmedModule,
                 IsActive = request.IsActive,
                 IsDeleted = false,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
@@ -96,13 +116,15 @@ public class StatusService : IStatusService
                 ?? throw new KeyNotFoundException(string.Format(CommonMessages.Statuses.NotFoundFormat, id));
 
             var trimmedName = request.StatusName.Trim();
-            var existing = await _repository.GetByNameAsync(trimmedName, cancellationToken);
+            var trimmedModule = string.IsNullOrWhiteSpace(request.Module) ? (entity.Module ?? "General") : request.Module.Trim();
+            var existing = await _repository.GetByNameAndModuleAsync(trimmedName, trimmedModule, cancellationToken);
             if (existing != null && existing.StatusId != id)
             {
-                throw new InvalidOperationException(string.Format(CommonMessages.Statuses.AlreadyExistsFormat, trimmedName));
+                throw new InvalidOperationException($"Status '{trimmedName}' already exists for module '{trimmedModule}'.");
             }
 
             entity.StatusName = trimmedName;
+            entity.Module = trimmedModule;
             entity.IsActive = request.IsActive;
             entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             entity.ModifiedOn = DateTime.UtcNow;
