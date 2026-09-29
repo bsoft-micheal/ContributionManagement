@@ -9,14 +9,46 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class StatusRepository : IStatusRepository
 {
     private readonly ApplicationDbContext _context;
+    private static bool _moduleColumnEnsured = false;
+    private static readonly SemaphoreSlim _columnLock = new(1, 1);
 
     public StatusRepository(ApplicationDbContext context)
     {
         _context = context;
     }
 
+    private async Task EnsureModuleColumnAsync(CancellationToken cancellationToken = default)
+    {
+        if (_moduleColumnEnsured) return;
+        await _columnLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_moduleColumnEnsured) return;
+            try
+            {
+                await _context.Database.ExecuteSqlRawAsync(
+                    @"ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS module VARCHAR(100) NULL;
+                      ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS statuses_status_name_key;
+                      ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS statuses_status_name_unique;
+                      ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS uq_statuses_status_name;",
+                    cancellationToken);
+            }
+            catch
+            {
+                // ignore if already exists, insufficient permissions, or during concurrent operations
+            }
+            _moduleColumnEnsured = true;
+        }
+        finally
+        {
+            _columnLock.Release();
+        }
+    }
+
     public async Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly = null, string? module = null, CancellationToken cancellationToken = default)
     {
+        await EnsureModuleColumnAsync(cancellationToken);
+
         var query = _context.Statuses
             .Where(x => !x.IsDeleted)
             .AsNoTracking();
@@ -56,6 +88,8 @@ public class StatusRepository : IStatusRepository
 
     public async Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default)
     {
+        await EnsureModuleColumnAsync(cancellationToken);
+
         var navModules = await _context.NavigationMenus
             .Where(x => !string.IsNullOrWhiteSpace(x.Module))
             .Select(x => x.Module!)
@@ -100,18 +134,21 @@ public class StatusRepository : IStatusRepository
 
     public async Task<Status?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
+        await EnsureModuleColumnAsync(cancellationToken);
         return await _context.Statuses
             .FirstOrDefaultAsync(x => x.StatusId == id && !x.IsDeleted, cancellationToken);
     }
 
     public async Task<Status?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
     {
+        await EnsureModuleColumnAsync(cancellationToken);
         return await _context.Statuses
             .FirstOrDefaultAsync(x => x.StatusName.ToLower() == name.ToLower() && !x.IsDeleted, cancellationToken);
     }
 
     public async Task<Status?> GetByNameAndModuleAsync(string name, string? module, CancellationToken cancellationToken = default)
     {
+        await EnsureModuleColumnAsync(cancellationToken);
         var query = _context.Statuses.Where(x => x.StatusName.ToLower() == name.ToLower() && !x.IsDeleted);
         if (!string.IsNullOrWhiteSpace(module))
         {
@@ -122,6 +159,7 @@ public class StatusRepository : IStatusRepository
 
     public async Task AddAsync(Status status, CancellationToken cancellationToken = default)
     {
+        await EnsureModuleColumnAsync(cancellationToken);
         await _context.Statuses.AddAsync(status, cancellationToken);
     }
 

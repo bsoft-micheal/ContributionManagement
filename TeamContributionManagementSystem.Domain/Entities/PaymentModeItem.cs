@@ -6,6 +6,9 @@ public class PaymentModeItem
     public string PaymentModeName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
+    public bool IsCash { get; set; } = false;
+    public bool SupportsQr { get; set; } = true;
+    public string? PaymentType { get; set; } = "Digital";
 
     // Common Audit Properties
     public string? CreatedBy { get; set; }

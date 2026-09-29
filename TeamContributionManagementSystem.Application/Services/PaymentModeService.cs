@@ -69,6 +69,12 @@ public class PaymentModeService : IPaymentModeService
                 }
             }
 
+            foreach (var dto in dtos)
+            {
+                var matchingEntity = entities.FirstOrDefault(e => e.PaymentModeId == dto.PaymentModeId);
+                EnrichPaymentMode(dto, matchingEntity);
+            }
+
             return dtos;
         }
         catch (Exception ex)
@@ -83,7 +89,10 @@ public class PaymentModeService : IPaymentModeService
         try
         {
             var entity = await _repository.GetByIdAsync(id, cancellationToken);
-            return entity == null ? null : _mapper.Map<PaymentModeDto>(entity);
+            if (entity == null) return null;
+            var dto = _mapper.Map<PaymentModeDto>(entity);
+            EnrichPaymentMode(dto, entity);
+            return dto;
         }
         catch (Exception ex)
         {
@@ -103,12 +112,22 @@ public class PaymentModeService : IPaymentModeService
                 throw new InvalidOperationException(string.Format(CommonMessages.PaymentModes.AlreadyExistsFormat, trimmedName));
             }
 
+            var isCash = request.IsCash ?? (string.Equals(trimmedName, "Cash", StringComparison.OrdinalIgnoreCase) || trimmedName.IndexOf("cash", StringComparison.OrdinalIgnoreCase) >= 0);
+            var isSplit = string.Equals(trimmedName, "Split", StringComparison.OrdinalIgnoreCase) || trimmedName.IndexOf("split", StringComparison.OrdinalIgnoreCase) >= 0;
+            var supportsQr = request.SupportsQr ?? !isCash;
+            var paymentType = !string.IsNullOrWhiteSpace(request.PaymentType)
+                ? request.PaymentType
+                : (isCash ? "Cash" : (isSplit ? "Split" : "Digital"));
+
             var entity = new PaymentModeItem
             {
                 PaymentModeId = Guid.NewGuid(),
                 PaymentModeName = trimmedName,
                 IsActive = request.IsActive,
                 IsDeleted = false,
+                IsCash = isCash,
+                SupportsQr = supportsQr,
+                PaymentType = paymentType,
                 CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
                 CreatedAt = DateTime.UtcNow,
                 CreatedOn = DateTime.UtcNow
@@ -117,7 +136,9 @@ public class PaymentModeService : IPaymentModeService
             await _repository.AddAsync(entity, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return _mapper.Map<PaymentModeDto>(entity);
+            var dto = _mapper.Map<PaymentModeDto>(entity);
+            EnrichPaymentMode(dto, entity);
+            return dto;
         }
         catch (Exception ex)
         {
@@ -140,15 +161,27 @@ public class PaymentModeService : IPaymentModeService
                 throw new InvalidOperationException(string.Format(CommonMessages.PaymentModes.AlreadyExistsFormat, trimmedName));
             }
 
+            var isCash = request.IsCash ?? (string.Equals(trimmedName, "Cash", StringComparison.OrdinalIgnoreCase) || trimmedName.IndexOf("cash", StringComparison.OrdinalIgnoreCase) >= 0);
+            var isSplit = string.Equals(trimmedName, "Split", StringComparison.OrdinalIgnoreCase) || trimmedName.IndexOf("split", StringComparison.OrdinalIgnoreCase) >= 0;
+            var supportsQr = request.SupportsQr ?? !isCash;
+            var paymentType = !string.IsNullOrWhiteSpace(request.PaymentType)
+                ? request.PaymentType
+                : (isCash ? "Cash" : (isSplit ? "Split" : "Digital"));
+
             entity.PaymentModeName = trimmedName;
             entity.IsActive = request.IsActive;
+            entity.IsCash = isCash;
+            entity.SupportsQr = supportsQr;
+            entity.PaymentType = paymentType;
             entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
             entity.ModifiedOn = DateTime.UtcNow;
 
             _repository.Update(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return _mapper.Map<PaymentModeDto>(entity);
+            var dto = _mapper.Map<PaymentModeDto>(entity);
+            EnrichPaymentMode(dto, entity);
+            return dto;
         }
         catch (Exception ex)
         {
@@ -172,5 +205,22 @@ public class PaymentModeService : IPaymentModeService
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeletePaymentModeAsyncById));
             throw;
         }
+    }
+
+    private static void EnrichPaymentMode(PaymentModeDto dto, PaymentModeItem? entity = null)
+    {
+        var name = dto.PaymentModeName?.Trim() ?? string.Empty;
+        var isCashName = string.Equals(name, "Cash", StringComparison.OrdinalIgnoreCase) || name.IndexOf("cash", StringComparison.OrdinalIgnoreCase) >= 0;
+        var isSplitName = string.Equals(name, "Split", StringComparison.OrdinalIgnoreCase) || name.IndexOf("split", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        bool isCash = entity != null ? entity.IsCash : isCashName;
+        bool supportsQr = entity != null ? entity.SupportsQr : (!isCashName);
+        string paymentType = !string.IsNullOrWhiteSpace(entity?.PaymentType)
+            ? entity.PaymentType!
+            : (isCash ? "Cash" : (isSplitName ? "Split" : "Digital"));
+
+        dto.IsCash = isCash;
+        dto.SupportsQr = supportsQr;
+        dto.PaymentType = paymentType;
     }
 }

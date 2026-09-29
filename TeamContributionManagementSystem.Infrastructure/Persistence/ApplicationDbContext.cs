@@ -336,6 +336,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.ToTable("payment_modes");
             entity.HasKey(x => x.PaymentModeId);
             entity.Property(x => x.PaymentModeName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.IsCash).HasDefaultValue(false);
+            entity.Property(x => x.SupportsQr).HasDefaultValue(true);
+            entity.Property(x => x.PaymentType).HasMaxLength(50).HasDefaultValue("Digital");
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.PaymentModeName).IsUnique();
