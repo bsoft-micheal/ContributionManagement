@@ -8,6 +8,9 @@ public class PaymentModeDto
     public Guid PaymentModeId { get; set; }
     public string PaymentModeName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public bool IsCash { get; set; }
+    public bool SupportsQr { get; set; } = true;
+    public string? PaymentType { get; set; }
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
@@ -34,6 +37,9 @@ public class CreatePaymentModeRequestDto
     public string PaymentModeName { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
+    public bool? IsCash { get; set; }
+    public bool? SupportsQr { get; set; }
+    public string? PaymentType { get; set; }
 }
 
 public class UpdatePaymentModeRequestDto : CreatePaymentModeRequestDto
