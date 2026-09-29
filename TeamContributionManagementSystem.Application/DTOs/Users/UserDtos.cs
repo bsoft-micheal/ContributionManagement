@@ -27,6 +27,9 @@ public class CreateUserRequestDto
 {
     public Guid? MemberId { get; set; }
 
+    [MaxLength(150)]
+    public string? FullName { get; set; }
+
     [Required]
     [MaxLength(100)]
     public string Username { get; set; } = string.Empty;
@@ -44,11 +47,26 @@ public class CreateUserRequestDto
     [MaxLength(20)]
     public string RoleName { get; set; } = string.Empty;
 
+    [MaxLength(20)]
+    public string? Phone { get; set; }
+
+    [MaxLength(20)]
+    public string? Gender { get; set; }
+
+    [MaxLength(50)]
+    public string? WorkType { get; set; }
+
+    public DateTime? DateOfBirth { get; set; }
+    public DateTime? JoiningDate { get; set; }
+
     public bool IsActive { get; set; } = true;
 }
 
 public class UpdateUserRequestDto
 {
+    [MaxLength(150)]
+    public string? FullName { get; set; }
+
     [Required]
     [MaxLength(100)]
     public string Username { get; set; } = string.Empty;
@@ -65,6 +83,18 @@ public class UpdateUserRequestDto
     [Required]
     [MaxLength(20)]
     public string RoleName { get; set; } = string.Empty;
+
+    [MaxLength(20)]
+    public string? Phone { get; set; }
+
+    [MaxLength(20)]
+    public string? Gender { get; set; }
+
+    [MaxLength(50)]
+    public string? WorkType { get; set; }
+
+    public DateTime? DateOfBirth { get; set; }
+    public DateTime? JoiningDate { get; set; }
 
     public bool IsActive { get; set; } = true;
 }
