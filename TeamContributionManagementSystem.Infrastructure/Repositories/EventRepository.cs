@@ -52,6 +52,7 @@ public class EventRepository : IEventRepository
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
+                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
                     CreatedByName = x.CreatedByUser != null 
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
                         : null,
@@ -103,6 +104,7 @@ public class EventRepository : IEventRepository
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
+                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
                     CreatedByName = x.CreatedByUser != null 
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
                         : null,

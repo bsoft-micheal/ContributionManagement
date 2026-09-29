@@ -19,6 +19,7 @@ public class UserManagementService : IUserManagementService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
+    private readonly IWorkTypeRepository? _workTypeRepository;
     private readonly IEmailService _emailService;
 
     public UserManagementService(ILogger<UserManagementService> logger, 
@@ -27,6 +28,8 @@ public class UserManagementService : IUserManagementService
         IRoleRepository roleRepository,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
+        IMapper mapper,
+        IWorkTypeRepository? workTypeRepository = null)
         IMapper mapper,
         IEmailService emailService)
     {
@@ -37,7 +40,20 @@ public class UserManagementService : IUserManagementService
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
         _mapper = mapper;
+        _workTypeRepository = workTypeRepository;
         _emailService = emailService;
+    }
+
+    private async Task<string> ResolveDefaultWorkTypeAsync(CancellationToken cancellationToken)
+    {
+        if (_workTypeRepository != null)
+        {
+            var active = await _workTypeRepository.GetAllAsync(true, cancellationToken);
+            var first = active.FirstOrDefault()?.WorkTypeName;
+            if (!string.IsNullOrWhiteSpace(first))
+                return first.Trim();
+        }
+        return "Office";
     }
 
     // ── HELPER: ENRICH USER DTO WITH MEMBER PROFILE ──────────────────────────
@@ -55,11 +71,17 @@ public class UserManagementService : IUserManagementService
             dto.JoiningDate = member.JoiningDate;
             dto.Gender = member.Gender;
             dto.Phone = member.Phone;
-            dto.WorkType = member.WorkType;
+            dto.WorkType = !string.IsNullOrWhiteSpace(member.WorkType)
+                ? member.WorkType
+                : await ResolveDefaultWorkTypeAsync(cancellationToken);
             if (member.Role != null && !string.IsNullOrWhiteSpace(member.Role.RoleName))
             {
                 dto.RoleName = member.Role.RoleName;
             }
+        }
+        else
+        {
+            dto.WorkType = await ResolveDefaultWorkTypeAsync(cancellationToken);
         }
         return dto;
     }
@@ -742,6 +764,12 @@ public class UserManagementService : IUserManagementService
                 member = await _memberRepository.GetByEmailAsync(newEmail, cancellationToken);
             }
 
+            var resolvedWorkType = !string.IsNullOrWhiteSpace(request.WorkType)
+                ? request.WorkType.Trim()
+                : (string.IsNullOrWhiteSpace(member?.WorkType)
+                    ? await ResolveDefaultWorkTypeAsync(cancellationToken)
+                    : member.WorkType);
+
             if (member != null)
             {
                 member.Name = request.FullName.Trim();
@@ -750,8 +778,7 @@ public class UserManagementService : IUserManagementService
                     member.Phone = request.Phone.Trim();
                 if (!string.IsNullOrWhiteSpace(request.Gender))
                     member.Gender = request.Gender.Trim();
-                if (!string.IsNullOrWhiteSpace(request.WorkType))
-                    member.WorkType = request.WorkType.Trim();
+                member.WorkType = resolvedWorkType;
                 if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
                     member.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
                 if (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
@@ -774,8 +801,8 @@ public class UserManagementService : IUserManagementService
                         Name = request.FullName.Trim(),
                         Email = newEmail,
                         Phone = request.Phone?.Trim() ?? string.Empty,
-                        Gender = request.Gender?.Trim() ?? "Male",
-                        WorkType = request.WorkType?.Trim() ?? "Office",
+                        Gender = request.Gender?.Trim() ?? string.Empty,
+                        WorkType = resolvedWorkType,
                         RoleId = defaultRole.RoleId,
                         DateOfBirth = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
                             ? request.DateOfBirth.Value.ToUniversalTime()

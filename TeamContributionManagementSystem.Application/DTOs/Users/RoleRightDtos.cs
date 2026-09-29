@@ -22,6 +22,11 @@ public class RoleRightDto
     [MaxLength(100)]
     public string Page { get; set; } = string.Empty;
 
+    [MaxLength(100)]
+    public string Action { get; set; } = string.Empty;
+
+    public int MenuType { get; set; } = 3;
+
     [Required]
     [MaxLength(20)]
     public string Access { get; set; } = string.Empty; // "readOnly", "readWrite", "deny"

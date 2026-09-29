@@ -109,16 +109,16 @@ public class ContributionRepository : IContributionRepository
         try
         {
             var query = _context.Contributions
-                .Where(x => !x.IsDeleted && x.PaymentStatus != PaymentStatus.Paid);
+                .Where(x => !x.IsDeleted && x.PaymentStatus != PaymentStatus.Paid && x.Event != null && !x.Event.IsDeleted);
 
             if (month.HasValue)
             {
-                query = query.Where(x => x.Event != null && x.Event.EventDate.Month == month.Value);
+                query = query.Where(x => x.Event!.EventDate.Month == month.Value);
             }
 
             if (year.HasValue)
             {
-                query = query.Where(x => x.Event != null && x.Event.EventDate.Year == year.Value);
+                query = query.Where(x => x.Event!.EventDate.Year == year.Value);
             }
 
             return await query
