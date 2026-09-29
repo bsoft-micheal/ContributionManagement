@@ -20,6 +20,7 @@ public class UserManagementService : IUserManagementService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
     private readonly IWorkTypeRepository? _workTypeRepository;
+    private readonly IEmailService _emailService;
 
     public UserManagementService(ILogger<UserManagementService> logger, 
         IUserRepository userRepository,
@@ -28,6 +29,7 @@ public class UserManagementService : IUserManagementService
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
         IMapper mapper,
+        IEmailService emailService,
         IWorkTypeRepository? workTypeRepository = null)
     {
         _logger = logger;
@@ -38,6 +40,7 @@ public class UserManagementService : IUserManagementService
         _passwordHasher = passwordHasher;
         _mapper = mapper;
         _workTypeRepository = workTypeRepository;
+        _emailService = emailService;
     }
 
     private async Task<string> ResolveDefaultWorkTypeAsync(CancellationToken cancellationToken)
@@ -56,10 +59,13 @@ public class UserManagementService : IUserManagementService
     private async Task<UserDto> EnrichUserDtoWithMemberProfileAsync(AppUser user, CancellationToken cancellationToken)
     {
         var dto = _mapper.Map<UserDto>(user);
+        dto.IsFirstLogin = user.IsFirstLogin;
+        dto.HasMemberProfile = true;
         var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
         if (member != null)
         {
             user.Members = new List<Member> { member };
+            dto.MemberUsername = member.Name;
             dto.DateOfBirth = member.DateOfBirth;
             dto.JoiningDate = member.JoiningDate;
             dto.Gender = member.Gender;
@@ -86,24 +92,71 @@ public class UserManagementService : IUserManagementService
         {
             var users = await _userRepository.GetAllAsync(cancellationToken);
             var members = await _memberRepository.GetAllAsync(cancellationToken);
-            var memberDict = members.ToDictionary(m => m.Email.Trim().ToLowerInvariant(), m => m);
 
-            foreach (var user in users)
+            var userDict = users
+                .Where(u => !u.IsDeleted)
+                .GroupBy(u => u.Email.Trim().ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var resultList = new List<UserDto>();
+            var processedEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Process all non-deleted members
+            foreach (var member in members.Where(m => !m.IsDeleted))
             {
-                if (memberDict.TryGetValue(user.Email.Trim().ToLowerInvariant(), out var member))
+                var emailKey = member.Email.Trim().ToLowerInvariant();
+                processedEmails.Add(emailKey);
+
+                var userDto = new UserDto
                 {
-                    user.DateOfBirth = member.DateOfBirth;
-                    user.JoiningDate = member.JoiningDate;
-                    user.Gender = member.Gender;
-                    user.Phone = member.Phone;
-                    user.WorkType = member.WorkType;
-                    if (!string.IsNullOrWhiteSpace(member.RoleName))
-                    {
-                        user.RoleName = member.RoleName;
-                    }
+                    FullName = member.Name,
+                    Email = member.Email,
+                    Phone = member.Phone,
+                    Gender = member.Gender,
+                    WorkType = member.WorkType,
+                    DateOfBirth = member.DateOfBirth,
+                    JoiningDate = member.JoiningDate,
+                    RoleName = !string.IsNullOrWhiteSpace(member.RoleName) ? member.RoleName : "Member",
+                    IsActive = member.IsActive,
+                    CreatedAt = member.CreatedAt,
+                    CreatedOn = member.CreatedOn ?? member.CreatedAt ?? DateTime.UtcNow,
+                    CreatedBy = member.CreatedBy,
+                };
+
+                if (userDict.TryGetValue(emailKey, out var user))
+                {
+                    userDto.UserId = user.UserId;
+                    userDto.Username = user.Username;
+                    userDto.RoleName = !string.IsNullOrWhiteSpace(user.RoleName) ? user.RoleName : (!string.IsNullOrWhiteSpace(member.RoleName) ? member.RoleName : "Member");
+                    userDto.IsActive = user.IsActive;
+                    userDto.IsFirstLogin = user.IsFirstLogin;
+                    userDto.HasMemberProfile = true; // Has login access
+                    userDto.ProfileImage = user.ProfileImage;
+                }
+                else
+                {
+                    // Member without User login access
+                    userDto.UserId = member.MemberId;
+                    userDto.Username = string.Empty;
+                    userDto.HasMemberProfile = false; // No login access
+                }
+
+                resultList.Add(userDto);
+            }
+
+            // 2. Process any remaining AppUsers who don't have a member record
+            foreach (var user in users.Where(u => !u.IsDeleted))
+            {
+                var emailKey = user.Email.Trim().ToLowerInvariant();
+                if (!processedEmails.Contains(emailKey))
+                {
+                    var uDto = _mapper.Map<UserDto>(user);
+                    uDto.HasMemberProfile = true;
+                    resultList.Add(uDto);
                 }
             }
-            return users;
+
+            return resultList.OrderByDescending(u => u.CreatedOn).ToList();
         }
         catch (Exception ex)
         {
@@ -134,113 +187,201 @@ public class UserManagementService : IUserManagementService
     {
         try
         {
-            Member? member = null;
-            if (request.MemberId.HasValue && request.MemberId.Value != Guid.Empty)
-            {
-                member = await _memberRepository.GetByIdAsync(request.MemberId.Value, cancellationToken)
-                    ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
+            var emailToUse = request.Email.Trim().ToLowerInvariant();
+            var isAccessEnabled = request.EnableUserAccess ?? request.CreateMemberProfile ?? (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password));
 
-                var existingUserForMember = await _userRepository.GetByEmailAsync(member.Email.Trim(), cancellationToken);
-                if (existingUserForMember != null)
+            // Check duplicate email in members or users
+            var existingMember = await _memberRepository.GetByEmailAsync(emailToUse, cancellationToken);
+            var existingUser = await _userRepository.GetByEmailAsync(emailToUse, cancellationToken);
+            if ((existingMember != null && !existingMember.IsDeleted) || (existingUser != null && !existingUser.IsDeleted))
+            {
+                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
+            }
+
+            // Check duplicate username if user access enabled
+            if (isAccessEnabled && !string.IsNullOrWhiteSpace(request.Username))
+            {
+                var usernameExists = await _userRepository.GetByUsernameAsync(request.Username.Trim(), cancellationToken);
+                if (usernameExists != null && !usernameExists.IsDeleted)
                 {
-                    throw new InvalidOperationException("A user account already exists for this member.");
+                    throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
                 }
             }
-            else
+
+            var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
+            var roleName = !string.IsNullOrWhiteSpace(request.RoleName) ? request.RoleName.Trim() : "Member";
+            var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, roleName, StringComparison.OrdinalIgnoreCase))
+                              ?? allRoles.FirstOrDefault(r => string.Equals(r.RoleName, "Member", StringComparison.OrdinalIgnoreCase))
+                              ?? allRoles.FirstOrDefault();
+
+            Guid? assignedRoleId = matchedRole?.RoleId;
+            if (assignedRoleId == null)
             {
-                member = await _memberRepository.GetByEmailAsync(request.Email.Trim().ToLowerInvariant(), cancellationToken);
+                var newRole = new Role
+                {
+                    RoleId = Guid.NewGuid(),
+                    RoleName = "Member",
+                    DefaultContributionAmount = 0,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedOn = DateTime.UtcNow
+                };
+                await _roleRepository.AddAsync(newRole, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                assignedRoleId = newRole.RoleId;
             }
 
-            var emailToUse = member != null ? member.Email.Trim().ToLowerInvariant() : request.Email.Trim().ToLowerInvariant();
-
-            var emailExists = await _userRepository.GetByEmailAsync(emailToUse, cancellationToken);
-            if (emailExists is not null)
-                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
-
-            var usernameExists = await _userRepository.GetByUsernameAsync(request.Username.Trim(), cancellationToken);
-            if (usernameExists is not null)
-                throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
-
-            if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
-                throw new InvalidOperationException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
+            if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var enumRole))
+            {
+                enumRole = UserRole.Member;
+            }
 
             var fullName = !string.IsNullOrWhiteSpace(request.FullName)
                 ? request.FullName.Trim()
-                : (member != null && !string.IsNullOrWhiteSpace(member.Name) 
-                    ? member.Name.Trim() 
-                    : request.Username.Trim());
+                : (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : emailToUse.Split('@')[0]);
 
-            var appUser = new AppUser
+            // 1. Always create the Member record
+            var member = new Member
             {
-                UserId       = Guid.NewGuid(),
-                Username     = request.Username.Trim(),
-                Email        = emailToUse,
-                PasswordHash = _passwordHasher.HashPassword(request.Password),
-                Role         = role,
-                FullName     = fullName,
-                IsActive     = request.IsActive,
-                CreatedBy    = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
-                CreatedAt    = DateTime.UtcNow,
-                CreatedOn    = DateTime.UtcNow
+                MemberId = Guid.NewGuid(),
+                Name = fullName,
+                Email = emailToUse,
+                Phone = request.Phone?.Trim() ?? string.Empty,
+                Gender = request.Gender?.Trim() ?? "Male",
+                WorkType = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : "Office",
+                RoleId = assignedRoleId,
+                DateOfBirth = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
+                    ? request.DateOfBirth.Value.ToUniversalTime()
+                    : DateTime.UtcNow.Date,
+                JoiningDate = (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
+                    ? request.JoiningDate.Value.ToUniversalTime()
+                    : DateTime.UtcNow.Date,
+                IsActive = request.IsActive,
+                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedAt = DateTime.UtcNow,
+                CreatedOn = DateTime.UtcNow
             };
+            await _memberRepository.AddAsync(member, cancellationToken);
 
-            await _userRepository.AddAsync(appUser, cancellationToken);
+            AppUser? appUser = null;
+            string? rawPassword = null;
 
-            var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
-            var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName, StringComparison.OrdinalIgnoreCase));
-
-            if (member != null)
+            // 2. If User Access is enabled -> Create AppUser login account
+            if (isAccessEnabled)
             {
-                member.Name = fullName;
-                member.Email = emailToUse;
-                if (!string.IsNullOrWhiteSpace(request.Phone)) member.Phone = request.Phone.Trim();
-                if (!string.IsNullOrWhiteSpace(request.Gender)) member.Gender = request.Gender.Trim();
-                if (!string.IsNullOrWhiteSpace(request.WorkType)) member.WorkType = request.WorkType.Trim();
-                if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default) member.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
-                if (request.JoiningDate.HasValue && request.JoiningDate.Value != default) member.JoiningDate = request.JoiningDate.Value.ToUniversalTime();
-                member.IsActive = request.IsActive;
-                if (matchedRole != null)
+                rawPassword = !string.IsNullOrWhiteSpace(request.Password)
+                    ? request.Password.Trim()
+                    : $"Pass@{new Random().Next(100000, 999999)}";
+
+                var username = !string.IsNullOrWhiteSpace(request.Username)
+                    ? request.Username.Trim()
+                    : emailToUse.Split('@')[0];
+
+                appUser = new AppUser
                 {
-                    member.RoleId = matchedRole.RoleId;
-                }
-                _memberRepository.Update(member);
-            }
-            else
-            {
-                var newMember = new Member
-                {
-                    MemberId    = Guid.NewGuid(),
-                    Name        = fullName,
-                    Email       = emailToUse,
-                    Phone       = request.Phone?.Trim() ?? string.Empty,
-                    Gender      = request.Gender?.Trim() ?? string.Empty,
-                    WorkType    = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : "Office",
-                    RoleId      = matchedRole?.RoleId,
-                    DateOfBirth = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
-                        ? request.DateOfBirth.Value.ToUniversalTime()
-                        : DateTime.UtcNow.Date,
-                    JoiningDate = (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
-                        ? request.JoiningDate.Value.ToUniversalTime()
-                        : DateTime.UtcNow.Date,
-                    IsActive    = request.IsActive,
-                    CreatedBy   = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
-                    CreatedAt   = DateTime.UtcNow,
-                    CreatedOn   = DateTime.UtcNow
+                    UserId       = Guid.NewGuid(),
+                    Username     = username,
+                    Email        = emailToUse,
+                    PasswordHash = _passwordHasher.HashPassword(rawPassword),
+                    Role         = enumRole,
+                    FullName     = fullName,
+                    IsActive     = request.IsActive,
+                    IsFirstLogin = false,
+                    CreatedBy    = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                    CreatedAt    = DateTime.UtcNow,
+                    CreatedOn    = DateTime.UtcNow
                 };
-                await _memberRepository.AddAsync(newMember, cancellationToken);
+                await _userRepository.AddAsync(appUser, cancellationToken);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            var created = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
+            // 3. If User Access enabled, send credentials email
+            if (isAccessEnabled && appUser != null && !string.IsNullOrWhiteSpace(rawPassword))
+            {
+                try
+                {
+                    var subject = "Welcome to Team Contribution Management System - Your Account Details";
+                    var emailBody = $@"
+<div style=""font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f7f6fb; padding: 40px 20px; border-radius: 16px; max-width: 600px; margin: 0 auto; color: #1e1a2e; border: 1px solid rgba(74, 63, 107, 0.08);"">
+    <div style=""text-align: center; margin-bottom: 25px;"">
+        <h2 style=""margin: 0; color: #7c3aed; font-weight: 900; letter-spacing: 0.05em;"">TEAM CONTRIBUTION</h2>
+        <span style=""font-size: 12px; color: #5b5280; font-weight: 700; text-transform: uppercase;"">Management System</span>
+    </div>
+    <div style=""background-color: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(30, 26, 46, 0.03);"">
+        <h3 style=""margin-top: 0; color: #1e1a2e; font-weight: 800; font-size: 18px;"">Welcome to the Team!</h3>
+        <p style=""color: #5b5280; font-size: 14px; line-height: 1.6;"">Hello <strong>{fullName}</strong>,</p>
+        <p style=""color: #5b5280; font-size: 14px; line-height: 1.6;"">Your user account has been successfully created. Here are your login credentials:</p>
+        
+        <table style=""width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;"">
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600; width: 40%;"">Username:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{appUser.Username}</td>
+            </tr>
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600;"">Email:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{appUser.Email}</td>
+            </tr>
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600;"">Temporary Password:</td>
+                <td style=""padding: 10px 0; color: #7c3aed; font-family: monospace; font-weight: 700; font-size: 15px;"">{rawPassword}</td>
+            </tr>
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600;"">Assigned Role:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{enumRole}</td>
+            </tr>
+        </table>
 
-            _logger.LogInformation(CommonLogMessages.Users.UserCreated, appUser.Username, appUser.UserId);
-            return await EnrichUserDtoWithMemberProfileAsync(created, cancellationToken);
+        <div style=""background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 16px; margin: 20px 0;"">
+            <p style=""margin: 0; color: #166534; font-size: 13px; line-height: 1.5; font-weight: 600;"">
+                &#10003; You can use the above password to log in directly to the portal. If you want to change your password, you can change it anytime in your Profile.
+            </p>
+        </div>
+
+        <p style=""color: #5b5280; font-size: 13px; line-height: 1.6; margin-bottom: 0;"">
+            Please keep your credentials secure.
+        </p>
+    </div>
+    <div style=""text-align: center; margin-top: 25px; color: #9d96bd; font-size: 12px;"">
+        &copy; 2026 Team Contribution Management System. All rights reserved.
+    </div>
+</div>";
+
+                    await _emailService.SendEmailAsync(appUser.Email, subject, emailBody, cancellationToken: cancellationToken);
+                    _logger.LogInformation("Credentials email sent successfully to {Email}", appUser.Email);
+                }
+                catch (Exception mailEx)
+                {
+                    _logger.LogError(mailEx, "Failed to send welcome credentials email to {Email}", appUser.Email);
+                }
+            }
+
+            var returnDto = new UserDto
+            {
+                UserId = appUser?.UserId ?? member.MemberId,
+                Username = appUser?.Username ?? string.Empty,
+                FullName = member.Name,
+                Email = member.Email,
+                Phone = member.Phone,
+                Gender = member.Gender,
+                WorkType = member.WorkType,
+                DateOfBirth = member.DateOfBirth,
+                JoiningDate = member.JoiningDate,
+                RoleName = matchedRole?.RoleName ?? roleName,
+                IsActive = member.IsActive,
+                HasMemberProfile = isAccessEnabled && appUser != null,
+                IsFirstLogin = appUser?.IsFirstLogin ?? false,
+                CreatedOn = member.CreatedOn ?? member.CreatedAt ?? DateTime.UtcNow,
+                CreatedAt = member.CreatedAt
+            };
+
+            _logger.LogInformation("User/Member created successfully with Email {Email}", emailToUse);
+            return returnDto;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "Error in CreateAsync: {Message}", msg);
             throw;
         }
     }
@@ -250,74 +391,80 @@ public class UserManagementService : IUserManagementService
     {
         try
         {
-            var appUser = await _userRepository.GetByIdAsync(userId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
-
-            var emailOwner = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
-            if (emailOwner is not null && emailOwner.UserId != userId)
-                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
-
-            var usernameOwner = await _userRepository.GetByUsernameAsync(request.Username.Trim(), cancellationToken);
-            if (usernameOwner is not null && usernameOwner.UserId != userId)
-                throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
-
-            if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
-                throw new InvalidOperationException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
-
-            var oldEmail = appUser.Email;
+            var isAccessEnabled = request.EnableUserAccess ?? request.CreateMemberProfile ?? (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password));
             var newEmail = request.Email.Trim().ToLowerInvariant();
-            var oldUsername = appUser.Username;
-            var newUsername = request.Username.Trim();
-            var oldFullName = appUser.FullName;
-            var newFullName = !string.IsNullOrWhiteSpace(request.FullName) ? request.FullName.Trim() : appUser.FullName;
 
-            appUser.Username = newUsername;
-            appUser.Email    = newEmail;
-            appUser.FullName = newFullName;
-            appUser.Role     = role;
-            appUser.IsActive = request.IsActive;
-            appUser.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
-            appUser.ModifiedOn = DateTime.UtcNow;
-
-            if (!string.IsNullOrWhiteSpace(request.Password))
-                appUser.PasswordHash = _passwordHasher.HashPassword(request.Password);
-
-            _userRepository.Update(appUser);
-
-            var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
-            var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName, StringComparison.OrdinalIgnoreCase));
-
-            var linkedMember = await _memberRepository.GetByEmailAsync(oldEmail, cancellationToken);
-            if (linkedMember == null && !string.Equals(oldEmail, newEmail, StringComparison.OrdinalIgnoreCase))
+            // 1. Find existing AppUser (by id or by email)
+            var appUser = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (appUser == null)
             {
-                linkedMember = await _memberRepository.GetByEmailAsync(newEmail, cancellationToken);
+                appUser = await _userRepository.GetByEmailAsync(newEmail, cancellationToken);
             }
 
-            if (linkedMember != null)
+            // 2. Find existing Member (by id or by email)
+            var member = await _memberRepository.GetByIdAsync(userId, cancellationToken);
+            if (member == null && appUser != null)
             {
-                linkedMember.Name = newFullName;
-                linkedMember.Email = newEmail;
-                if (!string.IsNullOrWhiteSpace(request.Phone)) linkedMember.Phone = request.Phone.Trim();
-                if (!string.IsNullOrWhiteSpace(request.Gender)) linkedMember.Gender = request.Gender.Trim();
-                if (!string.IsNullOrWhiteSpace(request.WorkType)) linkedMember.WorkType = request.WorkType.Trim();
-                if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default) linkedMember.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
-                if (request.JoiningDate.HasValue && request.JoiningDate.Value != default) linkedMember.JoiningDate = request.JoiningDate.Value.ToUniversalTime();
-                linkedMember.IsActive = request.IsActive;
-                if (matchedRole != null) linkedMember.RoleId = matchedRole.RoleId;
-                if (!string.IsNullOrWhiteSpace(user)) linkedMember.ModifiedBy = user.Trim();
-                linkedMember.ModifiedOn = DateTime.UtcNow;
+                member = await _memberRepository.GetByEmailAsync(appUser.Email, cancellationToken);
+            }
+            if (member == null && !string.IsNullOrWhiteSpace(newEmail))
+            {
+                member = await _memberRepository.GetByEmailAsync(newEmail, cancellationToken);
+            }
 
-                _memberRepository.Update(linkedMember);
+            if (appUser == null && member == null)
+            {
+                throw new KeyNotFoundException(CommonMessages.Users.NotFound);
+            }
+
+            // Check email uniqueness
+            var emailUser = await _userRepository.GetByEmailAsync(newEmail, cancellationToken);
+            if (emailUser != null && emailUser.UserId != appUser?.UserId && emailUser.UserId != userId && !emailUser.IsDeleted)
+            {
+                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
+            }
+            var emailMember = await _memberRepository.GetByEmailAsync(newEmail, cancellationToken);
+            if (emailMember != null && emailMember.MemberId != member?.MemberId && emailMember.MemberId != userId && !emailMember.IsDeleted)
+            {
+                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
+            }
+
+            var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
+            var roleName = !string.IsNullOrWhiteSpace(request.RoleName) ? request.RoleName.Trim() : (appUser?.Role.ToString() ?? "Member");
+            var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, roleName, StringComparison.OrdinalIgnoreCase)) ?? allRoles.FirstOrDefault();
+            if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var enumRole))
+            {
+                enumRole = UserRole.Member;
+            }
+
+            var fullName = !string.IsNullOrWhiteSpace(request.FullName) ? request.FullName.Trim() : (member?.Name ?? appUser?.FullName ?? string.Empty);
+
+            // 3. Update or Create Member
+            if (member != null)
+            {
+                member.Name = fullName;
+                member.Email = newEmail;
+                if (!string.IsNullOrWhiteSpace(request.Phone)) member.Phone = request.Phone.Trim();
+                if (!string.IsNullOrWhiteSpace(request.Gender)) member.Gender = request.Gender.Trim();
+                if (!string.IsNullOrWhiteSpace(request.WorkType)) member.WorkType = request.WorkType.Trim();
+                if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default) member.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
+                if (request.JoiningDate.HasValue && request.JoiningDate.Value != default) member.JoiningDate = request.JoiningDate.Value.ToUniversalTime();
+                member.IsActive = request.IsActive;
+                if (matchedRole != null) member.RoleId = matchedRole.RoleId;
+                if (!string.IsNullOrWhiteSpace(user)) member.ModifiedBy = user.Trim();
+                member.ModifiedOn = DateTime.UtcNow;
+
+                _memberRepository.Update(member);
             }
             else
             {
-                var newMember = new Member
+                member = new Member
                 {
                     MemberId    = Guid.NewGuid(),
-                    Name        = newFullName,
+                    Name        = fullName,
                     Email       = newEmail,
                     Phone       = request.Phone?.Trim() ?? string.Empty,
-                    Gender      = request.Gender?.Trim() ?? string.Empty,
+                    Gender      = request.Gender?.Trim() ?? "Male",
                     WorkType    = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : "Office",
                     RoleId      = matchedRole?.RoleId,
                     DateOfBirth = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
@@ -331,29 +478,152 @@ public class UserManagementService : IUserManagementService
                     CreatedAt   = DateTime.UtcNow,
                     CreatedOn   = DateTime.UtcNow
                 };
-                await _memberRepository.AddAsync(newMember, cancellationToken);
+                await _memberRepository.AddAsync(member, cancellationToken);
+            }
+
+            // 4. Update or Create AppUser (if isAccessEnabled) or Deactivate AppUser (if not enabled)
+            if (isAccessEnabled)
+            {
+                var username = !string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : (appUser?.Username ?? newEmail.Split('@')[0]);
+
+                // Check username uniqueness
+                var usernameOwner = await _userRepository.GetByUsernameAsync(username, cancellationToken);
+                if (usernameOwner != null && usernameOwner.UserId != appUser?.UserId && !usernameOwner.IsDeleted)
+                {
+                    throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
+                }
+
+                if (appUser != null)
+                {
+                    var oldUsername = appUser.Username;
+                    appUser.Username = username;
+                    appUser.Email = newEmail;
+                    appUser.FullName = fullName;
+                    appUser.Role = enumRole;
+                    appUser.IsActive = request.IsActive;
+                    appUser.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+                    appUser.ModifiedOn = DateTime.UtcNow;
+
+                    if (!string.IsNullOrWhiteSpace(request.Password))
+                    {
+                        appUser.PasswordHash = _passwordHasher.HashPassword(request.Password.Trim());
+                        appUser.IsFirstLogin = false;
+                    }
+
+                    _userRepository.Update(appUser);
+
+                    if (!string.Equals(oldUsername, username, StringComparison.OrdinalIgnoreCase))
+                    {
+                        await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldUsername, username, cancellationToken);
+                    }
+                }
+                else
+                {
+                    // User access newly enabled for this member!
+                    var rawPassword = !string.IsNullOrWhiteSpace(request.Password) ? request.Password.Trim() : $"Pass@{new Random().Next(100000, 999999)}";
+                    appUser = new AppUser
+                    {
+                        UserId = Guid.NewGuid(),
+                        Username = username,
+                        Email = newEmail,
+                        PasswordHash = _passwordHasher.HashPassword(rawPassword),
+                        Role = enumRole,
+                        FullName = fullName,
+                        IsActive = request.IsActive,
+                        IsFirstLogin = false,
+                        CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    };
+                    await _userRepository.AddAsync(appUser, cancellationToken);
+
+                    // Send email with credentials
+                    try
+                    {
+                        var subject = "Your Team Contribution Management System Account Access";
+                        var emailBody = $@"
+<div style=""font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f7f6fb; padding: 40px 20px; border-radius: 16px; max-width: 600px; margin: 0 auto; color: #1e1a2e; border: 1px solid rgba(74, 63, 107, 0.08);"">
+    <div style=""text-align: center; margin-bottom: 25px;"">
+        <h2 style=""margin: 0; color: #7c3aed; font-weight: 900; letter-spacing: 0.05em;"">TEAM CONTRIBUTION</h2>
+        <span style=""font-size: 12px; color: #5b5280; font-weight: 700; text-transform: uppercase;"">Management System</span>
+    </div>
+    <div style=""background-color: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(30, 26, 46, 0.03);"">
+        <h3 style=""margin-top: 0; color: #1e1a2e; font-weight: 800; font-size: 18px;"">User Access Enabled</h3>
+        <p style=""color: #5b5280; font-size: 14px; line-height: 1.6;"">Hello <strong>{fullName}</strong>,</p>
+        <p style=""color: #5b5280; font-size: 14px; line-height: 1.6;"">Your user account access has been enabled. Here are your login credentials:</p>
+        
+        <table style=""width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;"">
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600; width: 40%;"">Username:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{appUser.Username}</td>
+            </tr>
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600;"">Email:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{appUser.Email}</td>
+            </tr>
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600;"">Temporary Password:</td>
+                <td style=""padding: 10px 0; color: #7c3aed; font-family: monospace; font-weight: 700; font-size: 15px;"">{rawPassword}</td>
+            </tr>
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600;"">Assigned Role:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{enumRole}</td>
+            </tr>
+        </table>
+
+        <div style=""background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 16px; margin: 20px 0;"">
+            <p style=""margin: 0; color: #166534; font-size: 13px; line-height: 1.5; font-weight: 600;"">
+                &#10003; You can use the above password to log in directly to the portal. If you want to change your password, you can change it anytime in your Profile.
+            </p>
+        </div>
+    </div>
+</div>";
+                        await _emailService.SendEmailAsync(appUser.Email, subject, emailBody, cancellationToken: cancellationToken);
+                    }
+                    catch (Exception mailEx)
+                    {
+                        _logger.LogError(mailEx, "Failed to send credentials email upon enabling user access to {Email}", appUser.Email);
+                    }
+                }
+            }
+            else
+            {
+                // If user access is disabled, deactivate the AppUser if it existed
+                if (appUser != null)
+                {
+                    appUser.IsActive = false;
+                    _userRepository.Update(appUser);
+                }
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            if (!string.Equals(oldUsername, newUsername, StringComparison.OrdinalIgnoreCase))
+            var returnDto = new UserDto
             {
-                await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldUsername, newUsername, cancellationToken);
-            }
-            if (!string.IsNullOrWhiteSpace(oldFullName) && !string.Equals(oldFullName, newFullName, StringComparison.OrdinalIgnoreCase))
-            {
-                await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldFullName, newFullName, cancellationToken);
-            }
+                UserId = appUser?.UserId ?? member.MemberId,
+                Username = appUser?.Username ?? string.Empty,
+                FullName = member.Name,
+                Email = member.Email,
+                Phone = member.Phone,
+                Gender = member.Gender,
+                WorkType = member.WorkType,
+                DateOfBirth = member.DateOfBirth,
+                JoiningDate = member.JoiningDate,
+                RoleName = matchedRole?.RoleName ?? roleName,
+                IsActive = member.IsActive,
+                HasMemberProfile = isAccessEnabled && appUser != null && appUser.IsActive,
+                IsFirstLogin = appUser?.IsFirstLogin ?? false,
+                CreatedOn = member.CreatedOn ?? member.CreatedAt ?? DateTime.UtcNow,
+                CreatedAt = member.CreatedAt
+            };
 
-            var updated = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
-
-            _logger.LogInformation(CommonLogMessages.Users.UserUpdated, appUser.UserId);
-            return await EnrichUserDtoWithMemberProfileAsync(updated, cancellationToken);
+            _logger.LogInformation("User/Member updated successfully: {Id}", userId);
+            return returnDto;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "Error in UpdateAsync: {Message}", msg);
             throw;
         }
     }
@@ -363,10 +633,23 @@ public class UserManagementService : IUserManagementService
     {
         try
         {
-            var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
+            var appUser = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            var member = await _memberRepository.GetByIdAsync(userId, cancellationToken);
 
-            var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
+            if (appUser != null && member == null)
+            {
+                member = await _memberRepository.GetByEmailAsync(appUser.Email, cancellationToken);
+            }
+            if (member != null && appUser == null)
+            {
+                appUser = await _userRepository.GetByEmailAsync(member.Email, cancellationToken);
+            }
+
+            if (member == null && appUser == null)
+            {
+                throw new KeyNotFoundException(CommonMessages.Users.NotFound);
+            }
+
             if (member != null)
             {
                 member.IsDeleted = true;
@@ -374,7 +657,13 @@ public class UserManagementService : IUserManagementService
                 _memberRepository.Update(member);
             }
 
-            _userRepository.Delete(user);
+            if (appUser != null)
+            {
+                appUser.IsDeleted = true;
+                appUser.IsActive = false;
+                _userRepository.Delete(appUser);
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(CommonLogMessages.Users.UserDeleted, userId);
@@ -410,6 +699,7 @@ public class UserManagementService : IUserManagementService
             if (!string.IsNullOrWhiteSpace(request.Password))
             {
                 user.PasswordHash = _passwordHasher.HashPassword(request.Password);
+                user.IsFirstLogin = false;
             }
 
             // Handle profile image upload

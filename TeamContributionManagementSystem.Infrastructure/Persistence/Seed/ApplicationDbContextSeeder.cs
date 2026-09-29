@@ -25,6 +25,11 @@ public class ApplicationDbContextSeeder
         try
         {
             await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN role_id DROP NOT NULL;", cancellationToken);
+            await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN date_of_birth TYPE TIMESTAMPTZ USING date_of_birth::timestamptz;", cancellationToken);
+            await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN joining_date TYPE TIMESTAMPTZ USING joining_date::timestamptz;", cancellationToken);
+            await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;", cancellationToken);
+            await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;", cancellationToken);
+            await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_first_login BOOLEAN NOT NULL DEFAULT TRUE;", cancellationToken);
             await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS module VARCHAR(100) NULL;", cancellationToken);
             await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS statuses_status_name_key;", cancellationToken);
             await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS statuses_status_name_unique;", cancellationToken);

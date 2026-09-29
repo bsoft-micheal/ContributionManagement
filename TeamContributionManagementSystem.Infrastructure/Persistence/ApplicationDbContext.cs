@@ -93,6 +93,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.CreatedOn);
             entity.Property(x => x.PasswordResetOtp).HasMaxLength(10);
             entity.Property(x => x.PasswordResetOtpExpiry);
+            entity.Property(x => x.IsFirstLogin).HasDefaultValue(true);
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.Username).IsUnique();
             entity.HasMany(x => x.MfaDevices).WithOne(x => x.User).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
