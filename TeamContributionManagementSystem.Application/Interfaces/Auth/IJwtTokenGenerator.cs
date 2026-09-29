@@ -5,5 +5,5 @@ namespace TeamContributionManagementSystem.Application.Interfaces.Auth;
 
 public interface IJwtTokenGenerator
 {
-    AuthResponseDto GenerateToken(AppUser user, Guid? sessionId = null);
+    AuthResponseDto GenerateToken(AppUser user, Guid? sessionId = null, Guid? memberId = null);
 }

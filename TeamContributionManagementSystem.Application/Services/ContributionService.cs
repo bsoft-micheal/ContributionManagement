@@ -40,8 +40,14 @@ public class ContributionService : IContributionService
         try
         {
             var all = await _contributionRepository.GetAllAsync(cancellationToken);
-            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
             {
+                var myMemberId = _currentUserService.MemberId;
+                if (myMemberId.HasValue)
+                {
+                    return all.Where(c => c.MemberId == myMemberId.Value).ToList();
+                }
+
                 var userEmail = _currentUserService.Email;
                 if (!string.IsNullOrWhiteSpace(userEmail) && _memberRepository != null)
                 {
@@ -67,8 +73,14 @@ public class ContributionService : IContributionService
         try
         {
             var byEvent = await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);
-            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
             {
+                var myMemberId = _currentUserService.MemberId;
+                if (myMemberId.HasValue)
+                {
+                    return byEvent.Where(c => c.MemberId == myMemberId.Value).ToList();
+                }
+
                 var userEmail = _currentUserService.Email;
                 if (!string.IsNullOrWhiteSpace(userEmail) && _memberRepository != null)
                 {

@@ -19,7 +19,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         _configuration = configuration;
     }
 
-    public AuthResponseDto GenerateToken(AppUser user, Guid? sessionId = null)
+    public AuthResponseDto GenerateToken(AppUser user, Guid? sessionId = null, Guid? memberId = null)
     {
         var secret = _configuration[CommonConstants.ConfigKeys.JwtSecret]
             ?? throw new InvalidOperationException(CommonMessages.Auth.JwtSecretNotConfigured);
@@ -42,6 +42,11 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         if (sessionId.HasValue)
         {
             claims.Add(new Claim(CommonConstants.Defaults.SessionIdClaim, sessionId.Value.ToString()));
+        }
+
+        if (memberId.HasValue)
+        {
+            claims.Add(new Claim("member_id", memberId.Value.ToString()));
         }
 
         var credentials = new SigningCredentials(
