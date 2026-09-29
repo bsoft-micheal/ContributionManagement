@@ -29,9 +29,8 @@ public class UserManagementService : IUserManagementService
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
         IMapper mapper,
+        IEmailService emailService,
         IWorkTypeRepository? workTypeRepository = null)
-        IMapper mapper,
-        IEmailService emailService)
     {
         _logger = logger;
         _userRepository = userRepository;
