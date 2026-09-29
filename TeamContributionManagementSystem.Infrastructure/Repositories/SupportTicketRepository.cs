@@ -140,4 +140,68 @@ public class SupportTicketRepository : ISupportTicketRepository
             throw;
         }
     }
+
+    public async Task<string> GenerateNextTicketNoAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var year = DateTime.UtcNow.Year;
+            var prefix = $"{CommonConstants.Defaults.TicketPrefix}-{year}-";
+
+            var ticketNumbers = await _context.SupportTickets
+                .IgnoreQueryFilters()
+                .Where(x => x.TicketNo.StartsWith(prefix))
+                .Select(x => x.TicketNo)
+                .ToListAsync(cancellationToken);
+
+            int maxSeq = 0;
+            foreach (var tNo in ticketNumbers)
+            {
+                var suffix = tNo.Substring(prefix.Length);
+                if (int.TryParse(suffix, out int seq) && seq > maxSeq)
+                {
+                    maxSeq = seq;
+                }
+            }
+
+            return $"{prefix}{(maxSeq + 1):D3}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GenerateNextTicketNoAsync));
+            throw;
+        }
+    }
+
+    public async Task<string> GenerateNextRefNoAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
+            var prefix = $"REF-{dateStr}-";
+
+            var refNumbers = await _context.SupportTickets
+                .IgnoreQueryFilters()
+                .Where(x => x.RefNo != null && x.RefNo.StartsWith(prefix))
+                .Select(x => x.RefNo!)
+                .ToListAsync(cancellationToken);
+
+            int maxSeq = 0;
+            foreach (var rNo in refNumbers)
+            {
+                var suffix = rNo.Substring(prefix.Length);
+                if (int.TryParse(suffix, out int seq) && seq > maxSeq)
+                {
+                    maxSeq = seq;
+                }
+            }
+
+            return $"{prefix}{(maxSeq + 1):D3}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GenerateNextRefNoAsync));
+            throw;
+        }
+    }
 }
