@@ -6,6 +6,7 @@ namespace TeamContributionManagementSystem.Application.Interfaces.Repositories;
 public interface IEventRepository
 {
     Task<List<EventSummaryDto>> GetAllAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default);
+    Task<List<EventSummaryDto>> GetAllForMemberAsync(Guid memberId, int? month = null, int? year = null, CancellationToken cancellationToken = default);
     Task<List<EventSummaryDto>> GetUpcomingAsync(int count, CancellationToken cancellationToken = default);
     Task<Event?> GetByIdAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<EventDetailsDto?> GetByIdWithDetailsAsync(Guid eventId, CancellationToken cancellationToken = default);
@@ -16,6 +17,7 @@ public interface IEventRepository
 
     // Standardized naming
     Task<List<EventSummaryDto>> GetAllEventAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetAllAsync(month, year, cancellationToken);
+    Task<List<EventSummaryDto>> GetAllForMemberEventAsync(Guid memberId, int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetAllForMemberAsync(memberId, month, year, cancellationToken);
     Task<Event?> GetEventAsyncById(Guid eventId, CancellationToken cancellationToken = default) => GetByIdAsync(eventId, cancellationToken);
     Task SaveEventAsync(Event eventItem, CancellationToken cancellationToken = default) => AddAsync(eventItem, cancellationToken);
     void UpdateEventAsyncById(Event eventItem) => Update(eventItem);
