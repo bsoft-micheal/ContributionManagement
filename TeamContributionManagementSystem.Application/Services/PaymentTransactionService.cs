@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Payments;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -21,6 +22,7 @@ public class PaymentTransactionService : IPaymentTransactionService
     private readonly IStatusRepository? _statusRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService? _currentUserService;
 
     public PaymentTransactionService(
         ILogger<PaymentTransactionService> logger,
@@ -31,7 +33,8 @@ public class PaymentTransactionService : IPaymentTransactionService
         ISystemSettingService settingService,
         IUnitOfWork unitOfWork,
         IMapper mapper,
-        IStatusRepository? statusRepository = null)
+        IStatusRepository? statusRepository = null,
+        ICurrentUserService? currentUserService = null)
     {
         _logger = logger;
         _transactionRepository = transactionRepository;
@@ -42,13 +45,29 @@ public class PaymentTransactionService : IPaymentTransactionService
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _statusRepository = statusRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<IReadOnlyCollection<PaymentTransactionDto>> GetAllAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _transactionRepository.GetAllAsync(eventName, mode, status, startDate, endDate, cancellationToken);
+            var all = await _transactionRepository.GetAllAsync(eventName, mode, status, startDate, endDate, cancellationToken);
+            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            {
+                var userEmail = _currentUserService.Email;
+                if (!string.IsNullOrWhiteSpace(userEmail))
+                {
+                    var myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                    if (myMember != null)
+                    {
+                        var memberName = myMember.Name.Trim();
+                        return all.Where(t => string.Equals(t.MemberName, memberName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    }
+                }
+                return Array.Empty<PaymentTransactionDto>();
+            }
+            return all;
         }
         catch (Exception ex)
         {

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Members;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -17,6 +18,7 @@ public class MemberService : IMemberService
     private readonly IWorkTypeRepository? _workTypeRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService? _currentUserService;
 
     public MemberService(
         ILogger<MemberService> logger,
@@ -25,7 +27,8 @@ public class MemberService : IMemberService
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper,
-        IWorkTypeRepository? workTypeRepository = null)
+        IWorkTypeRepository? workTypeRepository = null,
+        ICurrentUserService? currentUserService = null)
     {
         _logger = logger;
         _memberRepository = memberRepository;
@@ -34,12 +37,29 @@ public class MemberService : IMemberService
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _workTypeRepository = workTypeRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<IReadOnlyCollection<MemberDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
+            // If caller is in the Member role, restrict results to their own member record only
+            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            {
+                var userEmail = _currentUserService.Email;
+                if (!string.IsNullOrWhiteSpace(userEmail))
+                {
+                    var myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                    if (myMember != null)
+                    {
+                        var singleDto = _mapper.Map<MemberDto>(myMember);
+                        return new List<MemberDto> { singleDto };
+                    }
+                }
+                return Array.Empty<MemberDto>();
+            }
+
             var dtos = await _memberRepository.GetAllAsync(cancellationToken);
 
             try
@@ -155,6 +175,11 @@ public class MemberService : IMemberService
     {
         try
         {
+            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedAccessException("Members are not authorized to modify member records here.");
+            }
+
             var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
 
@@ -219,6 +244,11 @@ public class MemberService : IMemberService
     {
         try
         {
+            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedAccessException("Members are not authorized to delete member records.");
+            }
+
             var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
 
