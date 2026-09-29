@@ -131,6 +131,11 @@ public class BudgetCalculationService : IBudgetCalculationService
             var item = await _repository.GetByIdAsync(budgetCalculationId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.BudgetCalculations.NotFound);
 
+            if (await _repository.HasExpensesAsync(item.ExpenseItem, item.Category, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete budget calculation item '{item.ExpenseItem}' because it is associated with existing expense records.");
+            }
+
             _repository.Delete(item);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }

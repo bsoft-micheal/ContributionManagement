@@ -23,7 +23,12 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
     {
         try
         {
-            return await _context.BudgetCalculations
+            var expenses = await _context.Expenses
+                .Where(x => !x.IsDeleted)
+                .Select(x => new { Desc = x.Description.ToLower(), Cat = x.Category.ToLower(), Event = x.EventName.ToLower() })
+                .ToListAsync(cancellationToken);
+
+            var items = await _context.BudgetCalculations
                 .Where(x => !x.IsDeleted)
                 .OrderBy(x => x.CreatedAt)
                 .Select(x => new BudgetCalculationDto
@@ -40,6 +45,16 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                     ModifiedOn = x.ModifiedOn
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var item in items)
+            {
+                var itemClean = item.ExpenseItem.Trim().ToLower();
+                var catClean = item.Category?.Trim().ToLower();
+
+                item.IsReferred = expenses.Any(x => x.Desc.Contains(itemClean) || (catClean != null && x.Cat == catClean && x.Event.Contains(itemClean)));
+            }
+
+            return items;
         }
         catch (Exception ex)
         {
@@ -79,6 +94,26 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByNameAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasExpensesAsync(string expenseItem, string? category = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var itemClean = expenseItem.Trim().ToLower();
+            var catClean = category?.Trim().ToLower();
+
+            var query = _context.Expenses.Where(x => !x.IsDeleted && 
+                (x.Description.ToLower().Contains(itemClean) || 
+                 (catClean != null && x.Category.ToLower() == catClean && x.EventName.ToLower().Contains(itemClean))));
+
+            return await query.AnyAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasExpensesAsync));
             throw;
         }
     }

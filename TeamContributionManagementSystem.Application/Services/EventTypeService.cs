@@ -28,7 +28,19 @@ public class EventTypeService : IEventTypeService
         try
         {
             var eventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
-            return _mapper.Map<IReadOnlyCollection<EventTypeDto>>(eventTypes);
+            var dtos = _mapper.Map<List<EventTypeDto>>(eventTypes);
+
+            foreach (var dto in dtos)
+            {
+                var hasEvents = await _eventTypeRepository.HasEventsAsync(dto.EventTypeId, cancellationToken);
+                var hasBc = await _eventTypeRepository.HasBudgetCalculationsAsync(dto.EventTypeName, cancellationToken);
+                var hasExpenses = await _eventTypeRepository.HasExpensesAsync(dto.EventTypeName, cancellationToken);
+                var hasPhotos = await _eventTypeRepository.HasGalleryPhotosAsync(dto.EventTypeName, cancellationToken);
+
+                dto.IsReferred = hasEvents || hasBc || hasExpenses || hasPhotos;
+            }
+
+            return dtos;
         }
         catch (Exception ex)
         {
@@ -119,7 +131,22 @@ public class EventTypeService : IEventTypeService
 
             if (await _eventTypeRepository.HasEventsAsync(eventTypeId, cancellationToken))
             {
-                throw new InvalidOperationException(CommonMessages.EventTypes.CannotDeleteWithEvents);
+                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because it is referenced by existing events.");
+            }
+
+            if (await _eventTypeRepository.HasBudgetCalculationsAsync(eventType.EventTypeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because budget calculation rules are configured for it.");
+            }
+
+            if (await _eventTypeRepository.HasExpensesAsync(eventType.EventTypeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because expenses are recorded under this category.");
+            }
+
+            if (await _eventTypeRepository.HasGalleryPhotosAsync(eventType.EventTypeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because photos are associated with this category in the gallery.");
             }
 
             _eventTypeRepository.Delete(eventType);

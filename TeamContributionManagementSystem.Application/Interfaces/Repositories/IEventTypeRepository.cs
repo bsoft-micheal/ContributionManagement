@@ -8,6 +8,9 @@ public interface IEventTypeRepository
     Task<EventType?> GetByIdAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
     Task<EventType?> GetByNameAsync(string eventTypeName, CancellationToken cancellationToken = default);
     Task<bool> HasEventsAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
+    Task<bool> HasBudgetCalculationsAsync(string eventTypeName, CancellationToken cancellationToken = default);
+    Task<bool> HasExpensesAsync(string eventTypeName, CancellationToken cancellationToken = default);
+    Task<bool> HasGalleryPhotosAsync(string eventTypeName, CancellationToken cancellationToken = default);
     Task AddAsync(EventType eventType, CancellationToken cancellationToken = default);
     void Update(EventType eventType);
     void Delete(EventType eventType);

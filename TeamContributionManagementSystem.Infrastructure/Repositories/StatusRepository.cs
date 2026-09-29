@@ -63,7 +63,44 @@ public class StatusRepository : IStatusRepository
             query = query.Where(x => x.Module != null && x.Module.ToLower() == module.ToLower());
         }
 
-        return await query
+        var usedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var ticketStatuses = await _context.SupportTickets
+            .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.Status))
+            .Select(x => x.Status.ToLower())
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        foreach (var s in ticketStatuses) usedStatuses.Add(s);
+
+        var expenseStatuses = await _context.Expenses
+            .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.Status))
+            .Select(x => x.Status.ToLower())
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        foreach (var s in expenseStatuses) usedStatuses.Add(s);
+
+        var txnStatuses = await _context.PaymentTransactions
+            .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.Status))
+            .Select(x => x.Status.ToLower())
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        foreach (var s in txnStatuses) usedStatuses.Add(s);
+
+        var eventStatuses = await _context.Events
+            .Where(x => !x.IsDeleted)
+            .Select(x => x.Status.ToString().ToLower())
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        foreach (var s in eventStatuses) usedStatuses.Add(s);
+
+        var contributionStatuses = await _context.Contributions
+            .Where(x => !x.IsDeleted)
+            .Select(x => x.PaymentStatus.ToString().ToLower())
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        foreach (var s in contributionStatuses) usedStatuses.Add(s);
+
+        var items = await query
             .OrderBy(x => x.Module)
             .ThenBy(x => x.StatusName)
             .Select(x => new StatusDto
@@ -79,6 +116,14 @@ public class StatusRepository : IStatusRepository
                 ModifiedOn = x.ModifiedOn
             })
             .ToListAsync(cancellationToken);
+
+        foreach (var item in items)
+        {
+            var cleanName = item.StatusName.Trim().ToLower();
+            item.IsReferred = usedStatuses.Contains(cleanName);
+        }
+
+        return items;
     }
 
     public Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly, CancellationToken cancellationToken)
@@ -155,6 +200,34 @@ public class StatusRepository : IStatusRepository
             query = query.Where(x => x.Module != null && x.Module.ToLower() == module.ToLower());
         }
         return await query.FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<bool> IsInUseAsync(string statusName, string? module = null, CancellationToken cancellationToken = default)
+    {
+        await EnsureModuleColumnAsync(cancellationToken);
+        var cleanName = statusName.Trim().ToLower();
+
+        // Support tickets
+        var inSupport = await _context.SupportTickets.AnyAsync(x => !x.IsDeleted && x.Status.ToLower() == cleanName, cancellationToken);
+        if (inSupport) return true;
+
+        // Expenses
+        var inExpenses = await _context.Expenses.AnyAsync(x => !x.IsDeleted && x.Status.ToLower() == cleanName, cancellationToken);
+        if (inExpenses) return true;
+
+        // Payment Transactions
+        var inTxns = await _context.PaymentTransactions.AnyAsync(x => !x.IsDeleted && x.Status.ToLower() == cleanName, cancellationToken);
+        if (inTxns) return true;
+
+        // Events
+        var inEvents = await _context.Events.AnyAsync(x => !x.IsDeleted && x.Status.ToString().ToLower() == cleanName, cancellationToken);
+        if (inEvents) return true;
+
+        // Contributions
+        var inContributions = await _context.Contributions.AnyAsync(x => !x.IsDeleted && x.PaymentStatus.ToString().ToLower() == cleanName, cancellationToken);
+        if (inContributions) return true;
+
+        return false;
     }
 
     public async Task AddAsync(Status status, CancellationToken cancellationToken = default)

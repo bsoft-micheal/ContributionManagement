@@ -90,6 +90,7 @@ public class UserManagementService : IUserManagementService
     {
         try
         {
+            var referenced = await _userRepository.GetReferencedUserIdentifiersAsync(cancellationToken);
             var users = await _userRepository.GetAllAsync(cancellationToken);
             var members = await _memberRepository.GetAllAsync(cancellationToken);
 
@@ -141,6 +142,18 @@ public class UserManagementService : IUserManagementService
                     userDto.HasMemberProfile = false; // No login access
                 }
 
+                var uid = userDto.UserId.ToString();
+                var mid = member.MemberId.ToString();
+                var uname = (userDto.Username ?? "").Trim().ToLowerInvariant();
+                var fname = (userDto.FullName ?? "").Trim().ToLowerInvariant();
+                var email = (userDto.Email ?? "").Trim().ToLowerInvariant();
+
+                userDto.IsReferred = referenced.Contains(uid) 
+                    || referenced.Contains(mid) 
+                    || (!string.IsNullOrEmpty(uname) && referenced.Contains(uname)) 
+                    || (!string.IsNullOrEmpty(fname) && referenced.Contains(fname)) 
+                    || (!string.IsNullOrEmpty(email) && referenced.Contains(email));
+
                 resultList.Add(userDto);
             }
 
@@ -152,6 +165,17 @@ public class UserManagementService : IUserManagementService
                 {
                     var uDto = _mapper.Map<UserDto>(user);
                     uDto.HasMemberProfile = true;
+
+                    var uid = uDto.UserId.ToString();
+                    var uname = (uDto.Username ?? "").Trim().ToLowerInvariant();
+                    var fname = (uDto.FullName ?? "").Trim().ToLowerInvariant();
+                    var email = (uDto.Email ?? "").Trim().ToLowerInvariant();
+
+                    uDto.IsReferred = referenced.Contains(uid) 
+                        || (!string.IsNullOrEmpty(uname) && referenced.Contains(uname)) 
+                        || (!string.IsNullOrEmpty(fname) && referenced.Contains(fname)) 
+                        || (!string.IsNullOrEmpty(email) && referenced.Contains(email));
+
                     resultList.Add(uDto);
                 }
             }
@@ -650,6 +674,25 @@ public class UserManagementService : IUserManagementService
                 throw new KeyNotFoundException(CommonMessages.Users.NotFound);
             }
 
+            var referenced = await _userRepository.GetReferencedUserIdentifiersAsync(cancellationToken);
+            var isReferred = (appUser != null && (
+                    referenced.Contains(appUser.UserId.ToString()) ||
+                    referenced.Contains(appUser.Username.Trim().ToLowerInvariant()) ||
+                    referenced.Contains(appUser.FullName.Trim().ToLowerInvariant()) ||
+                    referenced.Contains(appUser.Email.Trim().ToLowerInvariant())
+                ))
+                || (member != null && (
+                    referenced.Contains(member.MemberId.ToString()) ||
+                    referenced.Contains(member.Name.Trim().ToLowerInvariant()) ||
+                    referenced.Contains(member.Email.Trim().ToLowerInvariant())
+                ));
+
+            if (isReferred)
+            {
+                var displayName = member?.Name ?? appUser?.FullName ?? appUser?.Username ?? "User";
+                throw new InvalidOperationException($"Cannot delete user '{displayName}' because they have associated contributions, event participation, expenses, or ticket records.");
+            }
+
             if (member != null)
             {
                 member.IsDeleted = true;
@@ -707,11 +750,19 @@ public class UserManagementService : IUserManagementService
             {
                 if (!string.IsNullOrEmpty(user.ProfileImage))
                 {
-                    var relativePath = user.ProfileImage.Split('?')[0];
-                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, relativePath.TrimStart('/'));
-                    if (File.Exists(oldFilePath))
+                    var relativePath = user.ProfileImage.Split('?')[0].TrimStart('/');
+                    var deleteDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     {
-                        try { File.Delete(oldFilePath); } catch {}
+                        Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot),
+                        Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot)
+                    };
+                    foreach (var root in deleteDirs)
+                    {
+                        var oldFilePath = Path.Combine(root, relativePath);
+                        if (File.Exists(oldFilePath))
+                        {
+                            try { File.Delete(oldFilePath); } catch {}
+                        }
                     }
                 }
                 user.ProfileImage = null;
@@ -720,22 +771,24 @@ public class UserManagementService : IUserManagementService
             {
                 if (!string.IsNullOrEmpty(user.ProfileImage))
                 {
-                    var relativePath = user.ProfileImage.Split('?')[0];
-                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, relativePath.TrimStart('/'));
-                    if (File.Exists(oldFilePath))
+                    var relativePath = user.ProfileImage.Split('?')[0].TrimStart('/');
+                    var deleteDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     {
-                        try { File.Delete(oldFilePath); } catch {}
+                        Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot),
+                        Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot)
+                    };
+                    foreach (var root in deleteDirs)
+                    {
+                        var oldFilePath = Path.Combine(root, relativePath);
+                        if (File.Exists(oldFilePath))
+                        {
+                            try { File.Delete(oldFilePath); } catch {}
+                        }
                     }
                 }
 
                 var base64Data = request.ProfileImage.Substring(request.ProfileImage.IndexOf(CommonConstants.Defaults.Comma) + 1);
                 var imageBytes = Convert.FromBase64String(base64Data);
-
-                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, CommonConstants.Defaults.UserImagesFolder);
-                if (!Directory.Exists(folderPath))
-                {
-                    Directory.CreateDirectory(folderPath);
-                }
 
                 var extension = CommonConstants.Defaults.ExtPng;
                 if (request.ProfileImage.Contains(CommonConstants.Defaults.ImageJpeg) || request.ProfileImage.Contains(CommonConstants.Defaults.ImageJpg))
@@ -746,9 +799,22 @@ public class UserManagementService : IUserManagementService
                 var dateStr = DateTime.UtcNow.ToString(CommonConstants.Defaults.DateFormatYmd);
                 var cleanUsername = user.Username.Replace(CommonConstants.Defaults.Space, CommonConstants.Defaults.Underscore).ToLowerInvariant();
                 var fileName = $"{dateStr}{cleanUsername}.{extension}";
-                var filePath = Path.Combine(folderPath, fileName);
 
-                await File.WriteAllBytesAsync(filePath, imageBytes, cancellationToken);
+                var targetDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, CommonConstants.Defaults.UserImagesFolder),
+                    Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot, CommonConstants.Defaults.UserImagesFolder)
+                };
+
+                foreach (var folderPath in targetDirs)
+                {
+                    if (!Directory.Exists(folderPath))
+                    {
+                        Directory.CreateDirectory(folderPath);
+                    }
+                    var filePath = Path.Combine(folderPath, fileName);
+                    await File.WriteAllBytesAsync(filePath, imageBytes, cancellationToken);
+                }
                 
                 var cacheBuster = DateTime.UtcNow.Ticks;
                 user.ProfileImage = $"{CommonConstants.Defaults.UserImagesPathPrefix}{fileName}{CommonConstants.Defaults.VersionParamPrefix}{cacheBuster}";

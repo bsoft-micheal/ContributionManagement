@@ -36,12 +36,28 @@ public class ExceptionHandlingMiddleware
         if (exception is FluentValidation.ValidationException valEx)
         {
             statusCode = HttpStatusCode.BadRequest;
+            var validationMsg = valEx.Errors != null && valEx.Errors.Any()
+                ? string.Join(", ", valEx.Errors.Select(e => e.ErrorMessage))
+                : CommonMessages.Validation.ValidationFailed;
+
             payload = new
             {
                 success = false,
                 statusCode = (int)statusCode,
-                message = CommonMessages.Validation.ValidationFailed,
-                data = valEx.Errors.Select(e => new { e.PropertyName, e.ErrorMessage })
+                message = validationMsg,
+                data = valEx.Errors?.Select(e => new { e.PropertyName, e.ErrorMessage })
+            };
+        }
+        else if (exception is Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+        {
+            statusCode = HttpStatusCode.BadRequest;
+            var msg = dbEx.InnerException?.Message ?? dbEx.Message;
+            payload = new
+            {
+                success = false,
+                statusCode = (int)statusCode,
+                message = msg,
+                data = (object?)null
             };
         }
         else
@@ -55,11 +71,15 @@ public class ExceptionHandlingMiddleware
                 _ => HttpStatusCode.InternalServerError
             };
 
+            var msg = !string.IsNullOrWhiteSpace(exception.Message)
+                ? exception.Message
+                : exception.InnerException?.Message ?? CommonMessages.General.Failure;
+
             payload = new
             {
                 success = false,
                 statusCode = (int)statusCode,
-                message = exception.Message,
+                message = msg,
                 data = (object?)null
             };
         }

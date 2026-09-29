@@ -161,6 +161,7 @@ public class EventService : IEventService
                 EventName = (request.EventName ?? string.Empty).Trim(),
                 EventTypeId = eventType.EventTypeId,
                 EventDate = request.EventDate.Date,
+                EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null,
                 CreatedBy = user.UserId,
                 CreatedAt = DateTime.UtcNow,
                 Description = (request.Description ?? string.Empty).Trim(),
@@ -222,6 +223,7 @@ public class EventService : IEventService
                 var eventId = eventItem.EventId;
                 var eventName = eventItem.EventName;
                 var eventDate = eventItem.EventDate;
+                var eventDates = eventItem.EventDates;
                 var eventDescription = eventItem.Description;
                 var baseAmount = eventItem.BaseAmount;
                 bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventType.EventTypeName) &&
@@ -410,7 +412,7 @@ public class EventService : IEventService
                             singleCelebrantDateStr = bdayDate.ToString("MMM dd");
                         }
 
-                        var emailTasks = particularContributors.Select(async contributor =>
+                        foreach (var contributor in particularContributors)
                         {
                             try
                             {
@@ -428,7 +430,15 @@ public class EventService : IEventService
                                         ? $"We are celebrating the birthdays of our team members this month: <strong>{celebrantsFormatted}</strong>! Here are the event details and your contribution amount:"
                                         : "You have been added to a new event. Here are the event details and your contribution amount:");
 
-                                string eventDateLabel = isBirthdayEvent ? "Celebration Date:" : "Event Date:";
+                                string eventDateLabel = "Event Date:";
+                                string celebrantDatesCsv = !string.IsNullOrWhiteSpace(eventDates)
+                                    ? eventDates
+                                    : (isBirthdayEvent && targetCelebrants.Count > 0
+                                        ? string.Join(", ", targetCelebrants.OrderBy(c => c.DateOfBirth.Day).Select(c => $"{c.DateOfBirth.Day} {new DateTime(eventDate.Year, c.DateOfBirth.Month, 1):MMM}"))
+                                        : string.Empty);
+                                string eventDateValueDisplay = !string.IsNullOrWhiteSpace(celebrantDatesCsv)
+                                    ? celebrantDatesCsv
+                                    : $"{eventDate:MMMM dd, yyyy}";
 
                                 string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
                                     ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
@@ -571,7 +581,7 @@ public class EventService : IEventService
                 {celebrantsAndDatesHtml}
                 <div class=""detail-row"">
                     <span class=""detail-label"">{eventDateLabel}</span>
-                    <span class=""detail-value"">{eventDate:MMMM dd, yyyy}</span>
+                    <span class=""detail-value"" style=""font-weight: 600;"">{eventDateValueDisplay}</span>
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Total Amount:</span>
@@ -648,14 +658,13 @@ public class EventService : IEventService
 
                                 await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, inlineImages, CancellationToken.None);
                                 scopedLogger.LogInformation(CommonLogMessages.Events.EmailSentSuccess, contributor.Email, eventName);
+                                await Task.Delay(200);
                             }
                             catch (Exception ex)
                             {
                                 scopedLogger.LogError(ex, CommonLogMessages.Events.EmailSendFailed, contributor.Email);
                             }
-                        });
-
-                        await Task.WhenAll(emailTasks);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -686,6 +695,7 @@ public class EventService : IEventService
             eventItem.EventName = (request.EventName ?? string.Empty).Trim();
             eventItem.EventTypeId = eventType.EventTypeId;
             eventItem.EventDate = request.EventDate.Date;
+            eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
             eventItem.Description = (request.Description ?? string.Empty).Trim();
             if (request.Status != 0)
             {
@@ -816,6 +826,26 @@ public class EventService : IEventService
         {
             var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
+
+            if (await _eventRepository.HasPaidContributionsAsync(eventId, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event '{eventItem.EventName}' because member contributions have already been paid for this event.");
+            }
+
+            if (await _eventRepository.HasPaymentTransactionsAsync(eventItem.EventName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event '{eventItem.EventName}' because payment transactions have been submitted or recorded for it.");
+            }
+
+            if (await _eventRepository.HasExpensesAsync(eventItem.EventName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event '{eventItem.EventName}' because expenses have been recorded for this event.");
+            }
+
+            if (await _eventRepository.HasGalleryPhotosAsync(eventItem.EventName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event '{eventItem.EventName}' because photos are associated with this event in the gallery.");
+            }
 
             eventItem.IsDeleted = true;
             eventItem.ModifiedOn = DateTime.UtcNow;

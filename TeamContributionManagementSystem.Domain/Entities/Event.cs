@@ -8,6 +8,7 @@ public class Event
     public string EventName { get; set; } = string.Empty;
     public Guid EventTypeId { get; set; }
     public DateTime EventDate { get; set; }
+    public string? EventDates { get; set; }
     public Guid CreatedBy { get; set; }
     public string Description { get; set; } = string.Empty;
     public EventStatus Status { get; set; } = EventStatus.Planned;

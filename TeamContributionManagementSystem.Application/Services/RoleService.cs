@@ -106,7 +106,17 @@ public class RoleService : IRoleService
 
             if (await _roleRepository.HasMembersAsync(roleId, cancellationToken))
             {
-                throw new InvalidOperationException(CommonMessages.Roles.CannotDeleteWithMembers);
+                throw new InvalidOperationException($"Cannot delete role '{role.RoleName}' because it is currently assigned to active members.");
+            }
+
+            if (await _roleRepository.HasUsersAsync(roleId, role.RoleName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete role '{role.RoleName}' because it is assigned to user accounts.");
+            }
+
+            if (await _roleRepository.HasRoleRightsAsync(role.RoleName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete role '{role.RoleName}' because user rights and permissions are configured for this role.");
             }
 
             _roleRepository.Delete(role);

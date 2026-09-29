@@ -17,6 +17,12 @@ public class WorkTypeRepository : IWorkTypeRepository
 
     public async Task<IReadOnlyCollection<WorkTypeDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
+        var memberWorkTypes = await _context.Members
+            .Where(m => !m.IsDeleted && !string.IsNullOrEmpty(m.WorkType))
+            .Select(m => m.WorkType.ToLower())
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
         var query = _context.WorkTypes
             .AsNoTracking()
             .Where(x => !x.IsDeleted);
@@ -26,7 +32,7 @@ public class WorkTypeRepository : IWorkTypeRepository
             query = query.Where(x => x.IsActive);
         }
 
-        return await query
+        var items = await query
             .OrderBy(x => x.WorkTypeName)
             .Select(x => new WorkTypeDto
             {
@@ -40,6 +46,14 @@ public class WorkTypeRepository : IWorkTypeRepository
                 ModifiedOn = x.ModifiedOn
             })
             .ToListAsync(cancellationToken);
+
+        foreach (var item in items)
+        {
+            var cleanName = item.WorkTypeName.Trim().ToLower();
+            item.IsReferred = memberWorkTypes.Contains(cleanName);
+        }
+
+        return items;
     }
 
     public async Task<WorkType?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -52,6 +66,12 @@ public class WorkTypeRepository : IWorkTypeRepository
     {
         return await _context.WorkTypes
             .FirstOrDefaultAsync(x => x.WorkTypeName.ToLower() == name.Trim().ToLower() && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task<bool> HasMembersAsync(string workTypeName, CancellationToken cancellationToken = default)
+    {
+        var cleanName = workTypeName.Trim().ToLower();
+        return await _context.Members.AnyAsync(m => !m.IsDeleted && m.WorkType.ToLower() == cleanName, cancellationToken);
     }
 
     public async Task AddAsync(WorkType workType, CancellationToken cancellationToken = default)

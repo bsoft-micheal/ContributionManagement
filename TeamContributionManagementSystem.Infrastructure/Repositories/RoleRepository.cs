@@ -23,7 +23,24 @@ public class RoleRepository : IRoleRepository
     {
         try
         {
-            return await _context.Roles
+            var memberRoleIds = await _context.Members
+                .Where(m => !m.IsDeleted && m.RoleId != null)
+                .Select(m => m.RoleId!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var userRoleNames = await _context.Users
+                .Where(u => !u.IsDeleted)
+                .Select(u => u.Role.ToString().ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var roleRightNames = await _context.RoleRights
+                .Select(r => r.Role.ToString().ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var roles = await _context.Roles
                 .OrderBy(x => x.RoleName)
                 .Select(x => new RoleDto
                 {
@@ -37,6 +54,14 @@ public class RoleRepository : IRoleRepository
                     ModifiedOn = x.ModifiedOn
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var r in roles)
+            {
+                var nameLower = r.RoleName.Trim().ToLower();
+                r.IsReferred = memberRoleIds.Contains(r.RoleId) || userRoleNames.Contains(nameLower) || roleRightNames.Contains(nameLower);
+            }
+
+            return roles;
         }
         catch (Exception ex)
         {
@@ -80,6 +105,41 @@ public class RoleRepository : IRoleRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasMembersAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasUsersAsync(Guid roleId, string roleName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = roleName.Trim();
+            var enumParsed = Enum.TryParse<TeamContributionManagementSystem.Domain.Enums.UserRole>(cleanName, true, out var parsedRole);
+
+            return await _context.Users.AnyAsync(x => !x.IsDeleted && 
+                (enumParsed && x.Role == parsedRole), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasUsersAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasRoleRightsAsync(string roleName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = roleName.Trim();
+            if (Enum.TryParse<TeamContributionManagementSystem.Domain.Enums.UserRole>(cleanName, true, out var parsedRole))
+            {
+                return await _context.RoleRights.AnyAsync(x => x.Role == parsedRole, cancellationToken);
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasRoleRightsAsync));
             throw;
         }
     }

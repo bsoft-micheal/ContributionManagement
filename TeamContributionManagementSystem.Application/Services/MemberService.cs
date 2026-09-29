@@ -84,6 +84,25 @@ public class MemberService : IMemberService
                 _logger.LogWarning(ex, "Could not resolve user names for member audit fields");
             }
 
+            try
+            {
+                var referenced = await _userRepository.GetReferencedUserIdentifiersAsync(cancellationToken);
+                foreach (var dto in dtos)
+                {
+                    var mid = dto.MemberId.ToString();
+                    var mname = (dto.Name ?? "").Trim().ToLowerInvariant();
+                    var memail = (dto.Email ?? "").Trim().ToLowerInvariant();
+
+                    dto.IsReferred = referenced.Contains(mid) 
+                        || (!string.IsNullOrEmpty(mname) && referenced.Contains(mname)) 
+                        || (!string.IsNullOrEmpty(memail) && referenced.Contains(memail));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not compute isReferred for members");
+            }
+
             return dtos;
         }
         catch (Exception ex)
@@ -251,6 +270,16 @@ public class MemberService : IMemberService
 
             var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
+
+            var referenced = await _userRepository.GetReferencedUserIdentifiersAsync(cancellationToken);
+            var isReferred = referenced.Contains(member.MemberId.ToString()) 
+                || referenced.Contains(member.Name.Trim().ToLowerInvariant()) 
+                || referenced.Contains(member.Email.Trim().ToLowerInvariant());
+
+            if (isReferred)
+            {
+                throw new InvalidOperationException($"Cannot delete member '{member.Name}' because they have associated contributions, event participation, expenses, or ticket records.");
+            }
 
             member.IsDeleted = true;
             member.IsActive = false;

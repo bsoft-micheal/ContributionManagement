@@ -148,6 +148,11 @@ public class StatusService : IStatusService
             var entity = await _repository.GetByIdAsync(id, cancellationToken)
                 ?? throw new KeyNotFoundException(string.Format(CommonMessages.Statuses.NotFoundFormat, id));
 
+            if (await _repository.IsInUseAsync(entity.StatusName, entity.Module, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete status '{entity.StatusName}' because it is currently assigned to existing records in the system.");
+            }
+
             _repository.Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }

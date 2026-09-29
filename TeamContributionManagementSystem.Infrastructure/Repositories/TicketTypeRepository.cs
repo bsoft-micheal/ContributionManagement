@@ -17,6 +17,12 @@ public class TicketTypeRepository : ITicketTypeRepository
 
     public async Task<IReadOnlyCollection<TicketTypeDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
+        var ticketTypesInUse = await _context.SupportTickets
+            .Where(t => !t.IsDeleted && !string.IsNullOrEmpty(t.TicketType))
+            .Select(t => t.TicketType.ToLower())
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
         var query = _context.TicketTypes
             .AsNoTracking()
             .Where(x => !x.IsDeleted);
@@ -26,7 +32,7 @@ public class TicketTypeRepository : ITicketTypeRepository
             query = query.Where(x => x.IsActive);
         }
 
-        return await query
+        var items = await query
             .OrderBy(x => x.TypeName)
             .Select(x => new TicketTypeDto
             {
@@ -40,6 +46,14 @@ public class TicketTypeRepository : ITicketTypeRepository
                 ModifiedOn = x.ModifiedOn
             })
             .ToListAsync(cancellationToken);
+
+        foreach (var item in items)
+        {
+            var cleanName = item.TypeName.Trim().ToLower();
+            item.IsReferred = ticketTypesInUse.Contains(cleanName);
+        }
+
+        return items;
     }
 
     public async Task<TicketType?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -52,6 +66,12 @@ public class TicketTypeRepository : ITicketTypeRepository
     {
         return await _context.TicketTypes
             .FirstOrDefaultAsync(x => x.TypeName.ToLower() == name.Trim().ToLower() && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task<bool> HasSupportTicketsAsync(string typeName, CancellationToken cancellationToken = default)
+    {
+        var cleanName = typeName.Trim().ToLower();
+        return await _context.SupportTickets.AnyAsync(t => !t.IsDeleted && t.TicketType.ToLower() == cleanName, cancellationToken);
     }
 
     public async Task AddAsync(TicketType ticketType, CancellationToken cancellationToken = default)

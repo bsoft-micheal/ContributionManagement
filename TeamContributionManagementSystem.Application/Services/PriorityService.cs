@@ -69,6 +69,11 @@ public class PriorityService : IPriorityService
                 }
             }
 
+            foreach (var dto in dtos)
+            {
+                dto.IsReferred = await _repository.HasSupportTicketsAsync(dto.PriorityName, cancellationToken);
+            }
+
             return dtos;
         }
         catch (Exception ex)
@@ -163,6 +168,11 @@ public class PriorityService : IPriorityService
         {
             var entity = await _repository.GetByIdAsync(id, cancellationToken)
                 ?? throw new KeyNotFoundException(string.Format(CommonMessages.Priorities.NotFoundFormat, id));
+
+            if (await _repository.HasSupportTicketsAsync(entity.PriorityName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete priority '{entity.PriorityName}' because it is assigned to existing support tickets.");
+            }
 
             _repository.Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
