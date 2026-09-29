@@ -146,6 +146,10 @@ public class UserManagementService : IUserManagementService
                     throw new InvalidOperationException("A user account already exists for this member.");
                 }
             }
+            else
+            {
+                member = await _memberRepository.GetByEmailAsync(request.Email.Trim().ToLowerInvariant(), cancellationToken);
+            }
 
             var emailToUse = member != null ? member.Email.Trim().ToLowerInvariant() : request.Email.Trim().ToLowerInvariant();
 
@@ -160,9 +164,11 @@ public class UserManagementService : IUserManagementService
             if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
                 throw new InvalidOperationException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
 
-            var fullName = member != null && !string.IsNullOrWhiteSpace(member.Name) 
-                ? member.Name.Trim() 
-                : request.Username.Trim();
+            var fullName = !string.IsNullOrWhiteSpace(request.FullName)
+                ? request.FullName.Trim()
+                : (member != null && !string.IsNullOrWhiteSpace(member.Name) 
+                    ? member.Name.Trim() 
+                    : request.Username.Trim());
 
             var appUser = new AppUser
             {
@@ -180,15 +186,48 @@ public class UserManagementService : IUserManagementService
 
             await _userRepository.AddAsync(appUser, cancellationToken);
 
+            var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
+            var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName, StringComparison.OrdinalIgnoreCase));
+
             if (member != null)
             {
-                var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
-                var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName, StringComparison.OrdinalIgnoreCase));
+                member.Name = fullName;
+                member.Email = emailToUse;
+                if (!string.IsNullOrWhiteSpace(request.Phone)) member.Phone = request.Phone.Trim();
+                if (!string.IsNullOrWhiteSpace(request.Gender)) member.Gender = request.Gender.Trim();
+                if (!string.IsNullOrWhiteSpace(request.WorkType)) member.WorkType = request.WorkType.Trim();
+                if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default) member.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
+                if (request.JoiningDate.HasValue && request.JoiningDate.Value != default) member.JoiningDate = request.JoiningDate.Value.ToUniversalTime();
+                member.IsActive = request.IsActive;
                 if (matchedRole != null)
                 {
                     member.RoleId = matchedRole.RoleId;
-                    _memberRepository.Update(member);
                 }
+                _memberRepository.Update(member);
+            }
+            else
+            {
+                var newMember = new Member
+                {
+                    MemberId    = Guid.NewGuid(),
+                    Name        = fullName,
+                    Email       = emailToUse,
+                    Phone       = request.Phone?.Trim() ?? string.Empty,
+                    Gender      = request.Gender?.Trim() ?? string.Empty,
+                    WorkType    = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : "Office",
+                    RoleId      = matchedRole?.RoleId,
+                    DateOfBirth = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
+                        ? request.DateOfBirth.Value.ToUniversalTime()
+                        : DateTime.UtcNow.Date,
+                    JoiningDate = (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
+                        ? request.JoiningDate.Value.ToUniversalTime()
+                        : DateTime.UtcNow.Date,
+                    IsActive    = request.IsActive,
+                    CreatedBy   = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                    CreatedAt   = DateTime.UtcNow,
+                    CreatedOn   = DateTime.UtcNow
+                };
+                await _memberRepository.AddAsync(newMember, cancellationToken);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -229,9 +268,12 @@ public class UserManagementService : IUserManagementService
             var newEmail = request.Email.Trim().ToLowerInvariant();
             var oldUsername = appUser.Username;
             var newUsername = request.Username.Trim();
+            var oldFullName = appUser.FullName;
+            var newFullName = !string.IsNullOrWhiteSpace(request.FullName) ? request.FullName.Trim() : appUser.FullName;
 
             appUser.Username = newUsername;
             appUser.Email    = newEmail;
+            appUser.FullName = newFullName;
             appUser.Role     = role;
             appUser.IsActive = request.IsActive;
             appUser.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
@@ -242,14 +284,54 @@ public class UserManagementService : IUserManagementService
 
             _userRepository.Update(appUser);
 
-            if (!string.Equals(oldEmail, newEmail, StringComparison.OrdinalIgnoreCase))
+            var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
+            var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName, StringComparison.OrdinalIgnoreCase));
+
+            var linkedMember = await _memberRepository.GetByEmailAsync(oldEmail, cancellationToken);
+            if (linkedMember == null && !string.Equals(oldEmail, newEmail, StringComparison.OrdinalIgnoreCase))
             {
-                var linkedMember = await _memberRepository.GetByEmailAsync(oldEmail, cancellationToken);
-                if (linkedMember != null)
+                linkedMember = await _memberRepository.GetByEmailAsync(newEmail, cancellationToken);
+            }
+
+            if (linkedMember != null)
+            {
+                linkedMember.Name = newFullName;
+                linkedMember.Email = newEmail;
+                if (!string.IsNullOrWhiteSpace(request.Phone)) linkedMember.Phone = request.Phone.Trim();
+                if (!string.IsNullOrWhiteSpace(request.Gender)) linkedMember.Gender = request.Gender.Trim();
+                if (!string.IsNullOrWhiteSpace(request.WorkType)) linkedMember.WorkType = request.WorkType.Trim();
+                if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default) linkedMember.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
+                if (request.JoiningDate.HasValue && request.JoiningDate.Value != default) linkedMember.JoiningDate = request.JoiningDate.Value.ToUniversalTime();
+                linkedMember.IsActive = request.IsActive;
+                if (matchedRole != null) linkedMember.RoleId = matchedRole.RoleId;
+                if (!string.IsNullOrWhiteSpace(user)) linkedMember.ModifiedBy = user.Trim();
+                linkedMember.ModifiedOn = DateTime.UtcNow;
+
+                _memberRepository.Update(linkedMember);
+            }
+            else
+            {
+                var newMember = new Member
                 {
-                    linkedMember.Email = newEmail;
-                    _memberRepository.Update(linkedMember);
-                }
+                    MemberId    = Guid.NewGuid(),
+                    Name        = newFullName,
+                    Email       = newEmail,
+                    Phone       = request.Phone?.Trim() ?? string.Empty,
+                    Gender      = request.Gender?.Trim() ?? string.Empty,
+                    WorkType    = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : "Office",
+                    RoleId      = matchedRole?.RoleId,
+                    DateOfBirth = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
+                        ? request.DateOfBirth.Value.ToUniversalTime()
+                        : DateTime.UtcNow.Date,
+                    JoiningDate = (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
+                        ? request.JoiningDate.Value.ToUniversalTime()
+                        : DateTime.UtcNow.Date,
+                    IsActive    = request.IsActive,
+                    CreatedBy   = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                    CreatedAt   = DateTime.UtcNow,
+                    CreatedOn   = DateTime.UtcNow
+                };
+                await _memberRepository.AddAsync(newMember, cancellationToken);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -257,6 +339,10 @@ public class UserManagementService : IUserManagementService
             if (!string.Equals(oldUsername, newUsername, StringComparison.OrdinalIgnoreCase))
             {
                 await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldUsername, newUsername, cancellationToken);
+            }
+            if (!string.IsNullOrWhiteSpace(oldFullName) && !string.Equals(oldFullName, newFullName, StringComparison.OrdinalIgnoreCase))
+            {
+                await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldFullName, newFullName, cancellationToken);
             }
 
             var updated = await _userRepository.GetByIdAsync(appUser.UserId, cancellationToken)
@@ -279,6 +365,14 @@ public class UserManagementService : IUserManagementService
         {
             var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
+
+            var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
+            if (member != null)
+            {
+                member.IsDeleted = true;
+                member.IsActive = false;
+                _memberRepository.Update(member);
+            }
 
             _userRepository.Delete(user);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
