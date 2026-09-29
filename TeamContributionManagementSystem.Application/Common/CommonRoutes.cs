@@ -125,6 +125,7 @@ public static class CommonRoutes
     {
         public const string Base = $"{ApiBase}/dashboard";
         public const string GetSummary = "getSummaryDashboardAsync";
+        public const string GetEvents = "getEventsDashboardAsync";
     }
 
     public static class DeviceInfo

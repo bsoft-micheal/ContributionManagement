@@ -45,17 +45,26 @@ public class MemberService : IMemberService
         try
         {
             // If caller is in the Member role, restrict results to their own member record only
-            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
             {
-                var userEmail = _currentUserService.Email;
-                if (!string.IsNullOrWhiteSpace(userEmail))
+                var myMemberId = _currentUserService.MemberId;
+                Domain.Entities.Member? myMember = null;
+
+                if (myMemberId.HasValue)
                 {
-                    var myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
-                    if (myMember != null)
-                    {
-                        var singleDto = _mapper.Map<MemberDto>(myMember);
-                        return new List<MemberDto> { singleDto };
-                    }
+                    myMember = await _memberRepository.GetByIdAsync(myMemberId.Value, cancellationToken);
+                }
+
+                var userEmail = _currentUserService.Email;
+                if (myMember == null && !string.IsNullOrWhiteSpace(userEmail))
+                {
+                    myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                }
+
+                if (myMember != null)
+                {
+                    var singleDto = _mapper.Map<MemberDto>(myMember);
+                    return new List<MemberDto> { singleDto };
                 }
                 return Array.Empty<MemberDto>();
             }

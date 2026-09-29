@@ -113,6 +113,73 @@ public class EventRepository : IEventRepository
         }
     }
 
+    public async Task<List<EventSummaryDto>> GetAllForMemberAsync(Guid memberId, int? month = null, int? year = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var query = _context.Events
+                .Where(x => !x.IsDeleted && (
+                    x.Contributions.Any(c => !c.IsDeleted && c.MemberId == memberId) ||
+                    x.Participants.Any(p => !p.IsDeleted && p.MemberId == memberId)
+                ))
+                .AsQueryable();
+
+            if (month.HasValue)
+            {
+                query = query.Where(x => x.EventDate.Month == month.Value);
+            }
+
+            if (year.HasValue)
+            {
+                query = query.Where(x => x.EventDate.Year == year.Value);
+            }
+
+            return await query
+                .OrderByDescending(x => x.EventDate)
+                .Select(x => new EventSummaryDto
+                {
+                    EventId = x.EventId,
+                    EventName = x.EventName,
+                    EventTypeId = x.EventTypeId,
+                    EventTypeName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
+                    EventDate = x.EventDate,
+                    Description = x.Description,
+                    Status = x.Status,
+                    BaseAmount = x.BaseAmount,
+                    ParticipantCount = x.Contributions.Count(c => !c.IsDeleted && c.MemberId == memberId) > 0 ? 1 : (x.Participants.Count(p => !p.IsDeleted && p.MemberId == memberId) > 0 ? 1 : 0),
+                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.MemberId == memberId).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.MemberId == memberId && c.PaymentStatus == PaymentStatus.Paid).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.MemberId == memberId && c.PaymentStatus != PaymentStatus.Paid),
+                    CreatedByName = x.CreatedByUser != null 
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                        : null,
+                    CreatedBy = x.CreatedByUser != null 
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                        : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
+                    CreatedAt = x.CreatedAt,
+                    CreatedOn = x.CreatedAt,
+                    HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,
+                    TenureThresholdYears = x.EventType != null ? x.EventType.TenureThresholdYears : 0,
+                    NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
+                    StandardSharePercentage = x.EventType != null ? x.EventType.StandardSharePercentage : 0,
+                    RuleDescription = x.EventType != null ? x.EventType.RuleDescription : null,
+                    Participants = x.Participants.Where(p => !p.Member!.IsDeleted && p.MemberId == memberId).Select(p => new EventParticipantDto
+                    {
+                        Id = p.Id,
+                        MemberId = p.MemberId,
+                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
+                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                    }).ToList()
+                })
+                .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllForMemberAsync));
+            throw;
+        }
+    }
+
     public async Task<List<EventSummaryDto>> GetUpcomingAsync(int count, CancellationToken cancellationToken = default)
     {
         try
