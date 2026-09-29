@@ -53,17 +53,25 @@ public class PaymentTransactionService : IPaymentTransactionService
         try
         {
             var all = await _transactionRepository.GetAllAsync(eventName, mode, status, startDate, endDate, cancellationToken);
-            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
             {
-                var userEmail = _currentUserService.Email;
-                if (!string.IsNullOrWhiteSpace(userEmail))
+                var myMemberId = _currentUserService.MemberId;
+                Domain.Entities.Member? myMember = null;
+                if (myMemberId.HasValue)
                 {
-                    var myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
-                    if (myMember != null)
-                    {
-                        var memberName = myMember.Name.Trim();
-                        return all.Where(t => string.Equals(t.MemberName, memberName, StringComparison.OrdinalIgnoreCase)).ToList();
-                    }
+                    myMember = await _memberRepository.GetByIdAsync(myMemberId.Value, cancellationToken);
+                }
+
+                var userEmail = _currentUserService.Email;
+                if (myMember == null && !string.IsNullOrWhiteSpace(userEmail))
+                {
+                    myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                }
+
+                if (myMember != null)
+                {
+                    var memberName = myMember.Name.Trim();
+                    return all.Where(t => string.Equals(t.MemberName, memberName, StringComparison.OrdinalIgnoreCase)).ToList();
                 }
                 return Array.Empty<PaymentTransactionDto>();
             }
@@ -82,6 +90,30 @@ public class PaymentTransactionService : IPaymentTransactionService
         {
             var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Payments.NotFound);
+
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
+            {
+                var myMemberId = _currentUserService.MemberId;
+                Domain.Entities.Member? myMember = null;
+                if (myMemberId.HasValue)
+                {
+                    myMember = await _memberRepository.GetByIdAsync(myMemberId.Value, cancellationToken);
+                }
+
+                var userEmail = _currentUserService.Email;
+                if (myMember == null && !string.IsNullOrWhiteSpace(userEmail))
+                {
+                    myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                }
+
+                bool isOwner = myMember != null && string.Equals(entity.MemberName, myMember.Name.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                if (!isOwner)
+                {
+                    throw new UnauthorizedAccessException("Access denied to requested payment transaction.");
+                }
+            }
+
             return _mapper.Map<PaymentTransactionDto>(entity);
         }
         catch (Exception ex)

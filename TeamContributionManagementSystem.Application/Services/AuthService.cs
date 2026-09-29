@@ -277,13 +277,13 @@ public class AuthService : IAuthService
             await _unitOfWork.SaveChangesAsync(cancellationToken); // To save OTP clear if applicable
         }
 
-        var response = _jwtTokenGenerator.GenerateToken(user, sessionId);
+        var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
+        var response = _jwtTokenGenerator.GenerateToken(user, sessionId, member?.MemberId);
         response.UserId = user.UserId;
         response.Rights = await _roleRightsService.GetRoleRightAsyncByRole(user.Role.ToString(), cancellationToken);
         response.RequiresTwoFactor = false;
         response.IsFirstLogin = user.IsFirstLogin;
 
-        var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
         if (member != null)
         {
             response.MemberId = member.MemberId;

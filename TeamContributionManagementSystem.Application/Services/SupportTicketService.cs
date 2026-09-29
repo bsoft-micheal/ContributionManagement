@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -17,6 +18,8 @@ public class SupportTicketService : ISupportTicketService
     private readonly IPriorityRepository? _priorityRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService? _currentUserService;
+    private readonly IMemberRepository? _memberRepository;
 
     public SupportTicketService(
         ILogger<SupportTicketService> logger,
@@ -25,7 +28,9 @@ public class SupportTicketService : ISupportTicketService
         IMapper mapper,
         IStatusRepository? statusRepository = null,
         ITicketTypeRepository? ticketTypeRepository = null,
-        IPriorityRepository? priorityRepository = null)
+        IPriorityRepository? priorityRepository = null,
+        ICurrentUserService? currentUserService = null,
+        IMemberRepository? memberRepository = null)
     {
         _logger = logger;
         _ticketRepository = ticketRepository;
@@ -34,13 +39,41 @@ public class SupportTicketService : ISupportTicketService
         _statusRepository = statusRepository;
         _ticketTypeRepository = ticketTypeRepository;
         _priorityRepository = priorityRepository;
+        _currentUserService = currentUserService;
+        _memberRepository = memberRepository;
     }
 
     public async Task<IReadOnlyCollection<SupportTicketDto>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _ticketRepository.GetAllAsync(status, ticketType, priority, cancellationToken);
+            var all = await _ticketRepository.GetAllAsync(status, ticketType, priority, cancellationToken);
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
+            {
+                var myMemberId = _currentUserService.MemberId;
+                Domain.Entities.Member? myMember = null;
+                if (myMemberId.HasValue && _memberRepository != null)
+                {
+                    myMember = await _memberRepository.GetByIdAsync(myMemberId.Value, cancellationToken);
+                }
+
+                var userEmail = _currentUserService.Email;
+                if (myMember == null && !string.IsNullOrWhiteSpace(userEmail) && _memberRepository != null)
+                {
+                    myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                }
+
+                var myMemberIdStr = myMember?.MemberId.ToString();
+                var myMemberName = myMember?.Name.Trim();
+                var myUserEmail = userEmail?.Trim();
+
+                return all.Where(t =>
+                    (myMemberIdStr != null && string.Equals(t.MemberId, myMemberIdStr, StringComparison.OrdinalIgnoreCase)) ||
+                    (myMemberName != null && string.Equals(t.MemberName, myMemberName, StringComparison.OrdinalIgnoreCase)) ||
+                    (myUserEmail != null && string.Equals(t.CreatedBy, myUserEmail, StringComparison.OrdinalIgnoreCase))
+                ).ToList();
+            }
+            return all;
         }
         catch (Exception ex)
         {
@@ -55,6 +88,37 @@ public class SupportTicketService : ISupportTicketService
         {
             var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.SupportTickets.NotFound);
+
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
+            {
+                var myMemberId = _currentUserService.MemberId;
+                Domain.Entities.Member? myMember = null;
+                if (myMemberId.HasValue && _memberRepository != null)
+                {
+                    myMember = await _memberRepository.GetByIdAsync(myMemberId.Value, cancellationToken);
+                }
+
+                var userEmail = _currentUserService.Email;
+                if (myMember == null && !string.IsNullOrWhiteSpace(userEmail) && _memberRepository != null)
+                {
+                    myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                }
+
+                var myMemberIdStr = myMember?.MemberId.ToString();
+                var myMemberName = myMember?.Name.Trim();
+                var myUserEmail = userEmail?.Trim();
+
+                bool isOwner =
+                    (myMemberIdStr != null && string.Equals(ticket.MemberId, myMemberIdStr, StringComparison.OrdinalIgnoreCase)) ||
+                    (myMemberName != null && string.Equals(ticket.MemberName, myMemberName, StringComparison.OrdinalIgnoreCase)) ||
+                    (myUserEmail != null && string.Equals(ticket.CreatedBy, myUserEmail, StringComparison.OrdinalIgnoreCase));
+
+                if (!isOwner)
+                {
+                    throw new UnauthorizedAccessException("Access denied to requested support ticket.");
+                }
+            }
+
             return _mapper.Map<SupportTicketDto>(ticket);
         }
         catch (Exception ex)
