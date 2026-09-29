@@ -278,12 +278,14 @@ public class AuthService : IAuthService
         }
 
         var response = _jwtTokenGenerator.GenerateToken(user, sessionId);
+        response.UserId = user.UserId;
         response.Rights = await _roleRightsService.GetRoleRightAsyncByRole(user.Role.ToString(), cancellationToken);
         response.RequiresTwoFactor = false;
 
         var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
         if (member != null)
         {
+            response.MemberId = member.MemberId;
             response.Phone = member.Phone;
             response.DateOfBirth = member.DateOfBirth;
             response.JoiningDate = member.JoiningDate;
