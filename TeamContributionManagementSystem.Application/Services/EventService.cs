@@ -241,35 +241,12 @@ public class EventService : IEventService
                         var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<EventService>>();
                         var scopedMemberRepo = scope.ServiceProvider.GetRequiredService<IMemberRepository>();
                         var scopedSettingService = scope.ServiceProvider.GetService<ISystemSettingService>();
-                        var scopedQrRepo = scope.ServiceProvider.GetService<TeamContributionManagementSystem.Application.Interfaces.IPaymentQRSettingsRepository>();
 
                         string upiReceiverName = CommonConstants.Defaults.DefaultPayeeName;
                         string upiId = CommonConstants.Defaults.DefaultUpiId;
                         string qrImageUrl = string.Empty;
 
-                        // 1. Try fetching event-type specific payment QR configuration
-                        if (scopedQrRepo != null && !string.IsNullOrWhiteSpace(eventType.EventTypeName))
-                        {
-                            try
-                            {
-                                var qrSetting = await scopedQrRepo.GetByEventTypeAsync(eventType.EventTypeName);
-                                if (qrSetting != null && !string.IsNullOrWhiteSpace(qrSetting.UPIId))
-                                {
-                                    upiId = qrSetting.UPIId.Trim();
-                                    if (!string.IsNullOrWhiteSpace(qrSetting.ReceiverName))
-                                    {
-                                        upiReceiverName = qrSetting.ReceiverName.Trim();
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                scopedLogger.LogWarning(ex, "Failed to load event type QR settings for {EventType}", eventType.EventTypeName);
-                            }
-                        }
-
-                        // 2. Fallback to system settings if event-type specific QR is not configured
-                        if (scopedSettingService != null && (upiId == CommonConstants.Defaults.DefaultUpiId || string.IsNullOrWhiteSpace(upiId)))
+                        if (scopedSettingService != null)
                         {
                             try
                             {
