@@ -62,7 +62,8 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             FullName = user.FullName,
             Role = user.Role.ToString(),
             ProfileImage = user.ProfileImage,
-            ExpiresAtUtc = expiresAtUtc
+            ExpiresAtUtc = expiresAtUtc,
+            IsFirstLogin = user.IsFirstLogin
         };
     }
 }

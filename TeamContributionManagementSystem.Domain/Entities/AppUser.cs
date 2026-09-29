@@ -18,6 +18,7 @@ public class AppUser
     public DateTime? PasswordResetOtpExpiry { get; set; }
 
     public bool IsTwoFactorEnabled { get; set; } = false;
+    public bool IsFirstLogin { get; set; } = true;
 
     public ICollection<UserMfaDevice> MfaDevices { get; set; } = new List<UserMfaDevice>();
 

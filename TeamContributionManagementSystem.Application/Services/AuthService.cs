@@ -280,6 +280,7 @@ public class AuthService : IAuthService
         var response = _jwtTokenGenerator.GenerateToken(user, sessionId);
         response.Rights = await _roleRightsService.GetRoleRightAsyncByRole(user.Role.ToString(), cancellationToken);
         response.RequiresTwoFactor = false;
+        response.IsFirstLogin = user.IsFirstLogin;
 
         var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
         if (member != null)

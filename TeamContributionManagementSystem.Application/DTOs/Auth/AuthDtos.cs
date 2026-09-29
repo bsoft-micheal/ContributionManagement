@@ -27,6 +27,7 @@ public class AuthResponseDto
     public DateTime ExpiresAtUtc { get; set; }
     public IReadOnlyCollection<RoleRightDto> Rights { get; set; } = Array.Empty<RoleRightDto>();
     public bool RequiresTwoFactor { get; set; } = false;
+    public bool IsFirstLogin { get; set; } = false;
 
     // Joined from Member profile
     public string? Phone { get; set; }

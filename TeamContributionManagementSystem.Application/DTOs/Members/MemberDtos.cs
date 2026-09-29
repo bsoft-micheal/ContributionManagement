@@ -16,6 +16,7 @@ public class MemberDto
     public string Gender { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public bool IsExited { get; set; }
+    public bool IsDeleted { get; set; } = false;
     public string WorkType { get; set; } = string.Empty;
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
@@ -52,6 +53,7 @@ public class CreateMemberRequestDto
 
     public bool IsActive { get; set; } = true;
     public bool IsExited { get; set; }
+    public bool IsDeleted { get; set; } = false;
     public string WorkType { get; set; } = string.Empty;
 }
 
