@@ -30,12 +30,15 @@ public class DashboardService : IDashboardService
             var monthlyEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
             var pendingContributions = await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken);
 
+            var eventPendingSum = monthlyEvents.Sum(x => x.TotalExpectedAmount - x.TotalPaidAmount);
+            var eventPendingCount = monthlyEvents.Sum(x => x.PendingContributionsCount);
+
             return new DashboardSummaryDto
             {
                 MonthlyEventsCount = monthlyEvents.Count,
                 TotalContributions = monthlyEvents.Sum(x => x.TotalPaidAmount),
-                PendingPayments = pendingContributions.Count,
-                TotalPendingAmount = pendingContributions.Sum(x => x.Amount),
+                PendingPayments = monthlyEvents.Count > 0 ? eventPendingCount : pendingContributions.Count,
+                TotalPendingAmount = monthlyEvents.Count > 0 ? eventPendingSum : pendingContributions.Sum(x => x.Amount),
                 UpcomingEvents = monthlyEvents.Select(x => new UpcomingEventDto
                 {
                     EventId = x.EventId,
@@ -45,7 +48,7 @@ public class DashboardService : IDashboardService
                     ExpectedAmount = x.TotalExpectedAmount,
                     CollectedAmount = x.TotalPaidAmount,
                     PendingAmount = x.TotalExpectedAmount - x.TotalPaidAmount,
-                    PendingContributionsCount = 0,
+                    PendingContributionsCount = x.PendingContributionsCount,
                     TotalContributionsCount = x.ParticipantCount,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt

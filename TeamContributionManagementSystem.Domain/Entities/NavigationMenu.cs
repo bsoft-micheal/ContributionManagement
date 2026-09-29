@@ -30,4 +30,5 @@ public class NavigationMenu
     public bool HasSubModule { get; set; }
     public bool ShowingUserRight { get; set; }
     public string? ItemDescription { get; set; }
+    public int MenuType { get; set; } = 3;
 }

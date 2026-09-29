@@ -24,16 +24,21 @@ public class RoleRightRepository : IRoleRightRepository
     {
         try
         {
-            var navMenus = await _context.NavigationMenus.OrderBy(m => m.DisplayOrder).ToListAsync(cancellationToken);
+            var navMenus = await _context.NavigationMenus.ToListAsync(cancellationToken);
             var rights = await _context.RoleRights.ToListAsync(cancellationToken);
+            var rightsByRoleAndFeature = rights
+                .Where(x => x.FeatureID > 0)
+                .GroupBy(x => x.Role)
+                .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.FeatureID));
             var rightsMap = rights.ToDictionary(x => $"{x.Role}|{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}", StringComparer.OrdinalIgnoreCase);
 
-            var parentMap = navMenus.Where(m => m.ParentID == 0).ToDictionary(m => m.FeatureID);
+            var allMenuMap = navMenus.ToDictionary(m => m.FeatureID);
 
             var result = new List<RoleRightDto>();
             foreach (var role in Enum.GetValues<UserRole>())
             {
-                result.AddRange(BuildRightsFromNavigation(role, navMenus, parentMap, rightsMap));
+                var roleFeatures = rightsByRoleAndFeature.TryGetValue(role, out var map) ? map : new Dictionary<int, RoleRight>();
+                result.AddRange(BuildRightsFromNavigation(role, navMenus, allMenuMap, roleFeatures, rightsMap));
             }
 
             return result;
@@ -49,13 +54,14 @@ public class RoleRightRepository : IRoleRightRepository
     {
         try
         {
-            var navMenus = await _context.NavigationMenus.OrderBy(m => m.DisplayOrder).ToListAsync(cancellationToken);
+            var navMenus = await _context.NavigationMenus.ToListAsync(cancellationToken);
             var rights = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+            var rightsByFeature = rights.Where(x => x.FeatureID > 0).ToDictionary(x => x.FeatureID);
             var rightsMap = rights.ToDictionary(x => $"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}", StringComparer.OrdinalIgnoreCase);
 
-            var parentMap = navMenus.Where(m => m.ParentID == 0).ToDictionary(m => m.FeatureID);
+            var allMenuMap = navMenus.ToDictionary(m => m.FeatureID);
 
-            return BuildRightsFromNavigation(role, navMenus, parentMap, rightsMap);
+            return BuildRightsFromNavigation(role, navMenus, allMenuMap, rightsByFeature, rightsMap);
         }
         catch (Exception ex)
         {
@@ -67,38 +73,100 @@ public class RoleRightRepository : IRoleRightRepository
     private static List<RoleRightDto> BuildRightsFromNavigation(
         UserRole role,
         List<NavigationMenu> navMenus,
-        Dictionary<int, NavigationMenu> parentMap,
+        Dictionary<int, NavigationMenu> allMenuMap,
+        Dictionary<int, RoleRight> rightsByFeature,
         Dictionary<string, RoleRight> rightsMap)
     {
         var result = new List<RoleRightDto>();
 
-        foreach (var menu in navMenus)
+        // Build hierarchical ordering: Parent (MenuType 1) -> SubModule (MenuType 2) -> Action (MenuType 3)
+        var orderedNavMenus = new List<NavigationMenu>();
+        var rootMenus = navMenus.Where(m => m.ParentID == 0).OrderBy(m => m.MainModuleID).ThenBy(m => m.FeatureID).ToList();
+        var childrenByParent = navMenus.Where(m => m.ParentID != 0).GroupBy(m => m.ParentID).ToDictionary(g => g.Key, g => g.OrderBy(m => m.FeatureID).ToList());
+
+        foreach (var root in rootMenus)
+        {
+            orderedNavMenus.Add(root);
+            if (childrenByParent.TryGetValue(root.FeatureID, out var level2List))
+            {
+                foreach (var l2 in level2List)
+                {
+                    orderedNavMenus.Add(l2);
+                    if (childrenByParent.TryGetValue(l2.FeatureID, out var level3List))
+                    {
+                        foreach (var l3 in level3List)
+                        {
+                            orderedNavMenus.Add(l3);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add any remaining menus not caught by tree hierarchy
+        var addedIds = new HashSet<int>(orderedNavMenus.Select(m => m.FeatureID));
+        foreach (var remaining in navMenus.Where(m => !addedIds.Contains(m.FeatureID)).OrderBy(m => m.DisplayOrder).ThenBy(m => m.FeatureID))
+        {
+            orderedNavMenus.Add(remaining);
+        }
+
+        foreach (var menu in orderedNavMenus)
         {
             if (!menu.ShowingUserRight) continue;
 
             string moduleName;
             string subModuleName;
+            string actionName;
             string pageName;
+            int menuType = menu.MenuType;
 
             if (menu.ParentID == 0)
             {
-                moduleName = menu.Module ?? string.Empty;
+                moduleName = menu.Module ?? menu.Activity ?? string.Empty;
                 subModuleName = string.Empty;
-                pageName = menu.Module ?? string.Empty;
+                actionName = string.Empty;
+                pageName = moduleName;
+                menuType = 1;
             }
             else
             {
-                parentMap.TryGetValue(menu.ParentID, out var parent);
-                moduleName = parent?.Module ?? string.Empty;
-                subModuleName = menu.SubModule ?? string.Empty;
-                pageName = menu.SubModule ?? menu.Activity ?? string.Empty;
+                allMenuMap.TryGetValue(menu.ParentID, out var parent);
+
+                if (menu.MenuType == 3)
+                {
+                    // Action level
+                    if (parent != null && parent.ParentID != 0)
+                    {
+                        allMenuMap.TryGetValue(parent.ParentID, out var grandParent);
+                        moduleName = grandParent?.Module ?? grandParent?.Activity ?? parent?.Module ?? string.Empty;
+                        subModuleName = !string.IsNullOrWhiteSpace(parent?.Activity) ? parent.Activity : (parent?.SubModule ?? string.Empty);
+                    }
+                    else
+                    {
+                        moduleName = parent?.Module ?? parent?.Activity ?? string.Empty;
+                        subModuleName = string.Empty;
+                    }
+                    actionName = !string.IsNullOrWhiteSpace(menu.SubModule) ? menu.SubModule : (menu.Activity ?? string.Empty);
+                    pageName = !string.IsNullOrWhiteSpace(actionName) ? actionName : (!string.IsNullOrWhiteSpace(subModuleName) ? subModuleName : moduleName);
+                }
+                else
+                {
+                    // SubModule / Page level (MenuType == 2)
+                    moduleName = parent?.Module ?? parent?.Activity ?? string.Empty;
+                    subModuleName = !string.IsNullOrWhiteSpace(menu.Activity) ? menu.Activity : (menu.SubModule ?? string.Empty);
+                    actionName = string.Empty;
+                    pageName = !string.IsNullOrWhiteSpace(subModuleName) ? subModuleName : moduleName;
+                    menuType = 2;
+                }
             }
 
             var key = $"{moduleName.Trim()}|{subModuleName.Trim()}|{pageName.Trim()}";
             var mapKey = rightsMap.ContainsKey(key) ? key : $"{role}|{key}";
 
             RoleRight? existing = null;
-            if (rightsMap.TryGetValue(mapKey, out existing) || rightsMap.TryGetValue(key, out existing))
+            if ((menu.FeatureID > 0 && rightsByFeature.TryGetValue(menu.FeatureID, out existing))
+                || rightsMap.TryGetValue(mapKey, out existing)
+                || rightsMap.TryGetValue(key, out existing))
             {
                 result.Add(new RoleRightDto
                 {
@@ -107,12 +175,14 @@ public class RoleRightRepository : IRoleRightRepository
                     FeatureID = menu.FeatureID,
                     Module = moduleName,
                     SubModule = subModuleName,
+                    Action = actionName,
                     Page = pageName,
+                    MenuType = menuType,
                     Access = existing.Access,
                     AccessType = (int)existing.AccessType > 0 ? (int)existing.AccessType : (existing.Access == "deny" ? (int)AccessType.Deny : (existing.Access == "readOnly" ? (int)AccessType.ReadOnly : (int)AccessType.ReadWrite)),
                     CreatedBy = existing.CreatedBy,
                     CreatedAt = existing.CreatedAt,
-                    CreatedOn = existing.CreatedAt
+                    CreatedOn = existing.CreatedOn ?? existing.CreatedAt
                 });
             }
             else
@@ -127,9 +197,13 @@ public class RoleRightRepository : IRoleRightRepository
                     FeatureID = menu.FeatureID,
                     Module = moduleName,
                     SubModule = subModuleName,
+                    Action = actionName,
                     Page = pageName,
+                    MenuType = menuType,
                     Access = defaultAccess,
-                    AccessType = (int)defaultAccessType
+                    AccessType = (int)defaultAccessType,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedOn = DateTime.UtcNow
                 });
             }
         }
@@ -143,7 +217,7 @@ public class RoleRightRepository : IRoleRightRepository
         {
             var existing = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
             var rightsList = rights
-                .GroupBy(r => new { Module = r.Module.Trim(), SubModule = r.SubModule.Trim(), Page = r.Page.Trim() })
+                .GroupBy(r => r.FeatureID > 0 ? (object)r.FeatureID : $"{r.Module.Trim()}|{r.SubModule.Trim()}|{r.Page.Trim()}")
                 .Select(g => g.First())
                 .ToList();
 
@@ -179,6 +253,9 @@ public class RoleRightRepository : IRoleRightRepository
                     existingRight.Access = effectiveAccess;
                     existingRight.AccessType = effectiveAccessType;
                     existingRight.FeatureID = right.FeatureID;
+                    existingRight.Module = right.Module.Trim();
+                    existingRight.SubModule = right.SubModule.Trim();
+                    existingRight.Page = right.Page.Trim();
                 }
                 else
                 {
