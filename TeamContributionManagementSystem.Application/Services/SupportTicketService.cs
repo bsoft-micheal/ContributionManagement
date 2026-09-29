@@ -68,9 +68,7 @@ public class SupportTicketService : ISupportTicketService
     {
         try
         {
-            var all = await _ticketRepository.GetAllAsync(cancellationToken: cancellationToken);
-            var nextNumber = all.Count + 1;
-            var ticketNo = $"{CommonConstants.Defaults.TicketPrefix}-{DateTime.UtcNow.Year}-{nextNumber:D3}";
+            var ticketNo = await _ticketRepository.GenerateNextTicketNoAsync(cancellationToken);
 
             var ticketType = request.TicketType?.Trim();
             if (string.IsNullOrWhiteSpace(ticketType) && _ticketTypeRepository != null)
@@ -105,6 +103,12 @@ public class SupportTicketService : ISupportTicketService
                 priority = "Medium";
             }
 
+            var refNo = request.RefNo?.Trim();
+            if (string.IsNullOrWhiteSpace(refNo))
+            {
+                refNo = await _ticketRepository.GenerateNextRefNoAsync(cancellationToken);
+            }
+
             var ticket = new SupportTicket
             {
                 TicketId = Guid.NewGuid(),
@@ -118,7 +122,7 @@ public class SupportTicketService : ISupportTicketService
                 Status = status,
                 Priority = priority,
                 AssignedTo = null,
-                RefNo = request.RefNo?.Trim() ?? $"REF-{DateTime.UtcNow:yyyyMMdd}-{nextNumber:D3}",
+                RefNo = refNo,
                 Utr = request.Utr?.Trim(),
                 Attachment = request.Attachment?.Trim(),
                 IsActive = true,
