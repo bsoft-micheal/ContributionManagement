@@ -34,6 +34,7 @@ public class UserRepository : IUserRepository
                     Email = x.Email,
                     RoleName = x.Role.ToString(),
                     IsActive = x.IsActive,
+                    IsFirstLogin = x.IsFirstLogin,
                     ProfileImage = x.ProfileImage,
                     CreatedOn = x.CreatedOn,
                     CreatedAt = x.CreatedAt,

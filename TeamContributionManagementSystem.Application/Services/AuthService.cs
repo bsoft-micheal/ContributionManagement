@@ -281,6 +281,7 @@ public class AuthService : IAuthService
         response.UserId = user.UserId;
         response.Rights = await _roleRightsService.GetRoleRightAsyncByRole(user.Role.ToString(), cancellationToken);
         response.RequiresTwoFactor = false;
+        response.IsFirstLogin = user.IsFirstLogin;
 
         var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
         if (member != null)

@@ -10,6 +10,10 @@ public class UserDto
     public string Email { get; set; } = string.Empty;
     public string RoleName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public bool IsDeleted { get; set; } = false;
+    public bool IsFirstLogin { get; set; } = true;
+    public bool HasMemberProfile { get; set; }
+    public string? MemberUsername { get; set; }
     public string? ProfileImage { get; set; }
     public DateTime CreatedOn { get; set; }
     public DateTime? CreatedAt { get; set; }
@@ -30,22 +34,18 @@ public class CreateUserRequestDto
     [MaxLength(150)]
     public string? FullName { get; set; }
 
-    [Required]
     [MaxLength(100)]
-    public string Username { get; set; } = string.Empty;
+    public string? Username { get; set; }
 
     [Required]
     [EmailAddress]
     [MaxLength(150)]
     public string Email { get; set; } = string.Empty;
 
-    [Required]
-    [MinLength(6)]
-    public string Password { get; set; } = string.Empty;
+    public string? Password { get; set; }
 
-    [Required]
-    [MaxLength(20)]
-    public string RoleName { get; set; } = string.Empty;
+    [MaxLength(50)]
+    public string? RoleName { get; set; }
 
     [MaxLength(20)]
     public string? Phone { get; set; }
@@ -58,6 +58,12 @@ public class CreateUserRequestDto
 
     public DateTime? DateOfBirth { get; set; }
     public DateTime? JoiningDate { get; set; }
+
+    public bool? CreateMemberProfile { get; set; }
+    public bool? EnableUserAccess { get; set; }
+
+    [MaxLength(100)]
+    public string? MemberUsername { get; set; }
 
     public bool IsActive { get; set; } = true;
 }
@@ -67,9 +73,8 @@ public class UpdateUserRequestDto
     [MaxLength(150)]
     public string? FullName { get; set; }
 
-    [Required]
     [MaxLength(100)]
-    public string Username { get; set; } = string.Empty;
+    public string? Username { get; set; }
 
     [Required]
     [EmailAddress]
@@ -77,12 +82,10 @@ public class UpdateUserRequestDto
     public string Email { get; set; } = string.Empty;
 
     /// <summary>Optional – only set when the caller wants to change the password.</summary>
-    [MinLength(6)]
     public string? Password { get; set; }
 
-    [Required]
-    [MaxLength(20)]
-    public string RoleName { get; set; } = string.Empty;
+    [MaxLength(50)]
+    public string? RoleName { get; set; }
 
     [MaxLength(20)]
     public string? Phone { get; set; }
@@ -95,6 +98,12 @@ public class UpdateUserRequestDto
 
     public DateTime? DateOfBirth { get; set; }
     public DateTime? JoiningDate { get; set; }
+
+    public bool? CreateMemberProfile { get; set; }
+    public bool? EnableUserAccess { get; set; }
+
+    [MaxLength(100)]
+    public string? MemberUsername { get; set; }
 
     public bool IsActive { get; set; } = true;
 }
@@ -112,7 +121,6 @@ public class UpdateProfileRequestDto
 
     public string? ProfileImage { get; set; }
 
-    [MinLength(6)]
     public string? Password { get; set; }
 
     public DateTime? DateOfBirth { get; set; }
