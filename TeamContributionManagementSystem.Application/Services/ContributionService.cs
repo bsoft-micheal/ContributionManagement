@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Contributions;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -15,20 +16,44 @@ public class ContributionService : IContributionService
     private readonly IContributionRepository _contributionRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService? _currentUserService;
+    private readonly IMemberRepository? _memberRepository;
 
-    public ContributionService(ILogger<ContributionService> logger, IContributionRepository contributionRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public ContributionService(
+        ILogger<ContributionService> logger,
+        IContributionRepository contributionRepository,
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        ICurrentUserService? currentUserService = null,
+        IMemberRepository? memberRepository = null)
     {
         _logger = logger;
         _contributionRepository = contributionRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _currentUserService = currentUserService;
+        _memberRepository = memberRepository;
     }
 
     public async Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _contributionRepository.GetAllAsync(cancellationToken);
+            var all = await _contributionRepository.GetAllAsync(cancellationToken);
+            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            {
+                var userEmail = _currentUserService.Email;
+                if (!string.IsNullOrWhiteSpace(userEmail) && _memberRepository != null)
+                {
+                    var myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                    if (myMember != null)
+                    {
+                        return all.Where(c => c.MemberId == myMember.MemberId).ToList();
+                    }
+                }
+                return Array.Empty<ContributionDto>();
+            }
+            return all;
         }
         catch (Exception ex)
         {
@@ -41,7 +66,21 @@ public class ContributionService : IContributionService
     {
         try
         {
-            return await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);
+            var byEvent = await _contributionRepository.GetByEventIdAsync(eventId, cancellationToken);
+            if (_currentUserService != null && string.Equals(_currentUserService.Role, "Member", StringComparison.OrdinalIgnoreCase))
+            {
+                var userEmail = _currentUserService.Email;
+                if (!string.IsNullOrWhiteSpace(userEmail) && _memberRepository != null)
+                {
+                    var myMember = await _memberRepository.GetByEmailAsync(userEmail.Trim(), cancellationToken);
+                    if (myMember != null)
+                    {
+                        return byEvent.Where(c => c.MemberId == myMember.MemberId).ToList();
+                    }
+                }
+                return Array.Empty<ContributionDto>();
+            }
+            return byEvent;
         }
         catch (Exception ex)
         {
