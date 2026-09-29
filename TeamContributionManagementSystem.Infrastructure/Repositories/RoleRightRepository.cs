@@ -81,8 +81,8 @@ public class RoleRightRepository : IRoleRightRepository
 
         // Build hierarchical ordering: Parent (MenuType 1) -> SubModule (MenuType 2) -> Action (MenuType 3)
         var orderedNavMenus = new List<NavigationMenu>();
-        var rootMenus = navMenus.Where(m => m.ParentID == 0).OrderBy(m => m.MainModuleID).ThenBy(m => m.FeatureID).ToList();
-        var childrenByParent = navMenus.Where(m => m.ParentID != 0).GroupBy(m => m.ParentID).ToDictionary(g => g.Key, g => g.OrderBy(m => m.FeatureID).ToList());
+        var rootMenus = navMenus.Where(m => m.ParentID == 0).OrderBy(m => m.MainModuleID).ThenBy(m => m.DisplayOrder).ThenBy(m => m.FeatureID).ToList();
+        var childrenByParent = navMenus.Where(m => m.ParentID != 0).GroupBy(m => m.ParentID).ToDictionary(g => g.Key, g => g.OrderBy(m => m.DisplayOrder).ThenBy(m => m.FeatureID).ToList());
 
         foreach (var root in rootMenus)
         {
