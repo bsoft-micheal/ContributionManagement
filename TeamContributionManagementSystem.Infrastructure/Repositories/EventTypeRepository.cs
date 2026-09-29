@@ -61,11 +61,53 @@ public class EventTypeRepository : IEventTypeRepository
     {
         try
         {
-            return await _context.Events.AnyAsync(x => x.EventTypeId == eventTypeId, cancellationToken);
+            return await _context.Events.AnyAsync(x => x.EventTypeId == eventTypeId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasEventsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasBudgetCalculationsAsync(string eventTypeName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventTypeName.Trim().ToLower();
+            return await _context.BudgetCalculations.AnyAsync(x => !x.IsDeleted && x.Category != null && x.Category.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasBudgetCalculationsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasExpensesAsync(string eventTypeName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventTypeName.Trim().ToLower();
+            return await _context.Expenses.AnyAsync(x => !x.IsDeleted && x.Category.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasExpensesAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasGalleryPhotosAsync(string eventTypeName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventTypeName.Trim().ToLower();
+            return await _context.GalleryPhotos.AnyAsync(x => !x.IsDeleted && x.Category.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasGalleryPhotosAsync));
             throw;
         }
     }

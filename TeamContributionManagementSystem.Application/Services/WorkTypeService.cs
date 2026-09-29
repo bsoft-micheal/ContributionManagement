@@ -126,6 +126,11 @@ public class WorkTypeService : IWorkTypeService
             var entity = await _repository.GetByIdAsync(id, cancellationToken)
                 ?? throw new KeyNotFoundException(string.Format(CommonMessages.WorkTypes.NotFoundFormat, id));
 
+            if (await _repository.HasMembersAsync(entity.WorkTypeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete work type '{entity.WorkTypeName}' because it is currently assigned to active members.");
+            }
+
             _repository.Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }

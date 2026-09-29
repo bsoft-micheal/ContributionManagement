@@ -11,6 +11,7 @@ public interface IStatusRepository
     Task<Status?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Status?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
     Task<Status?> GetByNameAndModuleAsync(string name, string? module, CancellationToken cancellationToken = default);
+    Task<bool> IsInUseAsync(string statusName, string? module = null, CancellationToken cancellationToken = default);
     Task AddAsync(Status status, CancellationToken cancellationToken = default);
     void Update(Status status);
     void Delete(Status status);

@@ -15,6 +15,7 @@ public interface IUserRepository
     void Delete(AppUser user);
 
     Task CascadeUpdateCreatorDisplayNameAsync(Guid userId, string oldName, string newName, CancellationToken cancellationToken = default);
+    Task<HashSet<string>> GetReferencedUserIdentifiersAsync(CancellationToken cancellationToken = default);
 
     // Standardized naming
     Task<List<UserDto>> GetAllUserAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);

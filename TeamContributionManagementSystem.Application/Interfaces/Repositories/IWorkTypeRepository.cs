@@ -8,6 +8,7 @@ public interface IWorkTypeRepository
     Task<IReadOnlyCollection<WorkTypeDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default);
     Task<WorkType?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<WorkType?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
+    Task<bool> HasMembersAsync(string workTypeName, CancellationToken cancellationToken = default);
     Task AddAsync(WorkType workType, CancellationToken cancellationToken = default);
     void Update(WorkType workType);
     void Delete(WorkType workType);

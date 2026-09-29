@@ -11,6 +11,7 @@ public class EventSummaryDto
     public Guid EventTypeId { get; set; }
     public string EventTypeName { get; set; } = string.Empty;
     public DateTime EventDate { get; set; }
+    public string? EventDates { get; set; }
     public string Description { get; set; } = string.Empty;
     public EventStatus Status { get; set; }
     public decimal BaseAmount { get; set; }
@@ -29,6 +30,7 @@ public class EventSummaryDto
     public decimal NewEntrantSharePercentage { get; set; }
     public decimal StandardSharePercentage { get; set; }
     public string? RuleDescription { get; set; }
+    public bool IsReferred { get; set; }
 
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }
@@ -66,6 +68,9 @@ public class CreateEventRequestDto
 
     [Required]
     public DateTime EventDate { get; set; }
+
+    [MaxLength(500)]
+    public string? EventDates { get; set; }
 
     [MaxLength(1000)]
     public string Description { get; set; } = string.Empty;

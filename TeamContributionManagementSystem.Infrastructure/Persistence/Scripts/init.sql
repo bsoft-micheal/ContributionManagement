@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS events (
     event_name VARCHAR(200) NOT NULL,
     event_type_id UUID NOT NULL REFERENCES event_types(event_type_id) ON DELETE RESTRICT,
     event_date DATE NOT NULL,
+    event_dates VARCHAR(500) NULL,
     created_by UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
     description VARCHAR(1000) NOT NULL,
     status VARCHAR(30) NOT NULL,
@@ -638,6 +639,9 @@ ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS created_by VARCH
 ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS modified_by VARCHAR(150) NULL;
 ALTER TABLE IF EXISTS user_mfa_devices ADD COLUMN IF NOT EXISTS modified_on TIMESTAMPTZ NULL;
+
+-- Events: Add event_dates column for multi-date celebrations
+ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS event_dates VARCHAR(500) NULL;
 
 -- Members: Allow role_id to be nullable
 ALTER TABLE IF EXISTS members ALTER COLUMN role_id DROP NOT NULL;

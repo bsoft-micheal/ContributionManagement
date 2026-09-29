@@ -51,11 +51,11 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
-    /// Creates a new event and automatically adds the specified members as participants (Admin only).
+    /// Creates a new event and automatically adds the specified members as participants (Admin or Organizer).
     /// </summary>
     /// <param name="request">The event details and participant list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = CommonRoles.Admin)]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
     [HttpPost(CommonRoutes.Events.Create)]
     [ActionName(nameof(SaveEventAsync))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> SaveEventAsync([FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
@@ -68,12 +68,12 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
-    /// Updates an existing event and its participants (Admin only).
+    /// Updates an existing event and its participants (Admin or Organizer).
     /// </summary>
     /// <param name="id">The unique identifier of the event to update.</param>
     /// <param name="request">The updated event details and participant list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = CommonRoles.Admin)]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
     [HttpPut(CommonRoutes.Events.Update)]
     [ActionName(nameof(UpdateEventAsyncById))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> UpdateEventAsyncById(Guid id, [FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
@@ -83,11 +83,11 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
-    /// Deletes an event and all associated contributions/participants (Admin only).
+    /// Deletes an event and all associated contributions/participants (Admin or Organizer).
     /// </summary>
     /// <param name="id">The unique identifier of the event to delete.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = CommonRoles.Admin)]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
     [HttpDelete(CommonRoutes.Events.Delete)]
     [ActionName(nameof(DeleteEventAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteEventAsyncById(Guid id, CancellationToken cancellationToken)

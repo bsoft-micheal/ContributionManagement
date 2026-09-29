@@ -126,6 +126,11 @@ public class TicketTypeService : ITicketTypeService
             var entity = await _repository.GetByIdAsync(id, cancellationToken)
                 ?? throw new KeyNotFoundException(string.Format(CommonMessages.TicketTypes.NotFoundFormat, id));
 
+            if (await _repository.HasSupportTicketsAsync(entity.TypeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete ticket type '{entity.TypeName}' because it is referenced by existing support tickets.");
+            }
+
             _repository.Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }

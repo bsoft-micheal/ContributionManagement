@@ -20,11 +20,83 @@ public class UserRepository : IUserRepository
         _logger = logger;
     }
 
+    public async Task<HashSet<string>> GetReferencedUserIdentifiersAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var contributionMemberIds = await _context.Contributions
+                .Where(c => !c.IsDeleted)
+                .Select(c => c.MemberId.ToString())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in contributionMemberIds) set.Add(id);
+
+            var participantMemberIds = await _context.EventParticipants
+                .Select(ep => ep.MemberId.ToString())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in participantMemberIds) set.Add(id);
+
+            var eventCreators = await _context.Events
+                .Where(e => !e.IsDeleted && e.CreatedBy != Guid.Empty)
+                .Select(e => e.CreatedBy.ToString())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in eventCreators) set.Add(id);
+
+            var paymentTxnMembers = await _context.PaymentTransactions
+                .Where(pt => !pt.IsDeleted && !string.IsNullOrEmpty(pt.MemberName))
+                .Select(pt => pt.MemberName.Trim().ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var name in paymentTxnMembers) set.Add(name);
+
+            var expenseUsers = await _context.Expenses
+                .Where(ex => !ex.IsDeleted && !string.IsNullOrEmpty(ex.SubmittedBy))
+                .Select(ex => ex.SubmittedBy.Trim().ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var name in expenseUsers) set.Add(name);
+
+            var ticketMembers = await _context.SupportTickets
+                .Where(st => !st.IsDeleted && !string.IsNullOrEmpty(st.MemberName))
+                .Select(st => st.MemberName.Trim().ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var name in ticketMembers) set.Add(name);
+
+            var ticketMemberIds = await _context.SupportTickets
+                .Where(st => !st.IsDeleted && !string.IsNullOrEmpty(st.MemberId))
+                .Select(st => st.MemberId!.Trim().ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in ticketMemberIds) set.Add(id);
+
+            var ticketAssigned = await _context.SupportTickets
+                .Where(st => !st.IsDeleted && !string.IsNullOrEmpty(st.AssignedTo))
+                .Select(st => st.AssignedTo!.Trim().ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var name in ticketAssigned) set.Add(name);
+
+            return set;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetReferencedUserIdentifiersAsync));
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
     public async Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _context.Users
+            var referenced = await GetReferencedUserIdentifiersAsync(cancellationToken);
+
+            var users = await _context.Users
                 .OrderBy(x => x.Username)
                 .Select(x => new UserDto
                 {
@@ -34,6 +106,7 @@ public class UserRepository : IUserRepository
                     Email = x.Email,
                     RoleName = x.Role.ToString(),
                     IsActive = x.IsActive,
+                    IsDeleted = x.IsDeleted,
                     IsFirstLogin = x.IsFirstLogin,
                     ProfileImage = x.ProfileImage,
                     CreatedOn = x.CreatedOn,
@@ -41,6 +114,18 @@ public class UserRepository : IUserRepository
                     CreatedBy = x.CreatedBy
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var u in users)
+            {
+                var uid = u.UserId.ToString();
+                var uname = u.Username.Trim().ToLowerInvariant();
+                var fname = u.FullName.Trim().ToLowerInvariant();
+                var email = u.Email.Trim().ToLowerInvariant();
+
+                u.IsReferred = referenced.Contains(uid) || referenced.Contains(uname) || referenced.Contains(fname) || referenced.Contains(email);
+            }
+
+            return users;
         }
         catch (Exception ex)
         {

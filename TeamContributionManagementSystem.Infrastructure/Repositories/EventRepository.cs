@@ -37,7 +37,25 @@ public class EventRepository : IEventRepository
                 query = query.Where(x => x.EventDate.Year == year.Value);
             }
 
-            return await query
+            var paymentTxnEventNames = await _context.PaymentTransactions
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var expenseEventNames = await _context.Expenses
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var photoEventNames = await _context.GalleryPhotos
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var results = await query
                 .OrderByDescending(x => x.EventDate)
                 .Select(x => new EventSummaryDto
                 {
@@ -46,6 +64,7 @@ public class EventRepository : IEventRepository
                     EventTypeId = x.EventTypeId,
                     EventTypeName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
                     EventDate = x.EventDate,
+                    EventDates = x.EventDates,
                     Description = x.Description,
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
@@ -75,6 +94,17 @@ public class EventRepository : IEventRepository
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var r in results)
+            {
+                var cleanName = r.EventName.Trim().ToLower();
+                r.IsReferred = r.TotalPaidAmount > 0 
+                    || paymentTxnEventNames.Contains(cleanName) 
+                    || expenseEventNames.Contains(cleanName) 
+                    || photoEventNames.Contains(cleanName);
+            }
+
+            return results;
         }
         catch (Exception ex)
         {
@@ -154,7 +184,25 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            return await _context.Events
+            var paymentTxnEventNames = await _context.PaymentTransactions
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var expenseEventNames = await _context.Expenses
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var photoEventNames = await _context.GalleryPhotos
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var results = await _context.Events
                 .Where(x => !x.IsDeleted && x.EventDate >= DateTime.UtcNow.Date)
                 .OrderBy(x => x.EventDate)
                 .Take(count)
@@ -165,6 +213,7 @@ public class EventRepository : IEventRepository
                     EventTypeId = x.EventTypeId,
                     EventTypeName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
                     EventDate = x.EventDate,
+                    EventDates = x.EventDates,
                     Description = x.Description,
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
@@ -194,6 +243,17 @@ public class EventRepository : IEventRepository
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var r in results)
+            {
+                var cleanName = r.EventName.Trim().ToLower();
+                r.IsReferred = r.TotalPaidAmount > 0 
+                    || paymentTxnEventNames.Contains(cleanName) 
+                    || expenseEventNames.Contains(cleanName) 
+                    || photoEventNames.Contains(cleanName);
+            }
+
+            return results;
         }
         catch (Exception ex)
         {
@@ -228,6 +288,7 @@ public class EventRepository : IEventRepository
                     EventTypeId = x.EventTypeId,
                     EventTypeName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
                     EventDate = x.EventDate,
+                    EventDates = x.EventDates,
                     Description = x.Description,
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
@@ -299,6 +360,62 @@ public class EventRepository : IEventRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(BirthdayEventExistsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasPaidContributionsAsync(Guid eventId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Contributions.AnyAsync(x => x.EventId == eventId && !x.IsDeleted && 
+                (x.PaymentStatus == PaymentStatus.Paid || (x.Amount > 0 && (x.CashAmount > 0 || x.UpiAmount > 0))), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasPaidContributionsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasPaymentTransactionsAsync(string eventName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventName.Trim().ToLower();
+            return await _context.PaymentTransactions.AnyAsync(x => !x.IsDeleted && x.EventName.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasPaymentTransactionsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasExpensesAsync(string eventName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventName.Trim().ToLower();
+            return await _context.Expenses.AnyAsync(x => !x.IsDeleted && x.EventName.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasExpensesAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasGalleryPhotosAsync(string eventName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventName.Trim().ToLower();
+            return await _context.GalleryPhotos.AnyAsync(x => !x.IsDeleted && x.EventName.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasGalleryPhotosAsync));
             throw;
         }
     }

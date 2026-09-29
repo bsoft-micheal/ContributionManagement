@@ -126,6 +126,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.EventId);
             entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.EventDates).HasColumnName("event_dates").HasMaxLength(500);
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
             entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);

@@ -8,6 +8,7 @@ public interface ITicketTypeRepository
     Task<IReadOnlyCollection<TicketTypeDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default);
     Task<TicketType?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<TicketType?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
+    Task<bool> HasSupportTicketsAsync(string typeName, CancellationToken cancellationToken = default);
     Task AddAsync(TicketType ticketType, CancellationToken cancellationToken = default);
     void Update(TicketType ticketType);
     void Delete(TicketType ticketType);

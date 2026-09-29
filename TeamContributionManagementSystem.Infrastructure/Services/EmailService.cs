@@ -20,7 +20,7 @@ public class EmailService : IEmailService
         _logger = logger;
     }
 
-    private void CheckAndIncrementEmailCount()
+    private void CheckEmailLimit()
     {
         var logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
         Directory.CreateDirectory(logDirectory);
@@ -57,6 +57,37 @@ public class EmailService : IEmailService
                 _logger.LogError(CommonLogMessages.Emails.DailyLimitReached);
                 throw new InvalidOperationException(CommonMessages.Emails.DailyLimitReached);
             }
+        }
+    }
+
+    private void IncrementEmailCount()
+    {
+        var logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
+        Directory.CreateDirectory(logDirectory);
+        var trackerPath = Path.Combine(logDirectory, "email_limit_tracker.json");
+
+        lock (_lock)
+        {
+            var todayStr = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            int count = 0;
+
+            if (File.Exists(trackerPath))
+            {
+                try
+                {
+                    var content = File.ReadAllText(trackerPath);
+                    if (content.Contains(todayStr))
+                    {
+                        var parts = content.Split(new[] { "\"Count\":" }, StringSplitOptions.None);
+                        if (parts.Length > 1)
+                        {
+                            var countPart = parts[1].Split('}')[0].Trim();
+                            int.TryParse(countPart, out count);
+                        }
+                    }
+                }
+                catch { }
+            }
 
             count++;
 
@@ -80,7 +111,7 @@ public class EmailService : IEmailService
         IEnumerable<InlineEmailImage>? inlineImages = null,
         CancellationToken cancellationToken = default)
     {
-        CheckAndIncrementEmailCount();
+        CheckEmailLimit();
         var inlineImageList = inlineImages?.Where(image => !string.IsNullOrWhiteSpace(image.ContentId) && !string.IsNullOrWhiteSpace(image.FilePath)).ToList()
             ?? new List<InlineEmailImage>();
 
@@ -174,6 +205,7 @@ public class EmailService : IEmailService
             };
 
             await smtpClient.SendMailAsync(mailMessage, cancellationToken);
+            IncrementEmailCount();
             _logger.LogInformation(CommonLogMessages.Emails.EmailSentSuccess, toEmail);
         }
         catch (Exception ex)

@@ -16,6 +16,7 @@ public class PaymentModeDto
     public DateTime? CreatedOn { get; set; }
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
+    public bool IsReferred { get; set; }
 
     public string? UpdatedBy
     {
