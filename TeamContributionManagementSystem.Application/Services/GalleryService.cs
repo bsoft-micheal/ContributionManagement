@@ -13,6 +13,7 @@ public class GalleryService : IGalleryService
 {
     private readonly ILogger<GalleryService> _logger;
     private readonly IGalleryRepository _galleryRepository;
+    private readonly IEventRepository? _eventRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IUserRepository? _userRepository;
@@ -22,13 +23,15 @@ public class GalleryService : IGalleryService
         IGalleryRepository galleryRepository, 
         IUnitOfWork unitOfWork, 
         IMapper mapper,
-        IUserRepository? userRepository = null)
+        IUserRepository? userRepository = null,
+        IEventRepository? eventRepository = null)
     {
         _logger = logger;
         _galleryRepository = galleryRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _userRepository = userRepository;
+        _eventRepository = eventRepository;
     }
 
     public async Task<IReadOnlyCollection<GalleryPhotoDto>> GetAllAsync(string? eventName = null, string? category = null, CancellationToken cancellationToken = default)
@@ -142,13 +145,28 @@ public class GalleryService : IGalleryService
                 catch { }
             }
 
+            Guid? eventId = null;
+            if (_eventRepository != null && !string.IsNullOrWhiteSpace(request.EventName))
+            {
+                try
+                {
+                    var matchedEvent = await _eventRepository.GetByNameAsync(request.EventName.Trim(), cancellationToken);
+                    if (matchedEvent != null)
+                    {
+                        eventId = matchedEvent.EventId;
+                    }
+                }
+                catch { }
+            }
+
             var photo = new GalleryPhoto
             {
                 PhotoId = Guid.NewGuid(),
+                EventId = eventId,
                 Title = request.Title.Trim(),
                 EventName = request.EventName.Trim(),
                 Category = string.IsNullOrWhiteSpace(request.Category) ? CommonConstants.Defaults.DefaultGalleryCategory : request.Category.Trim(),
-                ImageUrl = await ProcessGalleryImageAsync(request.ImageUrl, cancellationToken),
+                ImageUrl = request.ImageUrl?.Trim() ?? string.Empty,
                 TakenDate = request.TakenDate,
                 Description = request.Description?.Trim(),
                 IsActive = true,
@@ -187,71 +205,5 @@ public class GalleryService : IGalleryService
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
-    }
-
-    private async Task<string> ProcessGalleryImageAsync(string imageUrl, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(imageUrl)) return string.Empty;
-
-        // Check if it's a JSON array of images
-        if (imageUrl.TrimStart().StartsWith("["))
-        {
-            try
-            {
-                var urls = System.Text.Json.JsonSerializer.Deserialize<List<string>>(imageUrl);
-                if (urls != null && urls.Count > 0)
-                {
-                    var savedList = new List<string>();
-                    foreach (var u in urls)
-                    {
-                        savedList.Add(await SaveSingleGalleryImageAsync(u, cancellationToken));
-                    }
-                    return System.Text.Json.JsonSerializer.Serialize(savedList);
-                }
-            }
-            catch { }
-        }
-
-        return await SaveSingleGalleryImageAsync(imageUrl, cancellationToken);
-    }
-
-    private async Task<string> SaveSingleGalleryImageAsync(string rawImage, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(rawImage)) return string.Empty;
-        var trimmed = rawImage.Trim();
-        if (trimmed.StartsWith(CommonConstants.Defaults.DataImagePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                var commaIndex = trimmed.IndexOf(CommonConstants.Defaults.Comma);
-                var base64Data = commaIndex >= 0 ? trimmed.Substring(commaIndex + 1) : trimmed;
-                var imageBytes = Convert.FromBase64String(base64Data);
-
-                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, "gallery_images");
-                if (!Directory.Exists(folderPath))
-                {
-                    Directory.CreateDirectory(folderPath);
-                }
-
-                var extension = CommonConstants.Defaults.ExtJpg;
-                if (trimmed.Contains("image/png", StringComparison.OrdinalIgnoreCase))
-                {
-                    extension = CommonConstants.Defaults.ExtPng;
-                }
-
-                var dateStr = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-                var uniqueId = Guid.NewGuid().ToString("N")[..8];
-                var fileName = $"{dateStr}_{uniqueId}.{extension}";
-                var filePath = Path.Combine(folderPath, fileName);
-
-                await File.WriteAllBytesAsync(filePath, imageBytes, cancellationToken);
-                return $"/gallery_images/{fileName}";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to save gallery image to disk");
-            }
-        }
-        return trimmed;
     }
 }

@@ -4,8 +4,13 @@ namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class GalleryPhoto
 {
+    [Column("photo_id")]
     public Guid PhotoId { get; set; }
+
+    [Column("event_id")]
     public Guid? EventId { get; set; }
+    public Event? Event { get; set; }
+
     public string Title { get; set; } = string.Empty;
 
     private string? _eventName;
@@ -24,7 +29,7 @@ public class GalleryPhoto
         set => _category = value;
     }
 
-    public Event? Event { get; set; }
+    [Column("image_url")]
     public string ImageUrl { get; set; } = string.Empty;
     public DateTime TakenDate { get; set; }
     public string? Description { get; set; }

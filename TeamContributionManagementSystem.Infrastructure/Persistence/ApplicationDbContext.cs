@@ -352,7 +352,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .HasForeignKey(x => x.EventId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.Property(x => x.ImageUrl).HasColumnType("text").IsRequired();
+            entity.Property(x => x.ImageUrl).HasColumnName("image_url").HasColumnType("text").IsRequired();
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
