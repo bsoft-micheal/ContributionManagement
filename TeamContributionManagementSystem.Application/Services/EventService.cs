@@ -20,6 +20,8 @@ public class EventService : IEventService
     private readonly IMemberRepository _memberRepository;
     private readonly IUserRepository _userRepository;
     private readonly IContributionRepository _contributionRepository;
+    private readonly IBudgetCalculationRepository _budgetCalculationRepository;
+    private readonly IExpenseRepository _expenseRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IEmailService _emailService;
@@ -32,6 +34,8 @@ public class EventService : IEventService
         IMemberRepository memberRepository,
         IUserRepository userRepository,
         IContributionRepository contributionRepository,
+        IBudgetCalculationRepository budgetCalculationRepository,
+        IExpenseRepository expenseRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IEmailService emailService,
@@ -43,6 +47,8 @@ public class EventService : IEventService
         _memberRepository = memberRepository;
         _userRepository = userRepository;
         _contributionRepository = contributionRepository;
+        _budgetCalculationRepository = budgetCalculationRepository;
+        _expenseRepository = expenseRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _emailService = emailService;
@@ -205,6 +211,49 @@ public class EventService : IEventService
             await _contributionRepository.AddRangeAsync(contributions, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Auto-create expenses from active BudgetCalculation items for this event type only
+            try
+            {
+                var budgetItems = await _budgetCalculationRepository.GetByEventTypeIdAsync(
+                    eventType.EventTypeId, cancellationToken);
+
+                if (budgetItems.Count > 0)
+                {
+                    var creatorName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName;
+
+                    var autoExpenses = budgetItems.Select(b => new Expense
+                    {
+                        ExpenseId = Guid.NewGuid(),
+                        EventName = eventItem.EventName,
+                        Category = eventType.EventTypeName,
+                        Amount = b.Rate,
+                        ExpenseDate = eventItem.EventDate,
+                        Status = "Pending",
+                        SubmittedBy = creatorName,
+                        Description = b.ExpenseItem,
+                        IsActive = true,
+                        IsDeleted = false,
+                        CreatedBy = user.UserId,
+                        CreatedAt = DateTime.UtcNow
+                    }).ToList();
+
+                    foreach (var expense in autoExpenses)
+                        await _expenseRepository.AddAsync(expense, cancellationToken);
+
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    _logger.LogInformation(
+                        "Auto-created {Count} expense(s) for event '{EventName}' (EventType: {EventType})",
+                        autoExpenses.Count, eventItem.EventName, eventType.EventTypeName);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: log and continue — event is already saved
+                _logger.LogWarning(ex,
+                    "Failed to auto-create expenses for event '{EventName}'", eventItem.EventName);
+            }
+
             // Fetch the created event to ensure it is fully committed
             var createdEvent = await GetByIdAsync(eventItem.EventId, cancellationToken);
 
@@ -313,8 +362,8 @@ public class EventService : IEventService
                             {
                                 var textToSearch = $"{eventName} {eventDescription}".ToLowerInvariant();
                                 targetCelebrants = allMonthCelebrants
-                                    .Where(m => !string.IsNullOrWhiteSpace(m.Name) && 
-                                                (textToSearch.Contains(m.Name.ToLowerInvariant()) || 
+                                    .Where(m => !string.IsNullOrWhiteSpace(m.Name) &&
+                                                (textToSearch.Contains(m.Name.ToLowerInvariant()) ||
                                                  textToSearch.Contains(m.MemberId.ToString().ToLowerInvariant())))
                                     .ToList();
                             }

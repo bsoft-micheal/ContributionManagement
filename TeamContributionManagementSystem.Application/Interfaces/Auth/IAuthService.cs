@@ -9,4 +9,5 @@ public interface IAuthService
     Task RequestPasswordResetOtpAsync(ForgotPasswordRequestDto request, CancellationToken cancellationToken = default);
     Task<bool> VerifyPasswordResetOtpAsync(VerifyOtpRequestDto request, CancellationToken cancellationToken = default);
     Task ResetPasswordWithOtpAsync(ResetPasswordRequestDto request, CancellationToken cancellationToken = default);
+    Task<AuthResponseDto> SwitchRoleAsync(SwitchRoleRequestDto request, string currentUserEmail, CancellationToken cancellationToken = default);
 }

@@ -12,17 +12,20 @@ public class BudgetCalculationService : IBudgetCalculationService
 {
     private readonly ILogger<BudgetCalculationService> _logger;
     private readonly IBudgetCalculationRepository _repository;
+    private readonly IEventTypeRepository _eventTypeRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
     public BudgetCalculationService(
         ILogger<BudgetCalculationService> logger,
         IBudgetCalculationRepository repository,
+        IEventTypeRepository eventTypeRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper)
     {
         _logger = logger;
         _repository = repository;
+        _eventTypeRepository = eventTypeRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
     }
@@ -64,12 +67,34 @@ public class BudgetCalculationService : IBudgetCalculationService
                 throw new InvalidOperationException(string.Format(CommonMessages.BudgetCalculations.AlreadyExistsFormat, request.ExpenseItem.Trim()));
             }
 
+            Guid? eventTypeId = request.EventTypeId;
+            string? categoryName = request.Category?.Trim();
+
+            if (!eventTypeId.HasValue && !string.IsNullOrWhiteSpace(categoryName))
+            {
+                var eventType = await _eventTypeRepository.GetByNameAsync(categoryName, cancellationToken);
+                if (eventType != null)
+                {
+                    eventTypeId = eventType.EventTypeId;
+                    categoryName = eventType.EventTypeName;
+                }
+            }
+            else if (eventTypeId.HasValue && string.IsNullOrWhiteSpace(categoryName))
+            {
+                var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId.Value, cancellationToken);
+                if (eventType != null)
+                {
+                    categoryName = eventType.EventTypeName;
+                }
+            }
+
             var item = new BudgetCalculation
             {
                 BudgetCalculationId = Guid.NewGuid(),
+                EventTypeId = eventTypeId,
                 ExpenseItem = request.ExpenseItem.Trim(),
                 Rate = request.Rate,
-                Category = request.Category?.Trim() ?? string.Empty,
+                Category = categoryName,
                 IsActive = request.IsActive,
                 IsDeleted = false,
                 CreatedBy = CommonMethods.ParseNullableGuid(user),
@@ -102,11 +127,36 @@ public class BudgetCalculationService : IBudgetCalculationService
                 throw new InvalidOperationException(string.Format(CommonMessages.BudgetCalculations.AlreadyExistsFormat, request.ExpenseItem.Trim()));
             }
 
+            Guid? eventTypeId = request.EventTypeId;
+            string? categoryName = request.Category?.Trim();
+
+            if (!eventTypeId.HasValue && !string.IsNullOrWhiteSpace(categoryName))
+            {
+                var eventType = await _eventTypeRepository.GetByNameAsync(categoryName, cancellationToken);
+                if (eventType != null)
+                {
+                    eventTypeId = eventType.EventTypeId;
+                    categoryName = eventType.EventTypeName;
+                }
+            }
+            else if (eventTypeId.HasValue && string.IsNullOrWhiteSpace(categoryName))
+            {
+                var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId.Value, cancellationToken);
+                if (eventType != null)
+                {
+                    categoryName = eventType.EventTypeName;
+                }
+            }
+
             item.ExpenseItem = request.ExpenseItem.Trim();
             item.Rate = request.Rate;
-            if (!string.IsNullOrWhiteSpace(request.Category))
+            if (eventTypeId.HasValue)
             {
-                item.Category = request.Category.Trim();
+                item.EventTypeId = eventTypeId;
+            }
+            if (!string.IsNullOrWhiteSpace(categoryName))
+            {
+                item.Category = categoryName;
             }
             item.IsActive = request.IsActive;
             item.ModifiedBy = CommonMethods.ParseNullableGuid(user);

@@ -498,4 +498,114 @@ public class AuthService : IAuthService
             throw;
         }
     }
+
+    public async Task<AuthResponseDto> SwitchRoleAsync(SwitchRoleRequestDto request, string currentUserEmail, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var user = await _userRepository.GetByEmailAsync(currentUserEmail.Trim(), cancellationToken);
+            if (user == null && request.UserId.HasValue)
+            {
+                user = await _userRepository.GetByIdAsync(request.UserId.Value, cancellationToken);
+            }
+
+            if (user == null)
+            {
+                throw new InvalidOperationException(CommonMessages.Auth.UserNotFound);
+            }
+
+            if (!user.IsActive)
+            {
+                throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
+            }
+
+            var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+            AppUserRole? matchedRoleMapping = null;
+
+            if (request.RoleId.HasValue && request.RoleId.Value != Guid.Empty)
+            {
+                matchedRoleMapping = activeUserRoles.FirstOrDefault(ur => ur.RoleId == request.RoleId.Value);
+            }
+
+            if (matchedRoleMapping == null && !string.IsNullOrWhiteSpace(request.RoleName))
+            {
+                matchedRoleMapping = activeUserRoles.FirstOrDefault(ur => ur.Role != null && string.Equals(ur.Role.RoleName, request.RoleName.Trim(), StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (matchedRoleMapping == null && !string.IsNullOrWhiteSpace(request.RoleName) && string.Equals(user.Role.ToString(), request.RoleName.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                // Single default role fallback
+            }
+            else if (matchedRoleMapping == null)
+            {
+                throw new InvalidOperationException("User can switch only to roles actually assigned to them.");
+            }
+
+            string targetRoleName = matchedRoleMapping?.Role?.RoleName 
+                ?? request.RoleName 
+                ?? user.Role.ToString();
+
+            Guid targetRoleId = matchedRoleMapping?.RoleId 
+                ?? (request.RoleId.HasValue && request.RoleId.Value != Guid.Empty ? request.RoleId.Value : Guid.Empty);
+
+            if (targetRoleId != Guid.Empty && user.RoleId != targetRoleId)
+            {
+                user.RoleId = targetRoleId;
+                _userRepository.Update(user);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
+            var roleNames = activeUserRoles.Select(ur => ur.Role?.RoleName).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var roleGuids = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
+
+            if (roleNames.Count == 0 && user.Role != 0)
+            {
+                roleNames.Add(user.Role.ToString());
+            }
+
+            var response = _jwtTokenGenerator.GenerateToken(
+                user, 
+                sessionId: null, 
+                memberId: member?.MemberId, 
+                roles: roleNames, 
+                roleIds: roleGuids,
+                activeRole: targetRoleName,
+                activeRoleId: targetRoleId);
+
+            response.UserId = user.UserId;
+            response.RequiresTwoFactor = false;
+            response.IsFirstLogin = user.IsFirstLogin;
+
+            // Load rights for the active switched role
+            if (targetRoleId != Guid.Empty)
+            {
+                var rights = await _roleRightsService.GetRoleRightAsyncByRoleId(targetRoleId, cancellationToken);
+                response.Rights = rights;
+            }
+            else
+            {
+                var rights = await _roleRightsService.GetRoleRightAsyncByRole(targetRoleName, cancellationToken);
+                response.Rights = rights;
+            }
+
+            if (member != null)
+            {
+                response.MemberId = member.MemberId;
+                response.Phone = member.Phone;
+                response.DateOfBirth = member.DateOfBirth;
+                response.JoiningDate = member.JoiningDate;
+                response.Gender = member.Gender;
+                response.WorkType = member.WorkType;
+            }
+
+            _logger.LogInformation("User {Email} switched active role to {Role}", user.Email, targetRoleName);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(SwitchRoleAsync));
+            throw;
+        }
+    }
 }

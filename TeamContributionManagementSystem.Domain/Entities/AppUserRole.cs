@@ -19,6 +19,12 @@ public class AppUserRole
     [NotMapped]
     public bool IsActive { get; set; } = true;
 
+    [Column("is_primary")]
+    public bool IsPrimary { get; set; } = false;
+
+    [Column("is_secondary")]
+    public bool IsSecondary { get; set; } = false;
+
     [NotMapped]
     public bool IsDeleted { get; set; } = false;
 
