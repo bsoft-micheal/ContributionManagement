@@ -91,7 +91,7 @@ public class StatusService : IStatusService
                 Module = trimmedModule,
                 IsActive = request.IsActive,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow,
                 CreatedOn = DateTime.UtcNow
             };
@@ -126,7 +126,7 @@ public class StatusService : IStatusService
             entity.StatusName = trimmedName;
             entity.Module = trimmedModule;
             entity.IsActive = request.IsActive;
-            entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            entity.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             entity.ModifiedOn = DateTime.UtcNow;
 
             _repository.Update(entity);

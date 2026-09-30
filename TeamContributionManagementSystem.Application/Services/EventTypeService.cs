@@ -70,7 +70,7 @@ public class EventTypeService : IEventTypeService
                 NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m,
                 StandardSharePercentage = request.StandardSharePercentage > 0 ? request.StandardSharePercentage : 100.0m,
                 RuleDescription = request.RuleDescription?.Trim(),
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -107,7 +107,7 @@ public class EventTypeService : IEventTypeService
             eventType.NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m;
             eventType.StandardSharePercentage = request.StandardSharePercentage > 0 ? request.StandardSharePercentage : 100.0m;
             eventType.RuleDescription = request.RuleDescription?.Trim();
-            eventType.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            eventType.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             eventType.ModifiedOn = DateTime.UtcNow;
 
             _eventTypeRepository.Update(eventType);

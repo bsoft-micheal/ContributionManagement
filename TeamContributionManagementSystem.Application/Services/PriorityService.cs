@@ -114,7 +114,7 @@ public class PriorityService : IPriorityService
                 PriorityName = trimmedName,
                 IsActive = request.IsActive,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow,
                 CreatedOn = DateTime.UtcNow
             };
@@ -147,7 +147,7 @@ public class PriorityService : IPriorityService
 
             entity.PriorityName = trimmedName;
             entity.IsActive = request.IsActive;
-            entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            entity.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             entity.ModifiedOn = DateTime.UtcNow;
 
             _repository.Update(entity);

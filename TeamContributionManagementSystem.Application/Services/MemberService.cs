@@ -174,7 +174,7 @@ public class MemberService : IMemberService
                 IsActive = request.IsActive,
                 IsExited = request.IsExited,
                 WorkType = workType ?? string.Empty,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim()
+                CreatedBy = CommonMethods.ParseNullableGuid(user)
             };
 
             await _memberRepository.AddAsync(member, cancellationToken);
@@ -238,7 +238,7 @@ public class MemberService : IMemberService
             }
             if (!string.IsNullOrWhiteSpace(user))
             {
-                member.ModifiedBy = user.Trim();
+                member.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             }
 
             _memberRepository.Update(member);

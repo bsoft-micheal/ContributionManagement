@@ -127,22 +127,25 @@ public class GalleryService : IGalleryService
     {
         try
         {
-            var creator = user?.Trim();
-            if (_userRepository != null && !string.IsNullOrWhiteSpace(creator))
+            Guid? creatorGuid = null;
+            if (!string.IsNullOrWhiteSpace(user))
             {
-                try
+                creatorGuid = CommonMethods.ParseNullableGuid(user);
+                if (!creatorGuid.HasValue && _userRepository != null)
                 {
-                    var users = await _userRepository.GetAllAsync(cancellationToken);
-                    var matched = users.FirstOrDefault(u =>
-                        string.Equals(u.UserId.ToString(), creator, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(u.Username, creator, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(u.FullName, creator, StringComparison.OrdinalIgnoreCase));
-                    if (matched != null && !string.IsNullOrWhiteSpace(matched.FullName))
+                    try
                     {
-                        creator = matched.FullName;
+                        var users = await _userRepository.GetAllAsync(cancellationToken);
+                        var matched = users.FirstOrDefault(u =>
+                            string.Equals(u.Username, user.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(u.FullName, user.Trim(), StringComparison.OrdinalIgnoreCase));
+                        if (matched != null)
+                        {
+                            creatorGuid = matched.UserId;
+                        }
                     }
+                    catch { }
                 }
-                catch { }
             }
 
             Guid? eventId = null;
@@ -171,7 +174,7 @@ public class GalleryService : IGalleryService
                 Description = request.Description?.Trim(),
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(creator) ? null : creator,
+                CreatedBy = creatorGuid,
                 CreatedAt = DateTime.UtcNow
             };
 

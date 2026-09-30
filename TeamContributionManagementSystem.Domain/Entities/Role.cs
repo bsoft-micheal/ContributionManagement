@@ -19,9 +19,9 @@ public class Role : IAuditableEntity
     public bool IsDeleted { get; set; } = false;
 
     // Common Audit Properties
-    public string? CreatedBy { get; set; }
+    public Guid? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CreatedOn { get; set; }
-    public string? ModifiedBy { get; set; }
+    public Guid? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }

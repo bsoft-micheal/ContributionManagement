@@ -28,6 +28,11 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 .Select(x => new { Desc = x.Description.ToLower(), Cat = x.Category.ToLower(), Event = x.EventName.ToLower() })
                 .ToListAsync(cancellationToken);
 
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
             var items = await _context.BudgetCalculations
                 .Where(x => !x.IsDeleted)
                 .OrderBy(x => x.CreatedAt)
@@ -38,10 +43,10 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                     Rate = x.Rate,
                     Category = x.EventType != null ? x.EventType.EventTypeName : null,
                     IsActive = x.IsActive,
-                    CreatedBy = x.CreatedBy,
+                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,
-                    ModifiedBy = x.ModifiedBy,
+                    ModifiedBy = x.ModifiedBy.HasValue ? x.ModifiedBy.Value.ToString() : null,
                     ModifiedOn = x.ModifiedOn
                 })
                 .ToListAsync(cancellationToken);
@@ -52,6 +57,15 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 var catClean = item.Category?.Trim().ToLower();
 
                 item.IsReferred = expenses.Any(x => x.Desc.Contains(itemClean) || (catClean != null && x.Cat == catClean && x.Event.Contains(itemClean)));
+
+                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+                {
+                    item.CreatedBy = cName;
+                }
+                if (!string.IsNullOrWhiteSpace(item.ModifiedBy) && Guid.TryParse(item.ModifiedBy, out var mGuid) && users.TryGetValue(mGuid, out var mName))
+                {
+                    item.ModifiedBy = mName;
+                }
             }
 
             return items;

@@ -51,7 +51,7 @@ public class RoleService : IRoleService
                 RoleId = Guid.NewGuid(),
                 RoleName = request.RoleName.Trim(),
                 DefaultContributionAmount = request.DefaultContributionAmount,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -82,7 +82,7 @@ public class RoleService : IRoleService
 
             role.RoleName = request.RoleName.Trim();
             role.DefaultContributionAmount = request.DefaultContributionAmount;
-            role.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            role.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             role.ModifiedOn = DateTime.UtcNow;
 
             _roleRepository.Update(role);

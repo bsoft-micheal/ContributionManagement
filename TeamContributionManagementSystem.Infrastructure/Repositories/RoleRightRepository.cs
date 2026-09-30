@@ -208,7 +208,7 @@ public class RoleRightRepository : IRoleRightRepository
                     MenuType = menuType,
                     Access = existing.Access,
                     AccessType = (int)existing.AccessType > 0 ? (int)existing.AccessType : (existing.Access == "deny" ? (int)AccessType.Deny : (existing.Access == "readOnly" ? (int)AccessType.ReadOnly : (int)AccessType.ReadWrite)),
-                    CreatedBy = existing.CreatedBy,
+                    CreatedBy = existing.CreatedBy.HasValue ? existing.CreatedBy.Value.ToString() : null,
                     CreatedAt = existing.CreatedAt,
                     CreatedOn = existing.CreatedOn ?? existing.CreatedAt
                 });

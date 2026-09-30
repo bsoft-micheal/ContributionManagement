@@ -95,7 +95,7 @@ public class ExpenseService : IExpenseService
                 FileName = attachment,
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -139,7 +139,7 @@ public class ExpenseService : IExpenseService
                 : request.ApprovedBy.Trim();
             expense.Description = request.Description.Trim();
             expense.FileName = attachment;
-            expense.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            expense.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             expense.ModifiedOn = DateTime.UtcNow;
 
             if (string.IsNullOrWhiteSpace(expense.ApprovedBy) && !string.IsNullOrWhiteSpace(user))

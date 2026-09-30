@@ -101,7 +101,7 @@ public class RoleRightsService : IRoleRightsService
                 Page = r.Page,
                 Access = r.Access,
                 AccessType = r.AccessType > 0 ? (AccessType)r.AccessType : (r.Access == "deny" ? AccessType.Deny : (r.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite)),
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow
             }).ToList();
 
