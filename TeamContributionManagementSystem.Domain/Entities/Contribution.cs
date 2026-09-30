@@ -6,7 +6,15 @@ public class Contribution
 {
     public Guid ContributionId { get; set; }
     public Guid EventId { get; set; }
-    public Guid MemberId { get; set; }
+    public Guid UserId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public Guid MemberId
+    {
+        get => UserId;
+        set => UserId = value;
+    }
+
     public decimal Amount { get; set; }
     public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
     public DateTime? PaymentDate { get; set; }
@@ -16,6 +24,8 @@ public class Contribution
     public bool IsDeleted { get; set; }
 
     public Event? Event { get; set; }
+    public AppUser? User { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public Member? Member { get; set; }
     public bool IsActive { get; set; } = true;
 

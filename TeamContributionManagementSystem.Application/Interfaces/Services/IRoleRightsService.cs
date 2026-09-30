@@ -7,5 +7,6 @@ public interface IRoleRightsService
 {
     Task<IReadOnlyCollection<RoleRightDto>> GetAllRoleRightAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<RoleRightDto>> GetRoleRightAsyncByRole(string roleName, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<RoleRightDto>> GetRoleRightAsyncByRoleId(Guid roleId, CancellationToken cancellationToken = default);
     Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, string? user = null, CancellationToken cancellationToken = default);
 }

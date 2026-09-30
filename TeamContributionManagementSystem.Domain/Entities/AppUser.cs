@@ -9,7 +9,22 @@ public class AppUser
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
-    public UserRole Role { get; set; } = UserRole.Member;
+    [NotMapped]
+    public UserRole Role
+    {
+        get
+        {
+            var roleName = UserRoles?.FirstOrDefault(ur => ur.IsActive && !ur.IsDeleted)?.Role?.RoleName;
+            if (!string.IsNullOrEmpty(roleName) && Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var r))
+            {
+                return r;
+            }
+            return UserRole.Member;
+        }
+        set { }
+    }
+
+    public ICollection<AppUserRole> UserRoles { get; set; } = new List<AppUserRole>();
     public string FullName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public string? ProfileImage { get; set; }
