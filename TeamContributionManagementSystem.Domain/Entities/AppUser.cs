@@ -14,7 +14,7 @@ public class AppUser
     {
         get
         {
-            var roleName = UserRoles?.FirstOrDefault(ur => ur.IsActive && !ur.IsDeleted)?.Role?.RoleName;
+            var roleName = UserRoles?.FirstOrDefault()?.Role?.RoleName;
             if (!string.IsNullOrEmpty(roleName) && Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var r))
             {
                 return r;
@@ -59,17 +59,17 @@ public class AppUser
     [NotMapped]
     public Guid? RoleId
     {
-        get => UserRoles.FirstOrDefault()?.RoleId;
+        get => UserRoles?.FirstOrDefault()?.RoleId;
         set
         {
             if (value.HasValue)
             {
-                var existing = UserRoles.FirstOrDefault();
+                var existing = UserRoles?.FirstOrDefault();
                 if (existing != null)
                 {
                     existing.RoleId = value.Value;
                 }
-                else
+                else if (UserRoles != null && !UserRoles.Any(ur => ur.RoleId == value.Value))
                 {
                     UserRoles.Add(new AppUserRole { UserId = UserId, RoleId = value.Value });
                 }
@@ -80,18 +80,18 @@ public class AppUser
     [NotMapped]
     public Role? RoleNavigation
     {
-        get => UserRoles.FirstOrDefault()?.Role;
+        get => UserRoles?.FirstOrDefault()?.Role;
         set
         {
             if (value != null)
             {
-                var existing = UserRoles.FirstOrDefault();
+                var existing = UserRoles?.FirstOrDefault();
                 if (existing != null)
                 {
                     existing.RoleId = value.RoleId;
                     existing.Role = value;
                 }
-                else
+                else if (UserRoles != null && !UserRoles.Any(ur => ur.RoleId == value.RoleId))
                 {
                     UserRoles.Add(new AppUserRole { UserId = UserId, RoleId = value.RoleId, Role = value });
                 }

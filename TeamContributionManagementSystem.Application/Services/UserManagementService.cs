@@ -238,7 +238,7 @@ public class UserManagementService : IUserManagementService
                 CreatedOn    = DateTime.UtcNow
             };
 
-            if (assignedRoleId.HasValue)
+            if (assignedRoleId.HasValue && !appUser.UserRoles.Any(ur => ur.RoleId == assignedRoleId.Value))
             {
                 appUser.UserRoles.Add(new AppUserRole
                 {
@@ -392,14 +392,23 @@ public class UserManagementService : IUserManagementService
             appUser.IsActive = request.IsActive;
             if (matchedRole != null)
             {
-                appUser.RoleId = matchedRole.RoleId;
-                appUser.UserRoles.Clear();
-                appUser.UserRoles.Add(new AppUserRole
+                var existingRole = appUser.UserRoles.FirstOrDefault();
+                if (existingRole != null)
                 {
-                    UserId = appUser.UserId,
-                    RoleId = matchedRole.RoleId,
-                    CreatedAt = DateTime.UtcNow
-                });
+                    if (existingRole.RoleId != matchedRole.RoleId)
+                    {
+                        existingRole.RoleId = matchedRole.RoleId;
+                    }
+                }
+                else
+                {
+                    appUser.UserRoles.Add(new AppUserRole
+                    {
+                        UserId = appUser.UserId,
+                        RoleId = matchedRole.RoleId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
             }
             if (!string.IsNullOrWhiteSpace(request.Phone)) appUser.Phone = request.Phone.Trim();
             if (!string.IsNullOrWhiteSpace(request.Gender)) appUser.Gender = request.Gender.Trim();
@@ -525,14 +534,23 @@ public class UserManagementService : IUserManagementService
                 var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName.Trim(), StringComparison.OrdinalIgnoreCase));
                 if (matchedRole != null)
                 {
-                    user.RoleId = matchedRole.RoleId;
-                    user.UserRoles.Clear();
-                    user.UserRoles.Add(new AppUserRole
+                    var existingRole = user.UserRoles.FirstOrDefault();
+                    if (existingRole != null)
                     {
-                        UserId = user.UserId,
-                        RoleId = matchedRole.RoleId,
-                        CreatedAt = DateTime.UtcNow
-                    });
+                        if (existingRole.RoleId != matchedRole.RoleId)
+                        {
+                            existingRole.RoleId = matchedRole.RoleId;
+                        }
+                    }
+                    else
+                    {
+                        user.UserRoles.Add(new AppUserRole
+                        {
+                            UserId = user.UserId,
+                            RoleId = matchedRole.RoleId,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
                 }
             }
 
