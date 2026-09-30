@@ -99,17 +99,16 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<AppUserRole>(entity =>
         {
             entity.ToTable("user_roles");
-            entity.HasKey(x => x.UserRoleId);
-            entity.Property(x => x.UserRoleId).HasColumnName("user_role_id");
+            entity.HasKey(x => new { x.UserId, x.RoleId });
             entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
             entity.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
-            entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
-            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
-            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
             entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(x => x.ModifiedBy).HasColumnName("modified_by");
-            entity.Property(x => x.ModifiedOn).HasColumnName("modified_on");
-            entity.HasIndex(x => new { x.UserId, x.RoleId }).IsUnique();
+            entity.Ignore(x => x.UserRoleId);
+            entity.Ignore(x => x.IsActive);
+            entity.Ignore(x => x.IsDeleted);
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+            entity.Ignore(x => x.ModifiedOn);
             entity.HasOne(x => x.User)
                 .WithMany(u => u.UserRoles)
                 .HasForeignKey(x => x.UserId)

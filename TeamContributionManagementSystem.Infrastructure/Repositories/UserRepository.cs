@@ -129,7 +129,7 @@ public class UserRepository : IUserRepository
                     Username = x.Username,
                     FullName = x.FullName,
                     Email = x.Email,
-                    RoleName = x.UserRoles.Where(ur => ur.IsActive && !ur.IsDeleted).Select(ur => ur.Role.RoleName).FirstOrDefault() ?? "Member",
+                    RoleName = x.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member",
                     IsActive = x.IsActive,
                     IsDeleted = x.IsDeleted,
                     IsFirstLogin = x.IsFirstLogin,
@@ -172,8 +172,8 @@ public class UserRepository : IUserRepository
         {
             return await _context.Users
                 .Include(u => u.MfaDevices)
-                .Include(u => u.UserRoles.Where(ur => ur.IsActive && !ur.IsDeleted))
-                    .ThenInclude(ur => ur.Role)
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
                 .FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
         }
         catch (Exception ex)
@@ -189,8 +189,8 @@ public class UserRepository : IUserRepository
         {
             return await _context.Users
                 .Include(u => u.MfaDevices)
-                .Include(u => u.UserRoles.Where(ur => ur.IsActive && !ur.IsDeleted))
-                    .ThenInclude(ur => ur.Role)
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
                 .FirstOrDefaultAsync(x => x.Username.ToLower() == username.ToLower(), cancellationToken);
         }
         catch (Exception ex)
@@ -206,8 +206,8 @@ public class UserRepository : IUserRepository
         {
             return await _context.Users
                 .Include(u => u.MfaDevices)
-                .Include(u => u.UserRoles.Where(ur => ur.IsActive && !ur.IsDeleted))
-                    .ThenInclude(ur => ur.Role)
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
                 .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         }
         catch (Exception ex)
@@ -222,9 +222,9 @@ public class UserRepository : IUserRepository
         try
         {
             return await _context.Users
-                .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(x => x.UserRoles.Any(ur => ur.Role.RoleName.ToLower() == "admin" && ur.IsActive && !ur.IsDeleted) && x.IsActive, cancellationToken);
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.IsActive && x.UserRoles.Any(ur => ur.Role != null && ur.Role.RoleName.ToLower() == "admin"), cancellationToken);
         }
         catch (Exception ex)
         {

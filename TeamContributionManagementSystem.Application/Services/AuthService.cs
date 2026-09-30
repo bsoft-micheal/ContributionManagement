@@ -279,7 +279,7 @@ public class AuthService : IAuthService
         }
 
         var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
-        var activeUserRoles = user.UserRoles?.Where(ur => ur.IsActive && !ur.IsDeleted).ToList() ?? new List<AppUserRole>();
+        var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
         var roleNames = activeUserRoles.Select(ur => ur.Role?.RoleName).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var roleGuids = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
 
