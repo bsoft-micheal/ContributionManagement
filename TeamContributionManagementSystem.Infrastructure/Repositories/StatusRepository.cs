@@ -66,8 +66,8 @@ public class StatusRepository : IStatusRepository
         var usedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var ticketStatuses = await _context.SupportTickets
-            .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.Status))
-            .Select(x => x.Status.ToLower())
+            .Where(x => !x.IsDeleted && x.StatusItem != null)
+            .Select(x => x.StatusItem!.StatusName.ToLower())
             .Distinct()
             .ToListAsync(cancellationToken);
         foreach (var s in ticketStatuses) usedStatuses.Add(s);
@@ -80,8 +80,8 @@ public class StatusRepository : IStatusRepository
         foreach (var s in expenseStatuses) usedStatuses.Add(s);
 
         var txnStatuses = await _context.PaymentTransactions
-            .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.Status))
-            .Select(x => x.Status.ToLower())
+            .Where(x => !x.IsDeleted && x.StatusItem != null)
+            .Select(x => x.StatusItem!.StatusName.ToLower())
             .Distinct()
             .ToListAsync(cancellationToken);
         foreach (var s in txnStatuses) usedStatuses.Add(s);
@@ -94,8 +94,8 @@ public class StatusRepository : IStatusRepository
         foreach (var s in eventStatuses) usedStatuses.Add(s);
 
         var contributionStatuses = await _context.Contributions
-            .Where(x => !x.IsDeleted)
-            .Select(x => x.PaymentStatus.ToString().ToLower())
+            .Where(x => !x.IsDeleted && x.StatusItem != null)
+            .Select(x => x.StatusItem!.StatusName.ToLower())
             .Distinct()
             .ToListAsync(cancellationToken);
         foreach (var s in contributionStatuses) usedStatuses.Add(s);
@@ -208,7 +208,7 @@ public class StatusRepository : IStatusRepository
         var cleanName = statusName.Trim().ToLower();
 
         // Support tickets
-        var inSupport = await _context.SupportTickets.AnyAsync(x => !x.IsDeleted && x.Status.ToLower() == cleanName, cancellationToken);
+        var inSupport = await _context.SupportTickets.AnyAsync(x => !x.IsDeleted && x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanName, cancellationToken);
         if (inSupport) return true;
 
         // Expenses
@@ -216,15 +216,18 @@ public class StatusRepository : IStatusRepository
         if (inExpenses) return true;
 
         // Payment Transactions
-        var inTxns = await _context.PaymentTransactions.AnyAsync(x => !x.IsDeleted && x.Status.ToLower() == cleanName, cancellationToken);
+        var inTxns = await _context.PaymentTransactions.AnyAsync(x => !x.IsDeleted && x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanName, cancellationToken);
         if (inTxns) return true;
 
         // Events
-        var inEvents = await _context.Events.AnyAsync(x => !x.IsDeleted && x.Status.ToString().ToLower() == cleanName, cancellationToken);
-        if (inEvents) return true;
+        if (Enum.TryParse<TeamContributionManagementSystem.Domain.Enums.EventStatus>(cleanName, true, out var eventStatus))
+        {
+            var inEvents = await _context.Events.AnyAsync(x => !x.IsDeleted && x.Status == eventStatus, cancellationToken);
+            if (inEvents) return true;
+        }
 
         // Contributions
-        var inContributions = await _context.Contributions.AnyAsync(x => !x.IsDeleted && x.PaymentStatus.ToString().ToLower() == cleanName, cancellationToken);
+        var inContributions = await _context.Contributions.AnyAsync(x => !x.IsDeleted && x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanName, cancellationToken);
         if (inContributions) return true;
 
         return false;

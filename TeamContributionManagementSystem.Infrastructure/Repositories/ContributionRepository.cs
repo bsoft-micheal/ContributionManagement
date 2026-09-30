@@ -33,12 +33,14 @@ public class ContributionRepository : IContributionRepository
                     EventId = x.EventId,
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
-                    MemberId = x.MemberId,
-                    MemberName = x.Member != null ? x.Member.FullName : string.Empty,
+                    MemberId = x.UserId,
+                    MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = x.PaymentStatus,
+                    PaymentStatus = (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentMode,
+                    PaymentMode = x.PaymentModeItem != null 
+                        ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
+                        : PaymentMode.None,
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy,
@@ -60,19 +62,21 @@ public class ContributionRepository : IContributionRepository
         {
             return await _context.Contributions
                 .Where(x => x.EventId == eventId && !x.IsDeleted)
-                .OrderBy(x => x.Member!.FullName)
+                .OrderBy(x => x.User != null ? x.User.FullName : string.Empty)
                 .Select(x => new ContributionDto
                 {
                     ContributionId = x.ContributionId,
                     EventId = x.EventId,
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
-                    MemberId = x.MemberId,
-                    MemberName = x.Member != null ? x.Member.FullName : string.Empty,
+                    MemberId = x.UserId,
+                    MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = x.PaymentStatus,
+                    PaymentStatus = (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentMode,
+                    PaymentMode = x.PaymentModeItem != null 
+                        ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
+                        : PaymentMode.None,
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy,
@@ -94,8 +98,10 @@ public class ContributionRepository : IContributionRepository
         {
             return await _context.Contributions
                 .Include(x => x.Event)
-                .Include(x => x.Member)
-                .FirstOrDefaultAsync(x => x.EventId == eventId && x.MemberId == memberId && !x.IsDeleted, cancellationToken);
+                .Include(x => x.User)
+                .Include(x => x.StatusItem)
+                .Include(x => x.PaymentModeItem)
+                .FirstOrDefaultAsync(x => x.EventId == eventId && x.UserId == memberId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -109,7 +115,7 @@ public class ContributionRepository : IContributionRepository
         try
         {
             var query = _context.Contributions
-                .Where(x => !x.IsDeleted && x.PaymentStatus != PaymentStatus.Paid && x.Event != null && !x.Event.IsDeleted);
+                .Where(x => !x.IsDeleted && (x.StatusItem == null || x.StatusItem.StatusName.ToLower() != "paid") && x.Event != null && !x.Event.IsDeleted);
 
             if (month.HasValue)
             {
@@ -129,12 +135,14 @@ public class ContributionRepository : IContributionRepository
                     EventId = x.EventId,
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
-                    MemberId = x.MemberId,
-                    MemberName = x.Member != null ? x.Member.FullName : string.Empty,
+                    MemberId = x.UserId,
+                    MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = x.PaymentStatus,
+                    PaymentStatus = (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentMode,
+                    PaymentMode = x.PaymentModeItem != null 
+                        ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
+                        : PaymentMode.None,
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy,
@@ -194,7 +202,7 @@ public class ContributionRepository : IContributionRepository
         try
         {
             return await _context.Contributions
-                .Where(x => !x.IsDeleted && x.Member != null && x.Member.Email == email)
+                .Where(x => !x.IsDeleted && x.User != null && x.User.Email == email)
                 .OrderBy(x => x.Event!.EventDate)
                 .Select(x => new ContributionDto
                 {
@@ -202,12 +210,14 @@ public class ContributionRepository : IContributionRepository
                     EventId = x.EventId,
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
-                    MemberId = x.MemberId,
-                    MemberName = x.Member != null ? x.Member.FullName : string.Empty,
+                    MemberId = x.UserId,
+                    MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = x.PaymentStatus,
+                    PaymentStatus = (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentMode,
+                    PaymentMode = x.PaymentModeItem != null 
+                        ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
+                        : PaymentMode.None,
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy,

@@ -4,7 +4,14 @@ public class EventParticipant
 {
     public Guid Id { get; set; }
     public Guid EventId { get; set; }
-    public Guid MemberId { get; set; }
+    public Guid UserId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public Guid MemberId
+    {
+        get => UserId;
+        set => UserId = value;
+    }
 
     public Event? Event { get; set; }
     public AppUser? Member { get; set; }

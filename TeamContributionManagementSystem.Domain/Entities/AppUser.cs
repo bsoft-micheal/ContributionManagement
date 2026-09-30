@@ -102,7 +102,6 @@ public class AppUser
     public DateTime JoiningDate { get; set; }
     public bool IsExited { get; set; } = false;
 
-    public ICollection<AppUserRole> UserRoles { get; set; } = new List<AppUserRole>();
     public ICollection<UserMfaDevice> MfaDevices { get; set; } = new List<UserMfaDevice>();
     public ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
     public ICollection<EventParticipant> EventParticipants { get; set; } = new List<EventParticipant>();

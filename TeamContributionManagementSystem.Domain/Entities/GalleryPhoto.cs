@@ -1,11 +1,30 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class GalleryPhoto
 {
     public Guid PhotoId { get; set; }
+    public Guid? EventId { get; set; }
     public string Title { get; set; } = string.Empty;
-    public string EventName { get; set; } = string.Empty;
-    public string Category { get; set; } = string.Empty;
+
+    private string? _eventName;
+    [NotMapped]
+    public string EventName
+    {
+        get => !string.IsNullOrWhiteSpace(_eventName) ? _eventName : (Event?.EventName ?? string.Empty);
+        set => _eventName = value;
+    }
+
+    private string? _category;
+    [NotMapped]
+    public string Category
+    {
+        get => !string.IsNullOrWhiteSpace(_category) ? _category : (Event?.EventType?.EventTypeName ?? string.Empty);
+        set => _category = value;
+    }
+
+    public Event? Event { get; set; }
     public string ImageUrl { get; set; } = string.Empty;
     public DateTime TakenDate { get; set; }
     public string? Description { get; set; }

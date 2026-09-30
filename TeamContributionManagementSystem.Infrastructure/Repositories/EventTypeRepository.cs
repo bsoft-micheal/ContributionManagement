@@ -75,7 +75,7 @@ public class EventTypeRepository : IEventTypeRepository
         try
         {
             var cleanName = eventTypeName.Trim().ToLower();
-            return await _context.BudgetCalculations.AnyAsync(x => !x.IsDeleted && x.Category != null && x.Category.ToLower() == cleanName, cancellationToken);
+            return await _context.BudgetCalculations.AnyAsync(x => !x.IsDeleted && x.EventType != null && x.EventType.EventTypeName.ToLower() == cleanName, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -103,7 +103,7 @@ public class EventTypeRepository : IEventTypeRepository
         try
         {
             var cleanName = eventTypeName.Trim().ToLower();
-            return await _context.GalleryPhotos.AnyAsync(x => !x.IsDeleted && x.Category.ToLower() == cleanName, cancellationToken);
+            return await _context.GalleryPhotos.AnyAsync(x => !x.IsDeleted && x.Event != null && x.Event.EventType != null && x.Event.EventType.EventTypeName.ToLower() == cleanName, cancellationToken);
         }
         catch (Exception ex)
         {
