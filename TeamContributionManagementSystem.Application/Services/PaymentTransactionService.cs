@@ -289,12 +289,30 @@ public class PaymentTransactionService : IPaymentTransactionService
                 resolvedStatusId = matchedSt?.StatusId;
             }
 
+            // Safe length bounds to strictly respect PostgreSQL database column constraints
+            var safeUtr = request.Utr?.Trim();
+            if (!string.IsNullOrEmpty(safeUtr) && safeUtr.Length > 95)
+            {
+                safeUtr = safeUtr.Substring(0, 92) + "...";
+            }
+
+            var safeNotes = request.Notes?.Trim();
+            if (!string.IsNullOrEmpty(safeNotes) && safeNotes.Length > 990)
+            {
+                safeNotes = safeNotes.Substring(0, 985) + "...";
+            }
+
+            if (paymentModeName.Length > 50)
+            {
+                paymentModeName = paymentModeName.Substring(0, 50);
+            }
+
             var entity = new PaymentTransaction
             {
                 TransactionId = Guid.NewGuid(),
                 TxnNumber = txnNumber,
-                MemberName = resolvedMemberName,
-                EventName = resolvedEventName,
+                MemberName = resolvedMemberName.Length > 150 ? resolvedMemberName.Substring(0, 150) : resolvedMemberName,
+                EventName = resolvedEventName.Length > 200 ? resolvedEventName.Substring(0, 200) : resolvedEventName,
                 UserId = resolvedUserId,
                 EventId = resolvedEventId,
                 PaymentModeId = resolvedPaymentModeId,
@@ -302,13 +320,12 @@ public class PaymentTransactionService : IPaymentTransactionService
                 Amount = request.Amount,
                 PaymentDate = request.PaymentDate != default ? request.PaymentDate : DateTime.UtcNow,
                 PaymentMode = paymentModeName,
-                Utr = request.Utr?.Trim(),
+                Utr = safeUtr,
                 Status = CommonConstants.PaymentStatuses.Pending,
-                Notes = request.Notes?.Trim(),
+                Notes = safeNotes,
                 Screenshot = await SaveScreenshotAsync(request.Screenshot, txnNumber, cancellationToken),
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(resolvedMemberName) ? "System" : resolvedMemberName,
                 CreatedBy = resolvedUserId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -549,30 +566,6 @@ public class PaymentTransactionService : IPaymentTransactionService
             var isVerified = entity.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase);
             var targetStatusName = isVerified ? "Paid" : "Pending";
 
-                    if (_statusRepository != null)
-                    {
-                        var st = await _statusRepository.GetByNameAsync(targetStatusName, cancellationToken);
-                        if (st != null)
-                        {
-                            match.StatusId = st.StatusId;
-                        }
-                    }
-
-                    if (entity.PaymentModeId.HasValue)
-                    {
-                        match.PaymentModeId = entity.PaymentModeId.Value;
-                    }
-
-                    if (isVerified)
-                    {
-                        match.PaymentStatus = PaymentStatus.Paid;
-                        match.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
-                        match.PaymentMode = Enum.TryParse<PaymentMode>(entity.PaymentMode, true, out var pm) ? pm : PaymentMode.Upi;
-                        match.UpiAmount = entity.Amount;
-                        match.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
-                        match.ModifiedOn = DateTime.UtcNow;
-                        _contributionRepository.Update(match);
-                        _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Paid, entity.MemberName, entity.EventName);
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
@@ -632,14 +625,15 @@ public class PaymentTransactionService : IPaymentTransactionService
                     }
                     else
                     {
-                        match.PaymentStatus = PaymentStatus.Pending;
-                        match.UpiAmount = 0;
-                        match.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
-                        match.ModifiedOn = DateTime.UtcNow;
-                        _contributionRepository.Update(match);
-                        _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Pending, entity.MemberName, entity.EventName);
+                        match.PaymentMode = PaymentMode.Upi;
                     }
                 }
+
+                match.PaymentStatus = isVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
+                match.ModifiedBy = entity.ModifiedBy ?? entity.CreatedBy;
+                match.ModifiedOn = DateTime.UtcNow;
+                _contributionRepository.Update(match);
+                _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, targetStatusName, entity.MemberName, entity.EventName);
             }
             else if (entity.EventId.HasValue && entity.UserId.HasValue)
             {
@@ -695,7 +689,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                     UpiAmount = upiAmount,
                     PaymentStatus = isVerified ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentMode = modeEnum,
-                    CreatedBy = entity.CreatedBy ?? "System",
+                    CreatedBy = entity.CreatedBy,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _contributionRepository.AddAsync(newContrib, cancellationToken);

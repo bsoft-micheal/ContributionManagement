@@ -89,11 +89,11 @@ public class SubmitPaymentProofDto
     public decimal Amount { get; set; }
 
     [Required]
-    [MaxLength(50)]
+    [MaxLength(150)]
     public string PaymentMode { get; set; } = "UPI";
 
     [Required]
-    [MaxLength(100)]
+    [MaxLength(200)]
     public string Utr { get; set; } = string.Empty;
 
     public DateTime PaymentDate { get; set; } = DateTime.UtcNow;
