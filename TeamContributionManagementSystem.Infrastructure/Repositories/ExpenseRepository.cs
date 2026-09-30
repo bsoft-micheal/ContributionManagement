@@ -50,7 +50,12 @@ public class ExpenseRepository : IExpenseRepository
                 query = query.Where(x => x.ExpenseDate <= endDate.Value);
             }
 
-            return await query
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
+            var items = await query
                 .OrderByDescending(x => x.ExpenseDate)
                 .Select(x => new ExpenseDto
                 {
@@ -66,13 +71,27 @@ public class ExpenseRepository : IExpenseRepository
                     FileName = x.FileName,
                     FileUrl = x.FileName,
                     IsActive = x.IsActive,
-                    CreatedBy = x.CreatedBy,
+                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
-                    ModifiedBy = x.ModifiedBy,
+                    ModifiedBy = x.ModifiedBy.HasValue ? x.ModifiedBy.Value.ToString() : null,
                     ModifiedOn = x.ModifiedOn
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var item in items)
+            {
+                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+                {
+                    item.CreatedBy = cName;
+                }
+                if (!string.IsNullOrWhiteSpace(item.ModifiedBy) && Guid.TryParse(item.ModifiedBy, out var mGuid) && users.TryGetValue(mGuid, out var mName))
+                {
+                    item.ModifiedBy = mName;
+                }
+            }
+
+            return items;
         }
         catch (Exception ex)
         {

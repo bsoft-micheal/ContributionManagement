@@ -233,7 +233,7 @@ public class UserManagementService : IUserManagementService
                 JoiningDate  = (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
                     ? request.JoiningDate.Value.ToUniversalTime()
                     : DateTime.UtcNow.Date,
-                CreatedBy    = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy    = CommonMethods.ParseNullableGuid(user),
                 CreatedAt    = DateTime.UtcNow,
                 CreatedOn    = DateTime.UtcNow
             };
@@ -420,7 +420,7 @@ public class UserManagementService : IUserManagementService
             if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default) appUser.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
             if (request.JoiningDate.HasValue && request.JoiningDate.Value != default) appUser.JoiningDate = request.JoiningDate.Value.ToUniversalTime();
 
-            appUser.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            appUser.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             appUser.ModifiedOn = DateTime.UtcNow;
 
             if (!string.IsNullOrWhiteSpace(request.Password))

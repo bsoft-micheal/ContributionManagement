@@ -40,6 +40,11 @@ public class RoleRepository : IRoleRepository
                 .Distinct()
                 .ToListAsync(cancellationToken);
 
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
             var roles = await _context.Roles
                 .OrderBy(x => x.RoleName)
                 .Select(x => new RoleDto
@@ -47,10 +52,10 @@ public class RoleRepository : IRoleRepository
                     RoleId = x.RoleId,
                     RoleName = x.RoleName,
                     DefaultContributionAmount = 0,
-                    CreatedBy = x.CreatedBy,
+                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
-                    ModifiedBy = x.ModifiedBy,
+                    ModifiedBy = x.ModifiedBy.HasValue ? x.ModifiedBy.Value.ToString() : null,
                     ModifiedOn = x.ModifiedOn
                 })
                 .ToListAsync(cancellationToken);
@@ -59,6 +64,15 @@ public class RoleRepository : IRoleRepository
             {
                 var nameLower = r.RoleName.Trim().ToLower();
                 r.IsReferred = memberRoleIds.Contains(r.RoleId) || userRoleNames.Contains(nameLower) || roleRightNames.Contains(nameLower);
+
+                if (!string.IsNullOrWhiteSpace(r.CreatedBy) && Guid.TryParse(r.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+                {
+                    r.CreatedBy = cName;
+                }
+                if (!string.IsNullOrWhiteSpace(r.ModifiedBy) && Guid.TryParse(r.ModifiedBy, out var mGuid) && users.TryGetValue(mGuid, out var mName))
+                {
+                    r.ModifiedBy = mName;
+                }
             }
 
             return roles;

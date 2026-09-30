@@ -73,7 +73,9 @@ public class SupportTicketService : ISupportTicketService
                 return all.Where(t =>
                     (myMemberIdStr != null && string.Equals(t.MemberId, myMemberIdStr, StringComparison.OrdinalIgnoreCase)) ||
                     (myMemberName != null && string.Equals(t.MemberName, myMemberName, StringComparison.OrdinalIgnoreCase)) ||
-                    (myUserEmail != null && string.Equals(t.CreatedBy, myUserEmail, StringComparison.OrdinalIgnoreCase))
+                    (myMemberName != null && string.Equals(t.CreatedBy, myMemberName, StringComparison.OrdinalIgnoreCase)) ||
+                    (myUserEmail != null && string.Equals(t.CreatedBy, myUserEmail, StringComparison.OrdinalIgnoreCase)) ||
+                    (myMemberIdStr != null && string.Equals(t.CreatedBy, myMemberIdStr, StringComparison.OrdinalIgnoreCase))
                 ).ToList();
             }
             return all;
@@ -114,7 +116,9 @@ public class SupportTicketService : ISupportTicketService
                 bool isOwner =
                     (myMemberIdStr != null && string.Equals(ticket.MemberId, myMemberIdStr, StringComparison.OrdinalIgnoreCase)) ||
                     (myMemberName != null && string.Equals(ticket.MemberName, myMemberName, StringComparison.OrdinalIgnoreCase)) ||
-                    (myUserEmail != null && string.Equals(ticket.CreatedBy, myUserEmail, StringComparison.OrdinalIgnoreCase));
+                    (ticket.UserId.HasValue && myMember != null && ticket.UserId.Value == myMember.MemberId) ||
+                    (ticket.CreatedBy.HasValue && myMember != null && ticket.CreatedBy.Value == myMember.MemberId) ||
+                    (ticket.CreatedBy.HasValue && !string.IsNullOrWhiteSpace(myMemberIdStr) && ticket.CreatedBy.Value.ToString().Equals(myMemberIdStr, StringComparison.OrdinalIgnoreCase));
 
                 if (!isOwner)
                 {
@@ -259,7 +263,7 @@ public class SupportTicketService : ISupportTicketService
                 Attachment = request.Attachment?.Trim(),
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -377,7 +381,7 @@ public class SupportTicketService : ISupportTicketService
                 ticket.ResolutionNotes = request.ResolutionNotes.Trim();
             }
 
-            ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            ticket.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             ticket.ModifiedOn = DateTime.UtcNow;
 
             _ticketRepository.Update(ticket);
@@ -424,7 +428,7 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            ticket.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             ticket.ModifiedOn = DateTime.UtcNow;
 
             _ticketRepository.Update(ticket);

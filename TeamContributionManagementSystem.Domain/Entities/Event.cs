@@ -22,6 +22,6 @@ public class Event
 
     // Common Audit Properties
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
-    public string? ModifiedBy { get; set; }
+    public Guid? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }

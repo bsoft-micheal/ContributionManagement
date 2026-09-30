@@ -100,6 +100,11 @@ public class StatusRepository : IStatusRepository
             .ToListAsync(cancellationToken);
         foreach (var s in contributionStatuses) usedStatuses.Add(s);
 
+        var users = await _context.Users
+            .AsNoTracking()
+            .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+            .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
         var items = await query
             .OrderBy(x => x.Module)
             .ThenBy(x => x.StatusName)
@@ -109,10 +114,10 @@ public class StatusRepository : IStatusRepository
                 StatusName = x.StatusName,
                 Module = x.Module ?? "General",
                 IsActive = x.IsActive,
-                CreatedBy = x.CreatedBy,
+                CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                 CreatedAt = x.CreatedAt,
                 CreatedOn = x.CreatedOn,
-                ModifiedBy = x.ModifiedBy,
+                ModifiedBy = x.ModifiedBy.HasValue ? x.ModifiedBy.Value.ToString() : null,
                 ModifiedOn = x.ModifiedOn
             })
             .ToListAsync(cancellationToken);
@@ -121,6 +126,15 @@ public class StatusRepository : IStatusRepository
         {
             var cleanName = item.StatusName.Trim().ToLower();
             item.IsReferred = usedStatuses.Contains(cleanName);
+
+            if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+            {
+                item.CreatedBy = cName;
+            }
+            if (!string.IsNullOrWhiteSpace(item.ModifiedBy) && Guid.TryParse(item.ModifiedBy, out var mGuid) && users.TryGetValue(mGuid, out var mName))
+            {
+                item.ModifiedBy = mName;
+            }
         }
 
         return items;

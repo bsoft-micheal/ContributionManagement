@@ -72,7 +72,7 @@ public class BudgetCalculationService : IBudgetCalculationService
                 Category = request.Category?.Trim() ?? string.Empty,
                 IsActive = request.IsActive,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow,
                 CreatedOn = DateTime.UtcNow
             };
@@ -109,7 +109,7 @@ public class BudgetCalculationService : IBudgetCalculationService
                 item.Category = request.Category.Trim();
             }
             item.IsActive = request.IsActive;
-            item.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            item.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             item.ModifiedOn = DateTime.UtcNow;
 
             _repository.Update(item);

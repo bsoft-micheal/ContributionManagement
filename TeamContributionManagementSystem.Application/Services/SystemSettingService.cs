@@ -144,13 +144,17 @@ public class SystemSettingService : ISystemSettingService
 
             var toAdd = new List<SystemSetting>();
 
-            foreach (var (key, (val, cat)) in dict)
+            foreach (var kvp in dict)
             {
+                var key = kvp.Key;
+                var val = kvp.Value.Value;
+                var cat = kvp.Value.Category;
+
                 if (existingMap.TryGetValue(key, out var entity))
                 {
                     entity.SettingValue = val;
                     entity.Category = cat;
-                    entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+                    entity.ModifiedBy = CommonMethods.ParseNullableGuid(user);
                     entity.ModifiedOn = DateTime.UtcNow;
                     _settingRepository.Update(entity);
                 }
@@ -162,7 +166,7 @@ public class SystemSettingService : ISystemSettingService
                         SettingKey = key,
                         SettingValue = val,
                         Category = cat,
-                        CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                        CreatedBy = CommonMethods.ParseNullableGuid(user),
                         CreatedAt = DateTime.UtcNow
                     });
                 }

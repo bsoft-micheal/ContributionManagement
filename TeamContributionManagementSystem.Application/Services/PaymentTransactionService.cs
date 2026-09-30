@@ -199,7 +199,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 Screenshot = await SaveScreenshotAsync(request.Screenshot, txnNumber, cancellationToken),
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -301,7 +301,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 Screenshot = await SaveScreenshotAsync(request.Screenshot, txnNumber, cancellationToken),
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = resolvedMemberName,
+                CreatedBy = resolvedUserId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -407,7 +407,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 entity.Notes = request.Notes.Trim();
             }
 
-            entity.ModifiedBy = entity.VerifiedBy;
+            entity.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
             entity.ModifiedOn = DateTime.UtcNow;
 
             _transactionRepository.Update(entity);
@@ -461,7 +461,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                         match.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
                         match.PaymentMode = Enum.TryParse<PaymentMode>(entity.PaymentMode, true, out var pm) ? pm : PaymentMode.Upi;
                         match.UpiAmount = entity.Amount;
-                        match.ModifiedBy = entity.VerifiedBy ?? user;
+                        match.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
                         match.ModifiedOn = DateTime.UtcNow;
                         _contributionRepository.Update(match);
                         _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Paid, entity.MemberName, entity.EventName);
@@ -470,7 +470,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                     {
                         match.PaymentStatus = PaymentStatus.Pending;
                         match.UpiAmount = 0;
-                        match.ModifiedBy = entity.VerifiedBy ?? user;
+                        match.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
                         match.ModifiedOn = DateTime.UtcNow;
                         _contributionRepository.Update(match);
                         _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Pending, entity.MemberName, entity.EventName);

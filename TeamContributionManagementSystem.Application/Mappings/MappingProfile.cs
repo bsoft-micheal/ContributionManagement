@@ -25,6 +25,9 @@ public class MappingProfile : Profile
 {
     public MappingProfile()
     {
+        CreateMap<Guid?, string?>().ConvertUsing(src => src.HasValue ? src.Value.ToString() : null);
+        CreateMap<Guid, string>().ConvertUsing(src => src.ToString());
+
         CreateMap<Role, RoleDto>()
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt ?? src.CreatedOn))
             .ForMember(dest => dest.ModifiedOn, opt => opt.MapFrom(src => src.ModifiedOn));
@@ -50,7 +53,7 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.EventName, opt => opt.MapFrom(src => src.Event != null ? src.Event.EventName : string.Empty))
             .ForMember(dest => dest.MemberName, opt => opt.MapFrom(src => src.User != null ? src.User.FullName : (src.Member != null ? src.Member.Name : string.Empty)))
             .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Event != null && src.Event.EventType != null ? src.Event.EventType.EventTypeName : string.Empty))
-            .ForMember(dest => dest.CreatedBy, opt => opt.MapFrom(src => src.CreatedBy))
+            .ForMember(dest => dest.CreatedBy, opt => opt.MapFrom(src => src.CreatedBy.HasValue ? src.CreatedBy.Value.ToString() : null))
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
 
         CreateMap<Event, EventSummaryDto>()
