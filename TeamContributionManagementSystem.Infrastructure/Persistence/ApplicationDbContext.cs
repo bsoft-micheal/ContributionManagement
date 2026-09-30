@@ -88,6 +88,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.PasswordResetOtp).HasMaxLength(10);
             entity.Property(x => x.PasswordResetOtpExpiry);
             entity.Property(x => x.IsFirstLogin).HasDefaultValue(true);
+            entity.Property(x => x.IsPrimary).HasColumnName("is_primary").HasDefaultValue(false);
+            entity.Property(x => x.IsSecondary).HasColumnName("is_secondary").HasDefaultValue(false);
+            entity.Property(x => x.EnableMultipleRoles).HasColumnName("enable_multiple_roles").HasDefaultValue(false);
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.Username).IsUnique();
             entity.HasMany(x => x.MfaDevices).WithOne(x => x.User).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
@@ -102,6 +105,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasKey(x => new { x.UserId, x.RoleId });
             entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
             entity.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
+            entity.Property(x => x.IsPrimary).HasColumnName("is_primary").HasDefaultValue(false);
+            entity.Property(x => x.IsSecondary).HasColumnName("is_secondary").HasDefaultValue(false);
             entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Ignore(x => x.UserRoleId);
             entity.Ignore(x => x.IsActive);
@@ -381,7 +386,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasKey(x => x.BudgetCalculationId);
             entity.Property(x => x.ExpenseItem).HasMaxLength(150).IsRequired();
             entity.Property(x => x.Rate).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
-            entity.Ignore(x => x.Category);
+            entity.Property(x => x.Category).HasColumnName("category").HasMaxLength(100);
             entity.Property(x => x.EventTypeId).HasColumnName("event_type_id");
             entity.HasOne(x => x.EventType)
                 .WithMany()

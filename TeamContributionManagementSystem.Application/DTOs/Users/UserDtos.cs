@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.DTOs.Auth;
 
 namespace TeamContributionManagementSystem.Application.DTOs.Users;
 
@@ -9,6 +10,14 @@ public class UserDto
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string RoleName { get; set; } = string.Empty;
+    public List<string> Roles { get; set; } = new();
+    public List<Guid> RoleIds { get; set; } = new();
+    public List<string> PrimaryRoles { get; set; } = new();
+    public List<string> SecondaryRoles { get; set; } = new();
+    public bool EnableMultipleRoles { get; set; } = false;
+    public bool IsPrimary { get; set; } = false;
+    public bool IsSecondary { get; set; } = false;
+    public Guid? ActiveRoleId { get; set; }
     public bool IsActive { get; set; }
     public bool IsDeleted { get; set; } = false;
     public bool IsFirstLogin { get; set; } = true;
@@ -47,6 +56,17 @@ public class CreateUserRequestDto
 
     [MaxLength(50)]
     public string? RoleName { get; set; }
+
+    public List<string>? Roles { get; set; }
+    public List<Guid>? RoleIds { get; set; }
+    public List<string>? PrimaryRoles { get; set; }
+    public List<string>? SecondaryRoles { get; set; }
+    public List<Guid>? PrimaryRoleIds { get; set; }
+    public List<Guid>? SecondaryRoleIds { get; set; }
+    public bool? EnableMultipleRoles { get; set; }
+    public bool? IsPrimary { get; set; }
+    public bool? IsSecondary { get; set; }
+    public Guid? ActiveRoleId { get; set; }
 
     [MaxLength(20)]
     public string? Phone { get; set; }
@@ -87,6 +107,17 @@ public class UpdateUserRequestDto
 
     [MaxLength(50)]
     public string? RoleName { get; set; }
+
+    public List<string>? Roles { get; set; }
+    public List<Guid>? RoleIds { get; set; }
+    public List<string>? PrimaryRoles { get; set; }
+    public List<string>? SecondaryRoles { get; set; }
+    public List<Guid>? PrimaryRoleIds { get; set; }
+    public List<Guid>? SecondaryRoleIds { get; set; }
+    public bool? EnableMultipleRoles { get; set; }
+    public bool? IsPrimary { get; set; }
+    public bool? IsSecondary { get; set; }
+    public Guid? ActiveRoleId { get; set; }
 
     [MaxLength(20)]
     public string? Phone { get; set; }

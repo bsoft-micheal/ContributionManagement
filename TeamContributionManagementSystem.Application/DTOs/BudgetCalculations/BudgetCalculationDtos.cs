@@ -6,6 +6,7 @@ namespace TeamContributionManagementSystem.Application.DTOs.BudgetCalculations;
 public class BudgetCalculationDto
 {
     public Guid BudgetCalculationId { get; set; }
+    public Guid? EventTypeId { get; set; }
     public string ExpenseItem { get; set; } = string.Empty;
     public decimal Rate { get; set; }
     public string? Category { get; set; }
@@ -29,6 +30,8 @@ public class CreateBudgetCalculationRequestDto
 
     [MaxLength(100)]
     public string? Category { get; set; }
+
+    public Guid? EventTypeId { get; set; }
 
     public bool IsActive { get; set; } = true;
 }

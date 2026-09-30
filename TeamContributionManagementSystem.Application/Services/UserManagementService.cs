@@ -84,7 +84,8 @@ public class UserManagementService : IUserManagementService
             ? user.WorkType
             : await ResolveDefaultWorkTypeAsync(cancellationToken);
 
-        var roleFromMapping = user.UserRoles?.Select(ur => ur.Role?.RoleName).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r));
+        var roleFromMapping = user.UserRoles?.Where(ur => ur.IsPrimary).Select(ur => ur.Role?.RoleName).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r))
+            ?? user.UserRoles?.Select(ur => ur.Role?.RoleName).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r));
         if (!string.IsNullOrWhiteSpace(roleFromMapping))
         {
             dto.RoleName = roleFromMapping;
@@ -100,6 +101,26 @@ public class UserManagementService : IUserManagementService
         else if (string.IsNullOrWhiteSpace(dto.RoleName))
         {
             dto.RoleName = user.Role.ToString();
+        }
+
+        var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+        dto.Roles = activeUserRoles.Select(ur => ur.Role?.RoleName).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        dto.RoleIds = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
+        dto.PrimaryRoles = activeUserRoles.Where(ur => ur.IsPrimary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        dto.SecondaryRoles = activeUserRoles.Where(ur => ur.IsSecondary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        dto.EnableMultipleRoles = user.EnableMultipleRoles;
+        dto.IsPrimary = user.IsPrimary || activeUserRoles.Any(ur => ur.IsPrimary);
+        dto.IsSecondary = user.IsSecondary || activeUserRoles.Any(ur => ur.IsSecondary);
+        dto.ActiveRoleId = user.RoleId;
+
+        if (dto.Roles.Count == 0 && !string.IsNullOrWhiteSpace(dto.RoleName))
+        {
+            dto.Roles.Add(dto.RoleName);
+        }
+        if (dto.PrimaryRoles.Count == 0 && dto.Roles.Count > 0)
+        {
+            dto.PrimaryRoles.Add(dto.Roles.First());
+            dto.IsPrimary = true;
         }
 
         return dto;
@@ -172,30 +193,132 @@ public class UserManagementService : IUserManagementService
                 }
             }
 
-            var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
-            var roleName = !string.IsNullOrWhiteSpace(request.RoleName) ? request.RoleName.Trim() : "Member";
-            var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, roleName, StringComparison.OrdinalIgnoreCase))
-                              ?? allRoles.FirstOrDefault(r => string.Equals(r.RoleName, "Member", StringComparison.OrdinalIgnoreCase))
-                              ?? allRoles.FirstOrDefault();
+            var isMultipleRoles = request.EnableMultipleRoles ?? false;
+            var primaryRolesReq = (request.PrimaryRoles ?? new List<string>())
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Select(r => r.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            Guid? assignedRoleId = matchedRole?.RoleId;
-            if (assignedRoleId == null)
+            var secondaryRolesReq = (request.SecondaryRoles ?? new List<string>())
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Select(r => r.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (isMultipleRoles)
             {
-                var newRole = new Role
+                if (primaryRolesReq.Count == 0)
                 {
-                    RoleId = Guid.NewGuid(),
-                    RoleName = "Member",
-                    DefaultContributionAmount = 0,
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedOn = DateTime.UtcNow
-                };
-                await _roleRepository.AddAsync(newRole, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                assignedRoleId = newRole.RoleId;
+                    throw new InvalidOperationException("At least one Primary Role is required.");
+                }
+
+                var overlap = primaryRolesReq.Intersect(secondaryRolesReq, StringComparer.OrdinalIgnoreCase).ToList();
+                if (overlap.Count > 0)
+                {
+                    throw new InvalidOperationException("Same role cannot exist in both Primary and Secondary.");
+                }
             }
 
-            if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var enumRole))
+            var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
+            var rolesDict = allRoles.ToDictionary(r => r.RoleName.Trim(), r => r.RoleId, StringComparer.OrdinalIgnoreCase);
+            var roleNamesDict = allRoles.ToDictionary(r => r.RoleId, r => r.RoleName, EqualityComparer<Guid>.Default);
+            var rolesToAdd = new List<AppUserRole>();
+            Guid? assignedRoleId = null;
+            string primaryRoleNameForUser = "Member";
+
+            if (isMultipleRoles)
+            {
+                primaryRoleNameForUser = primaryRolesReq.First();
+                foreach (var pRoleName in primaryRolesReq)
+                {
+                    if (!rolesDict.TryGetValue(pRoleName, out var roleId))
+                    {
+                        var newRoleEntity = new Role
+                        {
+                            RoleId = Guid.NewGuid(),
+                            RoleName = pRoleName,
+                            DefaultContributionAmount = 0,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedOn = DateTime.UtcNow
+                        };
+                        await _roleRepository.AddAsync(newRoleEntity, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        roleId = newRoleEntity.RoleId;
+                        rolesDict[pRoleName] = roleId;
+                        roleNamesDict[roleId] = pRoleName;
+                    }
+                    if (!assignedRoleId.HasValue) assignedRoleId = roleId;
+                    rolesToAdd.Add(new AppUserRole
+                    {
+                        RoleId = roleId,
+                        IsPrimary = true,
+                        IsSecondary = false,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                foreach (var sRoleName in secondaryRolesReq)
+                {
+                    if (!rolesDict.TryGetValue(sRoleName, out var roleId))
+                    {
+                        var newRoleEntity = new Role
+                        {
+                            RoleId = Guid.NewGuid(),
+                            RoleName = sRoleName,
+                            DefaultContributionAmount = 0,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedOn = DateTime.UtcNow
+                        };
+                        await _roleRepository.AddAsync(newRoleEntity, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        roleId = newRoleEntity.RoleId;
+                        rolesDict[sRoleName] = roleId;
+                        roleNamesDict[roleId] = sRoleName;
+                    }
+                    rolesToAdd.Add(new AppUserRole
+                    {
+                        RoleId = roleId,
+                        IsPrimary = false,
+                        IsSecondary = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+            else
+            {
+                var roleName = !string.IsNullOrWhiteSpace(request.RoleName) ? request.RoleName.Trim() : "Member";
+                primaryRoleNameForUser = roleName;
+                if (!rolesDict.TryGetValue(roleName, out var roleId))
+                {
+                    var newRoleEntity = new Role
+                    {
+                        RoleId = Guid.NewGuid(),
+                        RoleName = roleName,
+                        DefaultContributionAmount = 0,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
+                    };
+                    await _roleRepository.AddAsync(newRoleEntity, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    roleId = newRoleEntity.RoleId;
+                    rolesDict[roleName] = roleId;
+                    roleNamesDict[roleId] = roleName;
+                }
+                assignedRoleId = roleId;
+                rolesToAdd.Add(new AppUserRole
+                {
+                    RoleId = roleId,
+                    IsPrimary = true,
+                    IsSecondary = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            if (!Enum.TryParse<UserRole>(primaryRoleNameForUser, ignoreCase: true, out var enumRole))
             {
                 enumRole = UserRole.Member;
             }
@@ -214,38 +337,38 @@ public class UserManagementService : IUserManagementService
 
             var appUser = new AppUser
             {
-                UserId       = Guid.NewGuid(),
-                Username     = username,
-                Email        = emailToUse,
-                PasswordHash = _passwordHasher.HashPassword(rawPassword),
-                Role         = enumRole,
-                FullName     = fullName,
-                IsActive     = request.IsActive,
-                IsFirstLogin = false,
-                Phone        = request.Phone?.Trim() ?? string.Empty,
-                Gender       = !string.IsNullOrWhiteSpace(request.Gender) ? request.Gender.Trim() : "Male",
-                WorkType     = assignedWorkTypeName,
-                WorkTypeId   = assignedWorkTypeId,
-                RoleId       = assignedRoleId,
-                DateOfBirth  = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
+                UserId              = Guid.NewGuid(),
+                Username            = username,
+                Email               = emailToUse,
+                PasswordHash        = _passwordHasher.HashPassword(rawPassword),
+                Role                = enumRole,
+                FullName            = fullName,
+                IsActive            = request.IsActive,
+                IsFirstLogin        = false,
+                EnableMultipleRoles = isMultipleRoles,
+                IsPrimary           = true,
+                IsSecondary         = isMultipleRoles && secondaryRolesReq.Count > 0,
+                Phone               = request.Phone?.Trim() ?? string.Empty,
+                Gender              = !string.IsNullOrWhiteSpace(request.Gender) ? request.Gender.Trim() : "Male",
+                WorkType            = assignedWorkTypeName,
+                WorkTypeId          = assignedWorkTypeId,
+                RoleId              = assignedRoleId,
+                DateOfBirth         = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
                     ? request.DateOfBirth.Value.ToUniversalTime()
                     : DateTime.UtcNow.Date,
-                JoiningDate  = (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
+                JoiningDate         = (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
                     ? request.JoiningDate.Value.ToUniversalTime()
                     : DateTime.UtcNow.Date,
-                CreatedBy    = CommonMethods.ParseNullableGuid(user),
-                CreatedAt    = DateTime.UtcNow,
-                CreatedOn    = DateTime.UtcNow
+                CreatedBy           = CommonMethods.ParseNullableGuid(user),
+                CreatedAt           = DateTime.UtcNow,
+                CreatedOn           = DateTime.UtcNow
             };
 
-            if (assignedRoleId.HasValue && !appUser.UserRoles.Any(ur => ur.RoleId == assignedRoleId.Value))
+            appUser.UserRoles.Clear();
+            foreach (var ur in rolesToAdd.GroupBy(r => r.RoleId).Select(g => g.First()))
             {
-                appUser.UserRoles.Add(new AppUserRole
-                {
-                    UserId = appUser.UserId,
-                    RoleId = assignedRoleId.Value,
-                    CreatedAt = DateTime.UtcNow
-                });
+                ur.UserId = appUser.UserId;
+                appUser.UserRoles.Add(ur);
             }
 
             await _userRepository.AddAsync(appUser, cancellationToken);
@@ -322,7 +445,15 @@ public class UserManagementService : IUserManagementService
                 WorkType = appUser.WorkType,
                 DateOfBirth = appUser.DateOfBirth,
                 JoiningDate = appUser.JoiningDate,
-                RoleName = matchedRole?.RoleName ?? roleName,
+                RoleName = primaryRoleNameForUser,
+                Roles = rolesToAdd.Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
+                RoleIds = rolesToAdd.Select(ur => ur.RoleId).ToList(),
+                PrimaryRoles = rolesToAdd.Where(ur => ur.IsPrimary).Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
+                SecondaryRoles = rolesToAdd.Where(ur => ur.IsSecondary).Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
+                EnableMultipleRoles = appUser.EnableMultipleRoles,
+                IsPrimary = appUser.IsPrimary,
+                IsSecondary = appUser.IsSecondary,
+                ActiveRoleId = appUser.RoleId,
                 IsActive = appUser.IsActive,
                 HasMemberProfile = true,
                 IsFirstLogin = appUser.IsFirstLogin,
@@ -367,10 +498,151 @@ public class UserManagementService : IUserManagementService
                 throw new InvalidOperationException(CommonMessages.Users.EmailExists);
             }
 
+            var isMultipleRoles = request.EnableMultipleRoles ?? appUser.EnableMultipleRoles;
+            var primaryRolesReq = (request.PrimaryRoles ?? new List<string>())
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Select(r => r.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var secondaryRolesReq = (request.SecondaryRoles ?? new List<string>())
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Select(r => r.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (isMultipleRoles && (request.PrimaryRoles != null || request.SecondaryRoles != null))
+            {
+                if (primaryRolesReq.Count == 0)
+                {
+                    throw new InvalidOperationException("At least one Primary Role is required.");
+                }
+
+                var overlap = primaryRolesReq.Intersect(secondaryRolesReq, StringComparer.OrdinalIgnoreCase).ToList();
+                if (overlap.Count > 0)
+                {
+                    throw new InvalidOperationException("Same role cannot exist in both Primary and Secondary.");
+                }
+            }
+
             var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
-            var roleName = !string.IsNullOrWhiteSpace(request.RoleName) ? request.RoleName.Trim() : appUser.Role.ToString();
-            var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, roleName, StringComparison.OrdinalIgnoreCase)) ?? allRoles.FirstOrDefault();
-            if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var enumRole))
+            var rolesDict = allRoles.ToDictionary(r => r.RoleName.Trim(), r => r.RoleId, StringComparer.OrdinalIgnoreCase);
+            var roleNamesDict = allRoles.ToDictionary(r => r.RoleId, r => r.RoleName, EqualityComparer<Guid>.Default);
+            var rolesToAdd = new List<AppUserRole>();
+            string primaryRoleNameForUser = "Member";
+
+            if (isMultipleRoles && (request.PrimaryRoles != null || request.SecondaryRoles != null))
+            {
+                primaryRoleNameForUser = primaryRolesReq.First();
+                foreach (var pRoleName in primaryRolesReq)
+                {
+                    if (!rolesDict.TryGetValue(pRoleName, out var roleId))
+                    {
+                        var newRoleEntity = new Role
+                        {
+                            RoleId = Guid.NewGuid(),
+                            RoleName = pRoleName,
+                            DefaultContributionAmount = 0,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedOn = DateTime.UtcNow
+                        };
+                        await _roleRepository.AddAsync(newRoleEntity, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        roleId = newRoleEntity.RoleId;
+                        rolesDict[pRoleName] = roleId;
+                        roleNamesDict[roleId] = pRoleName;
+                    }
+                    rolesToAdd.Add(new AppUserRole
+                    {
+                        UserId = appUser.UserId,
+                        RoleId = roleId,
+                        IsPrimary = true,
+                        IsSecondary = false,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                foreach (var sRoleName in secondaryRolesReq)
+                {
+                    if (!rolesDict.TryGetValue(sRoleName, out var roleId))
+                    {
+                        var newRoleEntity = new Role
+                        {
+                            RoleId = Guid.NewGuid(),
+                            RoleName = sRoleName,
+                            DefaultContributionAmount = 0,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedOn = DateTime.UtcNow
+                        };
+                        await _roleRepository.AddAsync(newRoleEntity, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        roleId = newRoleEntity.RoleId;
+                        rolesDict[sRoleName] = roleId;
+                        roleNamesDict[roleId] = sRoleName;
+                    }
+                    rolesToAdd.Add(new AppUserRole
+                    {
+                        UserId = appUser.UserId,
+                        RoleId = roleId,
+                        IsPrimary = false,
+                        IsSecondary = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                appUser.UserRoles.Clear();
+                foreach (var ur in rolesToAdd.GroupBy(r => r.RoleId).Select(g => g.First()))
+                {
+                    ur.UserId = appUser.UserId;
+                    appUser.UserRoles.Add(ur);
+                }
+                appUser.EnableMultipleRoles = true;
+                appUser.IsPrimary = true;
+                appUser.IsSecondary = secondaryRolesReq.Count > 0;
+
+                var matchedActiveRole = !string.IsNullOrWhiteSpace(request.RoleName)
+                    ? rolesToAdd.FirstOrDefault(ur => rolesDict.TryGetValue(request.RoleName.Trim(), out var rId) && ur.RoleId == rId)
+                    : null;
+                appUser.RoleId = matchedActiveRole?.RoleId ?? rolesToAdd.First().RoleId;
+            }
+            else if (isMultipleRoles)
+            {
+                // Preserving existing multiple roles, allow updating active RoleId if RoleName is provided
+                appUser.EnableMultipleRoles = true;
+                if (!string.IsNullOrWhiteSpace(request.RoleName) && rolesDict.TryGetValue(request.RoleName.Trim(), out var activeRoleId))
+                {
+                    appUser.RoleId = activeRoleId;
+                    primaryRoleNameForUser = request.RoleName.Trim();
+                }
+            }
+            else
+            {
+                var roleName = !string.IsNullOrWhiteSpace(request.RoleName) ? request.RoleName.Trim() : appUser.Role.ToString();
+                var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, roleName, StringComparison.OrdinalIgnoreCase)) ?? allRoles.FirstOrDefault();
+                primaryRoleNameForUser = matchedRole?.RoleName ?? roleName;
+                if (matchedRole != null)
+                {
+                    appUser.UserRoles.Clear();
+                    var singleRole = new AppUserRole
+                    {
+                        UserId = appUser.UserId,
+                        RoleId = matchedRole.RoleId,
+                        IsPrimary = true,
+                        IsSecondary = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    appUser.UserRoles.Add(singleRole);
+                    rolesToAdd.Add(singleRole);
+                    appUser.RoleId = matchedRole.RoleId;
+                }
+                appUser.EnableMultipleRoles = false;
+                appUser.IsPrimary = true;
+                appUser.IsSecondary = false;
+            }
+
+            if (!Enum.TryParse<UserRole>(primaryRoleNameForUser, ignoreCase: true, out var enumRole))
             {
                 enumRole = UserRole.Member;
             }
@@ -390,26 +662,7 @@ public class UserManagementService : IUserManagementService
             appUser.FullName = fullName;
             appUser.Role = enumRole;
             appUser.IsActive = request.IsActive;
-            if (matchedRole != null)
-            {
-                var existingRole = appUser.UserRoles.FirstOrDefault();
-                if (existingRole != null)
-                {
-                    if (existingRole.RoleId != matchedRole.RoleId)
-                    {
-                        existingRole.RoleId = matchedRole.RoleId;
-                    }
-                }
-                else
-                {
-                    appUser.UserRoles.Add(new AppUserRole
-                    {
-                        UserId = appUser.UserId,
-                        RoleId = matchedRole.RoleId,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                }
-            }
+
             if (!string.IsNullOrWhiteSpace(request.Phone)) appUser.Phone = request.Phone.Trim();
             if (!string.IsNullOrWhiteSpace(request.Gender)) appUser.Gender = request.Gender.Trim();
             if (!string.IsNullOrWhiteSpace(request.WorkType))
@@ -448,7 +701,15 @@ public class UserManagementService : IUserManagementService
                 WorkType = appUser.WorkType,
                 DateOfBirth = appUser.DateOfBirth,
                 JoiningDate = appUser.JoiningDate,
-                RoleName = matchedRole?.RoleName ?? roleName,
+                RoleName = primaryRoleNameForUser,
+                Roles = appUser.UserRoles.Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
+                RoleIds = appUser.UserRoles.Select(ur => ur.RoleId).ToList(),
+                PrimaryRoles = appUser.UserRoles.Where(ur => ur.IsPrimary).Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
+                SecondaryRoles = appUser.UserRoles.Where(ur => ur.IsSecondary).Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
+                EnableMultipleRoles = appUser.EnableMultipleRoles,
+                IsPrimary = appUser.IsPrimary,
+                IsSecondary = appUser.IsSecondary,
+                ActiveRoleId = appUser.RoleId,
                 IsActive = appUser.IsActive,
                 HasMemberProfile = true,
                 IsFirstLogin = appUser.IsFirstLogin,

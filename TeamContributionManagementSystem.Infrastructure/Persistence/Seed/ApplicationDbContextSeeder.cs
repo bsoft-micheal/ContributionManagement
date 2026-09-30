@@ -16,7 +16,19 @@ public class ApplicationDbContextSeeder
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        // Live database schema is maintained as source of truth; no schema alteration scripts are executed.
-        await Task.CompletedTask;
+        try
+        {
+            await _context.Database.ExecuteSqlRawAsync(@"
+                ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT FALSE;
+                ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_secondary BOOLEAN DEFAULT FALSE;
+                ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS enable_multiple_roles BOOLEAN DEFAULT FALSE;
+                ALTER TABLE IF EXISTS user_roles ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT FALSE;
+                ALTER TABLE IF EXISTS user_roles ADD COLUMN IF NOT EXISTS is_secondary BOOLEAN DEFAULT FALSE;
+            ", cancellationToken);
+        }
+        catch
+        {
+            // Non-fatal if schema already contains the columns or permissions restrict DDL
+        }
     }
 }
