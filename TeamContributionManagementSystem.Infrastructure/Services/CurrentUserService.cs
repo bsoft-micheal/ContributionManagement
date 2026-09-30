@@ -148,7 +148,7 @@ public class CurrentUserService : ICurrentUserService
         }
     }
 
-    public bool IsMemberRole => HasRole(CommonRoles.Member);
+    public bool IsMemberRole => IsMemberOnlyRole;
 
     public bool IsMemberOnlyRole =>
         HasRole(CommonRoles.Member) &&

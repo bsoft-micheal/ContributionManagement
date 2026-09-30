@@ -44,8 +44,8 @@ public class MemberService : IMemberService
     {
         try
         {
-            // If caller is in the Member role, restrict results to their own member record only
-            if (_currentUserService != null && _currentUserService.IsMemberRole)
+            // If caller is strictly in the Member role only (not Admin/Organizer), restrict results to their own member record only
+            if (_currentUserService != null && _currentUserService.IsMemberOnlyRole)
             {
                 var myMemberId = _currentUserService.MemberId;
                 Domain.Entities.Member? myMember = null;
