@@ -129,7 +129,7 @@ public class PaymentModeService : IPaymentModeService
                 IsCash = isCash,
                 SupportsQr = supportsQr,
                 PaymentType = paymentType,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow,
                 CreatedOn = DateTime.UtcNow
             };
@@ -174,7 +174,7 @@ public class PaymentModeService : IPaymentModeService
             entity.IsCash = isCash;
             entity.SupportsQr = supportsQr;
             entity.PaymentType = paymentType;
-            entity.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            entity.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             entity.ModifiedOn = DateTime.UtcNow;
 
             _repository.Update(entity);

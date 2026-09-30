@@ -233,12 +233,12 @@ public class UserManagementService : IUserManagementService
                 JoiningDate  = (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
                     ? request.JoiningDate.Value.ToUniversalTime()
                     : DateTime.UtcNow.Date,
-                CreatedBy    = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy    = CommonMethods.ParseNullableGuid(user),
                 CreatedAt    = DateTime.UtcNow,
                 CreatedOn    = DateTime.UtcNow
             };
 
-            if (assignedRoleId.HasValue)
+            if (assignedRoleId.HasValue && !appUser.UserRoles.Any(ur => ur.RoleId == assignedRoleId.Value))
             {
                 appUser.UserRoles.Add(new AppUserRole
                 {
@@ -392,14 +392,23 @@ public class UserManagementService : IUserManagementService
             appUser.IsActive = request.IsActive;
             if (matchedRole != null)
             {
-                appUser.RoleId = matchedRole.RoleId;
-                appUser.UserRoles.Clear();
-                appUser.UserRoles.Add(new AppUserRole
+                var existingRole = appUser.UserRoles.FirstOrDefault();
+                if (existingRole != null)
                 {
-                    UserId = appUser.UserId,
-                    RoleId = matchedRole.RoleId,
-                    CreatedAt = DateTime.UtcNow
-                });
+                    if (existingRole.RoleId != matchedRole.RoleId)
+                    {
+                        existingRole.RoleId = matchedRole.RoleId;
+                    }
+                }
+                else
+                {
+                    appUser.UserRoles.Add(new AppUserRole
+                    {
+                        UserId = appUser.UserId,
+                        RoleId = matchedRole.RoleId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
             }
             if (!string.IsNullOrWhiteSpace(request.Phone)) appUser.Phone = request.Phone.Trim();
             if (!string.IsNullOrWhiteSpace(request.Gender)) appUser.Gender = request.Gender.Trim();
@@ -411,7 +420,7 @@ public class UserManagementService : IUserManagementService
             if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default) appUser.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
             if (request.JoiningDate.HasValue && request.JoiningDate.Value != default) appUser.JoiningDate = request.JoiningDate.Value.ToUniversalTime();
 
-            appUser.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            appUser.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             appUser.ModifiedOn = DateTime.UtcNow;
 
             if (!string.IsNullOrWhiteSpace(request.Password))
@@ -525,14 +534,23 @@ public class UserManagementService : IUserManagementService
                 var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName.Trim(), StringComparison.OrdinalIgnoreCase));
                 if (matchedRole != null)
                 {
-                    user.RoleId = matchedRole.RoleId;
-                    user.UserRoles.Clear();
-                    user.UserRoles.Add(new AppUserRole
+                    var existingRole = user.UserRoles.FirstOrDefault();
+                    if (existingRole != null)
                     {
-                        UserId = user.UserId,
-                        RoleId = matchedRole.RoleId,
-                        CreatedAt = DateTime.UtcNow
-                    });
+                        if (existingRole.RoleId != matchedRole.RoleId)
+                        {
+                            existingRole.RoleId = matchedRole.RoleId;
+                        }
+                    }
+                    else
+                    {
+                        user.UserRoles.Add(new AppUserRole
+                        {
+                            UserId = user.UserId,
+                            RoleId = matchedRole.RoleId,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
                 }
             }
 

@@ -199,7 +199,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 Screenshot = await SaveScreenshotAsync(request.Screenshot, txnNumber, cancellationToken),
                 IsActive = true,
                 IsDeleted = false,
-                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -309,6 +309,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 IsActive = true,
                 IsDeleted = false,
                 CreatedBy = string.IsNullOrWhiteSpace(resolvedMemberName) ? "System" : resolvedMemberName,
+                CreatedBy = resolvedUserId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -460,7 +461,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 entity.Notes = request.Notes.Trim();
             }
 
-            entity.ModifiedBy = entity.VerifiedBy;
+            entity.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
             entity.ModifiedOn = DateTime.UtcNow;
 
             _transactionRepository.Update(entity);
@@ -548,6 +549,30 @@ public class PaymentTransactionService : IPaymentTransactionService
             var isVerified = entity.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase);
             var targetStatusName = isVerified ? "Paid" : "Pending";
 
+                    if (_statusRepository != null)
+                    {
+                        var st = await _statusRepository.GetByNameAsync(targetStatusName, cancellationToken);
+                        if (st != null)
+                        {
+                            match.StatusId = st.StatusId;
+                        }
+                    }
+
+                    if (entity.PaymentModeId.HasValue)
+                    {
+                        match.PaymentModeId = entity.PaymentModeId.Value;
+                    }
+
+                    if (isVerified)
+                    {
+                        match.PaymentStatus = PaymentStatus.Paid;
+                        match.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
+                        match.PaymentMode = Enum.TryParse<PaymentMode>(entity.PaymentMode, true, out var pm) ? pm : PaymentMode.Upi;
+                        match.UpiAmount = entity.Amount;
+                        match.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
+                        match.ModifiedOn = DateTime.UtcNow;
+                        _contributionRepository.Update(match);
+                        _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Paid, entity.MemberName, entity.EventName);
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
@@ -607,15 +632,14 @@ public class PaymentTransactionService : IPaymentTransactionService
                     }
                     else
                     {
-                        match.PaymentMode = PaymentMode.Upi;
+                        match.PaymentStatus = PaymentStatus.Pending;
+                        match.UpiAmount = 0;
+                        match.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
+                        match.ModifiedOn = DateTime.UtcNow;
+                        _contributionRepository.Update(match);
+                        _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, CommonConstants.PaymentStatuses.Pending, entity.MemberName, entity.EventName);
                     }
                 }
-
-                match.PaymentStatus = isVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
-                match.ModifiedBy = entity.VerifiedBy ?? entity.ModifiedBy ?? entity.CreatedBy;
-                match.ModifiedOn = DateTime.UtcNow;
-                _contributionRepository.Update(match);
-                _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, targetStatusName, entity.MemberName, entity.EventName);
             }
             else if (entity.EventId.HasValue && entity.UserId.HasValue)
             {

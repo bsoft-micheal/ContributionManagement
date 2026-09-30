@@ -348,7 +348,7 @@ public class EventRepository : IEventRepository
                             : PaymentMode.None,
                         CashAmount = c.CashAmount,
                         UpiAmount = c.UpiAmount,
-                        CreatedBy = c.CreatedBy,
+                        CreatedBy = c.CreatedBy.HasValue ? c.CreatedBy.Value.ToString() : null,
                         CreatedAt = c.CreatedAt,
                         CreatedOn = c.CreatedAt
                     }).ToList()

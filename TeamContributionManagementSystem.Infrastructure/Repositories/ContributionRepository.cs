@@ -24,7 +24,12 @@ public class ContributionRepository : IContributionRepository
     {
         try
         {
-            return await _context.Contributions
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
+            var items = await _context.Contributions
                 .Where(x => !x.IsDeleted)
                 .OrderBy(x => x.Event!.EventDate)
                 .Select(x => new ContributionDto
@@ -43,11 +48,21 @@ public class ContributionRepository : IContributionRepository
                         : PaymentMode.None,
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
-                    CreatedBy = x.CreatedBy,
+                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var item in items)
+            {
+                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+                {
+                    item.CreatedBy = cName;
+                }
+            }
+
+            return items;
         }
         catch (Exception ex)
         {
@@ -60,7 +75,12 @@ public class ContributionRepository : IContributionRepository
     {
         try
         {
-            return await _context.Contributions
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
+            var items = await _context.Contributions
                 .Where(x => x.EventId == eventId && !x.IsDeleted)
                 .OrderBy(x => x.User != null ? x.User.FullName : string.Empty)
                 .Select(x => new ContributionDto
@@ -79,11 +99,21 @@ public class ContributionRepository : IContributionRepository
                         : PaymentMode.None,
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
-                    CreatedBy = x.CreatedBy,
+                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var item in items)
+            {
+                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+                {
+                    item.CreatedBy = cName;
+                }
+            }
+
+            return items;
         }
         catch (Exception ex)
         {
@@ -127,7 +157,12 @@ public class ContributionRepository : IContributionRepository
                 query = query.Where(x => x.Event!.EventDate.Year == year.Value);
             }
 
-            return await query
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
+            var items = await query
                 .OrderBy(x => x.Event!.EventDate)
                 .Select(x => new ContributionDto
                 {
@@ -145,11 +180,21 @@ public class ContributionRepository : IContributionRepository
                         : PaymentMode.None,
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
-                    CreatedBy = x.CreatedBy,
+                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var item in items)
+            {
+                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+                {
+                    item.CreatedBy = cName;
+                }
+            }
+
+            return items;
         }
         catch (Exception ex)
         {
@@ -214,7 +259,12 @@ public class ContributionRepository : IContributionRepository
     {
         try
         {
-            return await _context.Contributions
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
+            var items = await _context.Contributions
                 .Where(x => !x.IsDeleted && x.User != null && x.User.Email == email)
                 .OrderBy(x => x.Event!.EventDate)
                 .Select(x => new ContributionDto
@@ -233,11 +283,21 @@ public class ContributionRepository : IContributionRepository
                         : PaymentMode.None,
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
-                    CreatedBy = x.CreatedBy,
+                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var item in items)
+            {
+                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+                {
+                    item.CreatedBy = cName;
+                }
+            }
+
+            return items;
         }
         catch (Exception ex)
         {

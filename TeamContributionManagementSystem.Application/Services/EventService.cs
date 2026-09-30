@@ -197,7 +197,7 @@ public class EventService : IEventService
                 MemberId = member.MemberId,
                 Amount = memberAmounts.TryGetValue(member.MemberId, out var amount) ? amount : 0m,
                 PaymentStatus = PaymentStatus.Pending,
-                CreatedBy = creatorDisplayName,
+                CreatedBy = user.UserId,
                 CreatedAt = DateTime.UtcNow
             }).ToList();
 

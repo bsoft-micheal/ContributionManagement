@@ -99,17 +99,16 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<AppUserRole>(entity =>
         {
             entity.ToTable("user_roles");
-            entity.HasKey(x => x.UserRoleId);
-            entity.Property(x => x.UserRoleId).HasColumnName("user_role_id");
+            entity.HasKey(x => new { x.UserId, x.RoleId });
             entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
             entity.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
-            entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
-            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
-            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
             entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(x => x.ModifiedBy).HasColumnName("modified_by");
-            entity.Property(x => x.ModifiedOn).HasColumnName("modified_on");
-            entity.HasIndex(x => new { x.UserId, x.RoleId }).IsUnique();
+            entity.Ignore(x => x.UserRoleId);
+            entity.Ignore(x => x.IsActive);
+            entity.Ignore(x => x.IsDeleted);
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+            entity.Ignore(x => x.ModifiedOn);
             entity.HasOne(x => x.User)
                 .WithMany(u => u.UserRoles)
                 .HasForeignKey(x => x.UserId)
@@ -230,8 +229,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.ApprovedBy).HasMaxLength(150);
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.FileName).HasColumnType("text");
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => new { x.ExpenseDate, x.Status });
         });
 
@@ -257,8 +254,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.Utr).HasMaxLength(100);
             entity.Property(x => x.Attachment).HasColumnType("text");
             entity.Property(x => x.ResolutionNotes).HasMaxLength(2000);
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.TicketNo).IsUnique();
             entity.HasOne(x => x.User)
                 .WithMany()
@@ -294,8 +289,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.SettingValue).IsRequired();
             entity.Property(x => x.Category).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(500);
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.SettingKey).IsUnique();
         });
 
@@ -316,8 +309,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.VerifiedBy).HasMaxLength(150);
             entity.Property(x => x.Notes).HasMaxLength(1000);
             entity.Property(x => x.Screenshot).HasColumnType("text");
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.TxnNumber).IsUnique();
             entity.HasOne(x => x.User)
                 .WithMany()
@@ -353,10 +344,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .HasForeignKey(x => x.EventId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.Property(x => x.ImageUrl).HasColumnType("text").IsRequired();
+            entity.Property(x => x.ImageUrl).HasColumnName("image_url").HasColumnType("text").IsRequired();
             entity.Property(x => x.Description).HasMaxLength(1000);
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.EventId);
         });
 
@@ -399,8 +388,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .HasForeignKey(x => x.EventTypeId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.ExpenseItem);
         });
 
@@ -408,8 +395,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.TicketTypeId);
             entity.Property(x => x.TypeName).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.TypeName).IsUnique();
         });
 
@@ -418,8 +403,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasKey(x => x.StatusId);
             entity.Property(x => x.StatusName).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Module).HasMaxLength(100);
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => new { x.StatusName, x.Module }).IsUnique();
         });
 
@@ -427,8 +410,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.WorkTypeId);
             entity.Property(x => x.WorkTypeName).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.WorkTypeName).IsUnique();
         });
 
@@ -436,8 +417,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.PriorityId);
             entity.Property(x => x.PriorityName).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.PriorityName).IsUnique();
         });
 
@@ -449,8 +428,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.IsCash).HasDefaultValue(false);
             entity.Property(x => x.SupportsQr).HasDefaultValue(true);
             entity.Property(x => x.PaymentType).HasMaxLength(50).HasDefaultValue("Digital");
-            entity.Property(x => x.CreatedBy).HasMaxLength(150);
-            entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.PaymentModeName).IsUnique();
         });
 

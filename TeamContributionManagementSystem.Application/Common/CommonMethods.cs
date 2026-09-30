@@ -285,4 +285,14 @@ public static class CommonMethods
             return Expression.Lambda<Action<object>>(body, param).Compile();
         }
     }
+
+    /// <summary>
+    /// Safely parses a string identifier into a nullable Guid.
+    /// </summary>
+    public static Guid? ParseNullableGuid(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (Guid.TryParse(value.Trim(), out var result)) return result;
+        return null;
+    }
 }
