@@ -13,6 +13,7 @@ public static class CommonRoutes
         public const string Base = $"{ApiBase}/auth";
         public const string Login = "loginAsync";
         public const string Verify2Fa = "verify-2faAsync";
+        public const string SwitchRole = "switchRoleAsync";
         public const string ForgotPasswordRequest = "forgot-password/requestAsync";
         public const string ForgotPasswordVerify = "forgot-password/verifyAsync";
         public const string ForgotPasswordReset = "forgot-password/resetAsync";
@@ -45,6 +46,7 @@ public static class CommonRoutes
         public const string Create = "saveUserAsync";
         public const string SaveBulk = "saveBulkUserAsync";
         public const string Update = "updateUserAsyncById/{id:guid}";
+        public const string SwitchRole = "switchRoleAsync";
         public const string GetProfile = "getProfileAsync";
         public const string UpdateProfile = "updateProfileAsync";
         public const string Delete = "deleteUserAsyncById/{id:guid}";

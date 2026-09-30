@@ -26,6 +26,18 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         IEnumerable<string>? roles = null, 
         IEnumerable<Guid>? roleIds = null)
     {
+        return GenerateToken(user, sessionId, memberId, roles, roleIds, null, null);
+    }
+
+    public AuthResponseDto GenerateToken(
+        AppUser user, 
+        Guid? sessionId, 
+        Guid? memberId, 
+        IEnumerable<string>? roles, 
+        IEnumerable<Guid>? roleIds,
+        string? activeRole,
+        Guid? activeRoleId)
+    {
         var secret = _configuration[CommonConstants.ConfigKeys.JwtSecret]
             ?? throw new InvalidOperationException(CommonMessages.Auth.JwtSecretNotConfigured);
 
@@ -51,13 +63,53 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             .Distinct()
             .ToList();
 
-        string primaryRole = resolvedRoles.Contains(CommonRoles.Admin, StringComparer.OrdinalIgnoreCase)
-            ? CommonRoles.Admin
-            : (resolvedRoles.Contains("Organizer", StringComparer.OrdinalIgnoreCase)
-                ? "Organizer"
-                : (resolvedRoles.Contains(CommonRoles.Member, StringComparer.OrdinalIgnoreCase)
-                    ? CommonRoles.Member
-                    : (resolvedRoles.FirstOrDefault() ?? CommonRoles.Member)));
+        var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+        var primaryRolesList = activeUserRoles
+            .Where(ur => ur.IsPrimary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName))
+            .Select(ur => ur.Role!.RoleName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var secondaryRolesList = activeUserRoles
+            .Where(ur => ur.IsSecondary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName))
+            .Select(ur => ur.Role!.RoleName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (primaryRolesList.Count == 0 && resolvedRoles.Count > 0)
+        {
+            primaryRolesList.Add(resolvedRoles.First());
+        }
+
+        string effectiveActiveRole;
+        if (!string.IsNullOrWhiteSpace(activeRole) && resolvedRoles.Contains(activeRole, StringComparer.OrdinalIgnoreCase))
+        {
+            effectiveActiveRole = activeRole;
+        }
+        else if (primaryRolesList.Count > 0)
+        {
+            effectiveActiveRole = primaryRolesList.First();
+        }
+        else
+        {
+            effectiveActiveRole = resolvedRoles.Contains(CommonRoles.Admin, StringComparer.OrdinalIgnoreCase)
+                ? CommonRoles.Admin
+                : (resolvedRoles.Contains("Organizer", StringComparer.OrdinalIgnoreCase)
+                    ? "Organizer"
+                    : (resolvedRoles.Contains(CommonRoles.Member, StringComparer.OrdinalIgnoreCase)
+                        ? CommonRoles.Member
+                        : (resolvedRoles.FirstOrDefault() ?? CommonRoles.Member)));
+        }
+
+        Guid? effectiveActiveRoleId = activeRoleId;
+        if (!effectiveActiveRoleId.HasValue || effectiveActiveRoleId.Value == Guid.Empty)
+        {
+            effectiveActiveRoleId = activeUserRoles.FirstOrDefault(ur => ur.Role != null && string.Equals(ur.Role.RoleName, effectiveActiveRole, StringComparison.OrdinalIgnoreCase))?.RoleId;
+            if (!effectiveActiveRoleId.HasValue && resolvedRoleIds.Count > 0)
+            {
+                effectiveActiveRoleId = resolvedRoleIds.First();
+            }
+        }
 
         var claims = new List<Claim>
         {
@@ -66,8 +118,14 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
             new(ClaimTypes.Name, user.FullName),
             new(ClaimTypes.Email, user.Email),
-            new("role", primaryRole)
+            new("role", effectiveActiveRole),
+            new("activeRole", effectiveActiveRole)
         };
+
+        if (effectiveActiveRoleId.HasValue)
+        {
+            claims.Add(new Claim("activeRoleId", effectiveActiveRoleId.Value.ToString()));
+        }
 
         foreach (var r in resolvedRoles)
         {
@@ -109,9 +167,15 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             Token = new JwtSecurityTokenHandler().WriteToken(token),
             Email = user.Email,
             FullName = user.FullName,
-            Role = primaryRole,
+            Role = effectiveActiveRole,
             Roles = resolvedRoles,
             RoleIds = resolvedRoleIds,
+            PrimaryRoles = primaryRolesList,
+            SecondaryRoles = secondaryRolesList,
+            EnableMultipleRoles = user.EnableMultipleRoles,
+            IsPrimary = user.IsPrimary || activeUserRoles.Any(ur => ur.IsPrimary),
+            IsSecondary = user.IsSecondary || activeUserRoles.Any(ur => ur.IsSecondary),
+            ActiveRoleId = effectiveActiveRoleId,
             ProfileImage = user.ProfileImage,
             ExpiresAtUtc = expiresAtUtc,
             IsFirstLogin = user.IsFirstLogin

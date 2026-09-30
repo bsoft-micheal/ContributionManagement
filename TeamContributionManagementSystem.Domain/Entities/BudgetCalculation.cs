@@ -9,15 +9,7 @@ public class BudgetCalculation
     public string ExpenseItem { get; set; } = string.Empty;
     public decimal Rate { get; set; }
 
-    private string? _category;
-
-    [NotMapped]
-    public string? Category
-    {
-        get => !string.IsNullOrWhiteSpace(_category) ? _category : EventType?.EventTypeName;
-        set => _category = value;
-    }
-
+    public string? Category { get; set; }
     public EventType? EventType { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;

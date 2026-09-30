@@ -120,32 +120,59 @@ public class UserRepository : IUserRepository
         {
             var referenced = await GetReferencedUserIdentifiersAsync(cancellationToken);
 
-            var users = await _context.Users
-                .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
+            var userEntities = await _context.Users
+                .AsNoTracking()
+                .Include(x => x.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .Include(x => x.WorkTypeNavigation)
                 .OrderBy(x => x.FullName)
-                .Select(x => new UserDto
-                {
-                    UserId = x.UserId,
-                    Username = x.Username,
-                    FullName = x.FullName,
-                    Email = x.Email,
-                    RoleName = x.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member",
-                    IsActive = x.IsActive,
-                    IsDeleted = x.IsDeleted,
-                    IsFirstLogin = x.IsFirstLogin,
-                    ProfileImage = x.ProfileImage,
-                    CreatedOn = x.CreatedOn,
-                    CreatedAt = x.CreatedAt,
-                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
-                    HasMemberProfile = true,
-                    MemberUsername = x.FullName,
-                    DateOfBirth = x.DateOfBirth,
-                    JoiningDate = x.JoiningDate,
-                    Gender = x.Gender,
-                    Phone = x.Phone,
-                    WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty
-                })
                 .ToListAsync(cancellationToken);
+
+            var users = userEntities
+                .Select(x =>
+                {
+                    var assignedRoles = x.UserRoles?.Where(ur => ur.Role != null).ToList() ?? new List<AppUserRole>();
+                    var activeRole = (x.RoleId.HasValue ? assignedRoles.FirstOrDefault(ur => ur.RoleId == x.RoleId.Value)?.Role?.RoleName : null)
+                        ?? assignedRoles.FirstOrDefault(ur => ur.IsPrimary)?.Role?.RoleName
+                        ?? assignedRoles.FirstOrDefault()?.Role?.RoleName
+                        ?? "Member";
+
+                    var allRoleNames = assignedRoles.Select(ur => ur.Role!.RoleName).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var primaryRoleNames = assignedRoles.Where(ur => ur.IsPrimary).Select(ur => ur.Role!.RoleName).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var secondaryRoleNames = assignedRoles.Where(ur => ur.IsSecondary).Select(ur => ur.Role!.RoleName).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+                    return new UserDto
+                    {
+                        UserId = x.UserId,
+                        Username = x.Username,
+                        FullName = x.FullName,
+                        Email = x.Email,
+                        RoleName = activeRole,
+                        Roles = allRoleNames,
+                        RoleIds = assignedRoles.Select(ur => ur.RoleId).Distinct().ToList(),
+                        PrimaryRoles = primaryRoleNames,
+                        SecondaryRoles = secondaryRoleNames,
+                        EnableMultipleRoles = x.EnableMultipleRoles,
+                        IsPrimary = x.IsPrimary || assignedRoles.Any(ur => ur.IsPrimary),
+                        IsSecondary = x.IsSecondary || assignedRoles.Any(ur => ur.IsSecondary),
+                        ActiveRoleId = x.RoleId,
+                        IsActive = x.IsActive,
+                        IsDeleted = x.IsDeleted,
+                        IsFirstLogin = x.IsFirstLogin,
+                        ProfileImage = x.ProfileImage,
+                        CreatedOn = x.CreatedOn,
+                        CreatedAt = x.CreatedAt,
+                        CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
+                        HasMemberProfile = true,
+                        MemberUsername = x.FullName,
+                        DateOfBirth = x.DateOfBirth,
+                        JoiningDate = x.JoiningDate,
+                        Gender = x.Gender,
+                        Phone = x.Phone,
+                        WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty
+                    };
+                })
+                .ToList();
 
             var userDict = users.ToDictionary(u => u.UserId, u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username);
 
@@ -157,6 +184,16 @@ public class UserRepository : IUserRepository
                 var email = u.Email.Trim().ToLowerInvariant();
 
                 u.IsReferred = referenced.Contains(uid) || referenced.Contains(uname) || referenced.Contains(fname) || referenced.Contains(email);
+
+                if (u.Roles.Count == 0 && !string.IsNullOrWhiteSpace(u.RoleName))
+                {
+                    u.Roles.Add(u.RoleName);
+                }
+                if (u.PrimaryRoles.Count == 0 && u.Roles.Count > 0)
+                {
+                    u.PrimaryRoles.Add(u.Roles.First());
+                    u.IsPrimary = true;
+                }
 
                 if (!string.IsNullOrWhiteSpace(u.CreatedBy) && Guid.TryParse(u.CreatedBy, out var cGuid) && userDict.TryGetValue(cGuid, out var cName))
                 {

@@ -9,6 +9,7 @@ public interface IBudgetCalculationRepository
     Task<BudgetCalculation?> GetByIdAsync(Guid budgetCalculationId, CancellationToken cancellationToken = default);
     Task<BudgetCalculation?> GetByNameAsync(string expenseItem, string? category = null, CancellationToken cancellationToken = default);
     Task<bool> HasExpensesAsync(string expenseItem, string? category = null, CancellationToken cancellationToken = default);
+    Task<List<BudgetCalculation>> GetByEventTypeIdAsync(Guid eventTypeId, CancellationToken cancellationToken = default);
     Task AddAsync(BudgetCalculation budgetCalculation, CancellationToken cancellationToken = default);
     void Update(BudgetCalculation budgetCalculation);
     void Delete(BudgetCalculation budgetCalculation);

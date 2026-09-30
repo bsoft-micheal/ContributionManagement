@@ -27,6 +27,12 @@ public class AuthResponseDto
     public string Role { get; set; } = string.Empty;
     public List<string> Roles { get; set; } = new();
     public List<Guid> RoleIds { get; set; } = new();
+    public List<string> PrimaryRoles { get; set; } = new();
+    public List<string> SecondaryRoles { get; set; } = new();
+    public bool EnableMultipleRoles { get; set; } = false;
+    public bool IsPrimary { get; set; } = false;
+    public bool IsSecondary { get; set; } = false;
+    public Guid? ActiveRoleId { get; set; }
     public string? ProfileImage { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
     public IReadOnlyCollection<RoleRightDto> Rights { get; set; } = Array.Empty<RoleRightDto>();
@@ -85,4 +91,11 @@ public class ResetPasswordRequestDto
     [Required]
     [MinLength(6, ErrorMessage = CommonValidationMessages.PasswordMinLength)]
     public string NewPassword { get; set; } = string.Empty;
+}
+
+public class SwitchRoleRequestDto
+{
+    public Guid? RoleId { get; set; }
+    public string? RoleName { get; set; }
+    public Guid? UserId { get; set; }
 }

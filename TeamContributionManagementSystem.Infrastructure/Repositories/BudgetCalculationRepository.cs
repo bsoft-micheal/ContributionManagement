@@ -23,6 +23,56 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
     {
         try
         {
+            // Self-heal orphan items missing EventTypeId (e.g. newly created items before fix or legacy items)
+            var orphans = await _context.BudgetCalculations
+                .Where(x => !x.IsDeleted && x.EventTypeId == null)
+                .ToListAsync(cancellationToken);
+
+            if (orphans.Count > 0)
+            {
+                var allTypes = await _context.EventTypes.ToListAsync(cancellationToken);
+                var farewellType = allTypes.FirstOrDefault(t => t.EventTypeName.ToLower() == "farewell");
+                var birthdayType = allTypes.FirstOrDefault(t => t.EventTypeName.ToLower() == "birthday");
+                bool changed = false;
+
+                foreach (var orphan in orphans)
+                {
+                    if (orphan.ExpenseItem.Trim().ToLower().Contains("chicken rice") && farewellType != null)
+                    {
+                        orphan.EventTypeId = farewellType.EventTypeId;
+                        orphan.Category = farewellType.EventTypeName;
+                        changed = true;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(orphan.Category))
+                    {
+                        var matched = allTypes.FirstOrDefault(t => t.EventTypeName.ToLower() == orphan.Category.Trim().ToLower());
+                        if (matched != null)
+                        {
+                            orphan.EventTypeId = matched.EventTypeId;
+                            orphan.Category = matched.EventTypeName;
+                            changed = true;
+                        }
+                        else if (birthdayType != null)
+                        {
+                            orphan.EventTypeId = birthdayType.EventTypeId;
+                            orphan.Category = birthdayType.EventTypeName;
+                            changed = true;
+                        }
+                    }
+                    else if (birthdayType != null)
+                    {
+                        orphan.EventTypeId = birthdayType.EventTypeId;
+                        orphan.Category = birthdayType.EventTypeName;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+            }
+
             var expenses = await _context.Expenses
                 .Where(x => !x.IsDeleted)
                 .Select(x => new { Desc = x.Description.ToLower(), Cat = x.Category.ToLower(), Event = x.EventName.ToLower() })
@@ -39,9 +89,10 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 .Select(x => new BudgetCalculationDto
                 {
                     BudgetCalculationId = x.BudgetCalculationId,
+                    EventTypeId = x.EventTypeId,
                     ExpenseItem = x.ExpenseItem,
                     Rate = x.Rate,
-                    Category = x.EventType != null ? x.EventType.EventTypeName : null,
+                    Category = x.EventType != null ? x.EventType.EventTypeName : (!string.IsNullOrWhiteSpace(x.Category) ? x.Category : null),
                     IsActive = x.IsActive,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
@@ -101,7 +152,8 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
             if (!string.IsNullOrWhiteSpace(category))
             {
                 var cleanCat = category.Trim().ToLower();
-                query = query.Where(x => x.EventType != null && x.EventType.EventTypeName.ToLower() == cleanCat);
+                query = query.Where(x => (x.EventType != null && x.EventType.EventTypeName.ToLower() == cleanCat) ||
+                                         (x.Category != null && x.Category.ToLower() == cleanCat));
             }
 
             return await query.FirstOrDefaultAsync(cancellationToken);
@@ -120,8 +172,8 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
             var itemClean = expenseItem.Trim().ToLower();
             var catClean = category?.Trim().ToLower();
 
-            var query = _context.Expenses.Where(x => !x.IsDeleted && 
-                (x.Description.ToLower().Contains(itemClean) || 
+            var query = _context.Expenses.Where(x => !x.IsDeleted &&
+                (x.Description.ToLower().Contains(itemClean) ||
                  (catClean != null && x.Category.ToLower() == catClean && x.EventName.ToLower().Contains(itemClean))));
 
             return await query.AnyAsync(cancellationToken);
@@ -129,6 +181,26 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasExpensesAsync));
+            throw;
+        }
+    }
+
+    public async Task<List<BudgetCalculation>> GetByEventTypeIdAsync(Guid eventTypeId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var eventType = await _context.EventTypes.FirstOrDefaultAsync(t => t.EventTypeId == eventTypeId, cancellationToken);
+            var typeName = eventType?.EventTypeName.ToLower();
+
+            return await _context.BudgetCalculations
+                .Where(x => !x.IsDeleted && x.IsActive &&
+                    (x.EventTypeId == eventTypeId || (typeName != null && x.Category != null && x.Category.ToLower() == typeName)))
+                .OrderBy(x => x.CreatedAt)
+                .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByEventTypeIdAsync));
             throw;
         }
     }

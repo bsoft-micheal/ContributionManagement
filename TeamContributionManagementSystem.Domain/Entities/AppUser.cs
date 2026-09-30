@@ -41,6 +41,9 @@ public class AppUser
 
     public bool IsTwoFactorEnabled { get; set; } = false;
     public bool IsFirstLogin { get; set; } = true;
+    public bool IsPrimary { get; set; } = false;
+    public bool IsSecondary { get; set; } = false;
+    public bool EnableMultipleRoles { get; set; } = false;
 
     // Member profile fields merged directly into AppUser
     public string Phone { get; set; } = string.Empty;
@@ -56,45 +59,24 @@ public class AppUser
         get => !string.IsNullOrWhiteSpace(_workType) ? _workType : (WorkTypeNavigation?.WorkTypeName ?? string.Empty);
         set => _workType = value;
     }
+    private Guid? _activeRoleId;
+
     [NotMapped]
     public Guid? RoleId
     {
-        get => UserRoles?.FirstOrDefault()?.RoleId;
-        set
-        {
-            if (value.HasValue)
-            {
-                var existing = UserRoles?.FirstOrDefault();
-                if (existing != null)
-                {
-                    existing.RoleId = value.Value;
-                }
-                else if (UserRoles != null && !UserRoles.Any(ur => ur.RoleId == value.Value))
-                {
-                    UserRoles.Add(new AppUserRole { UserId = UserId, RoleId = value.Value });
-                }
-            }
-        }
+        get => _activeRoleId ?? UserRoles?.FirstOrDefault(ur => ur.IsPrimary)?.RoleId ?? UserRoles?.FirstOrDefault()?.RoleId;
+        set => _activeRoleId = value;
     }
 
     [NotMapped]
     public Role? RoleNavigation
     {
-        get => UserRoles?.FirstOrDefault()?.Role;
+        get => UserRoles?.FirstOrDefault(ur => ur.IsPrimary)?.Role ?? UserRoles?.FirstOrDefault()?.Role;
         set
         {
             if (value != null)
             {
-                var existing = UserRoles?.FirstOrDefault();
-                if (existing != null)
-                {
-                    existing.RoleId = value.RoleId;
-                    existing.Role = value;
-                }
-                else if (UserRoles != null && !UserRoles.Any(ur => ur.RoleId == value.RoleId))
-                {
-                    UserRoles.Add(new AppUserRole { UserId = UserId, RoleId = value.RoleId, Role = value });
-                }
+                _activeRoleId = value.RoleId;
             }
         }
     }

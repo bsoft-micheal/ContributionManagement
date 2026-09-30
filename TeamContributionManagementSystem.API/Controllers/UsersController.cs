@@ -5,6 +5,9 @@ using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
+using TeamContributionManagementSystem.Application.DTOs.Auth;
+using TeamContributionManagementSystem.Application.Interfaces.Auth;
+
 namespace TeamContributionManagementSystem.API.Controllers;
 
 /// <summary>
@@ -17,10 +20,12 @@ namespace TeamContributionManagementSystem.API.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUserManagementService _userService;
+    private readonly IAuthService _authService;
 
-    public UsersController(IUserManagementService userService)
+    public UsersController(IUserManagementService userService, IAuthService authService)
     {
         _userService = userService;
+        _authService = authService;
     }
 
     /// <summary>
@@ -156,5 +161,31 @@ public class UsersController : ControllerBase
     {
         await _userService.DeleteUserAsyncById(id, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Users.DeleteSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Switches the authenticated user's active role.
+    /// </summary>
+    /// <param name="request">The target role identifier or name.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An ApiResponse containing updated AuthResponseDto.</returns>
+    [HttpPost(CommonRoutes.Users.SwitchRole)]
+    [ActionName(nameof(SwitchRoleAsync))]
+    public async Task<ActionResult<ApiResponse<AuthResponseDto>>> SwitchRoleAsync([FromBody] SwitchRoleRequestDto request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userEmail = User.FindFirstValue(ClaimTypes.Email) 
+                ?? User.FindFirstValue(ClaimTypes.Name) 
+                ?? User.Identity?.Name 
+                ?? string.Empty;
+
+            var response = await _authService.SwitchRoleAsync(request, userEmail, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<AuthResponseDto>.SuccessResult(response, "Role switched successfully", CommonStatusCodes.Status200OK));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<AuthResponseDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
+        }
     }
 }
