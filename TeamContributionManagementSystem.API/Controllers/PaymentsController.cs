@@ -84,9 +84,11 @@ public class PaymentsController : ControllerBase
     public async Task<ActionResult<ApiResponse<PaymentContextDto>>> GetPaymentContextDetailsAsync(
         [FromQuery] Guid? eventId,
         [FromQuery] Guid? memberId,
+        [FromQuery] string? eventName,
+        [FromQuery] string? memberName,
         CancellationToken cancellationToken)
     {
-        var result = await _transactionService.GetPaymentContextAsync(eventId, memberId, cancellationToken);
+        var result = await _transactionService.GetPaymentContextAsync(eventId, memberId, eventName, memberName, cancellationToken);
         if (result == null)
         {
             return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentContextDto>.FailureResult(CommonMessages.General.NotFound, CommonStatusCodes.Status404NotFound));
