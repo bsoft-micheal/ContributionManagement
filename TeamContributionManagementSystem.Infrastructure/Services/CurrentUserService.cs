@@ -49,13 +49,16 @@ public class CurrentUserService : ICurrentUserService
     {
         get
         {
+            var user = _httpContextAccessor.HttpContext?.User;
+            var activeRole = user?.FindFirst("activeRole")?.Value ?? user?.FindFirst("role")?.Value;
+            if (!string.IsNullOrWhiteSpace(activeRole)) return activeRole;
+
             var allRoles = Roles;
             if (allRoles.Contains(CommonRoles.Admin, StringComparer.OrdinalIgnoreCase)) return CommonRoles.Admin;
             if (allRoles.Contains("Organizer", StringComparer.OrdinalIgnoreCase)) return "Organizer";
             if (allRoles.Contains(CommonRoles.Member, StringComparer.OrdinalIgnoreCase)) return CommonRoles.Member;
             return allRoles.FirstOrDefault()
-                ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Role)
-                ?? _httpContextAccessor.HttpContext?.User?.FindFirst("role")?.Value;
+                ?? user?.FindFirstValue(ClaimTypes.Role);
         }
     }
 
@@ -148,7 +151,17 @@ public class CurrentUserService : ICurrentUserService
         }
     }
 
-    public bool IsMemberRole => HasRole(CommonRoles.Member);
+    public bool IsMemberRole
+    {
+        get
+        {
+            if (HasRole(CommonRoles.Admin) || HasRole("Organizer"))
+            {
+                return string.Equals(Role, CommonRoles.Member, StringComparison.OrdinalIgnoreCase);
+            }
+            return HasRole(CommonRoles.Member) || string.Equals(Role, CommonRoles.Member, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     public bool IsMemberOnlyRole =>
         HasRole(CommonRoles.Member) &&
