@@ -19,10 +19,37 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         _logger = logger;
     }
 
+    private static bool _columnsEnsured = false;
+    private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
+
+    private async Task EnsureColumnsAsync(CancellationToken cancellationToken)
+    {
+        if (_columnsEnsured) return;
+        await _semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            if (_columnsEnsured) return;
+            await _context.Database.ExecuteSqlRawAsync(@"
+                ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS category VARCHAR(100) NULL;
+                ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS event_type_id UUID NULL;
+            ", cancellationToken);
+            _columnsEnsured = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not ensure columns on budget_calculations");
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
     public async Task<List<BudgetCalculationDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
+            await EnsureColumnsAsync(cancellationToken);
             // Self-heal orphan items missing EventTypeId (e.g. newly created items before fix or legacy items)
             var orphans = await _context.BudgetCalculations
                 .Where(x => !x.IsDeleted && x.EventTypeId == null)
@@ -132,6 +159,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
     {
         try
         {
+            await EnsureColumnsAsync(cancellationToken);
             return await _context.BudgetCalculations
                 .FirstOrDefaultAsync(x => x.BudgetCalculationId == budgetCalculationId && !x.IsDeleted, cancellationToken);
         }
@@ -146,6 +174,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
     {
         try
         {
+            await EnsureColumnsAsync(cancellationToken);
             var query = _context.BudgetCalculations
                 .Where(x => !x.IsDeleted && x.ExpenseItem.ToLower() == expenseItem.ToLower());
 
@@ -189,6 +218,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
     {
         try
         {
+            await EnsureColumnsAsync(cancellationToken);
             var eventType = await _context.EventTypes.FirstOrDefaultAsync(t => t.EventTypeId == eventTypeId, cancellationToken);
             var typeName = eventType?.EventTypeName.ToLower();
 
@@ -209,6 +239,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
     {
         try
         {
+            await EnsureColumnsAsync(cancellationToken);
             await _context.BudgetCalculations.AddAsync(budgetCalculation, cancellationToken);
         }
         catch (Exception ex)
