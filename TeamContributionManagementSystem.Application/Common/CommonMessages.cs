@@ -9,6 +9,7 @@ public static class CommonMessages
     {
         public const string Success = "Operation completed successfully.";
         public const string Failure = "An unexpected error occurred.";
+        public const string UnexpectedErrorOccurred = "An unexpected error occurred.";
         public const string NotFound = "The requested record was not found.";
         public const string InvalidRequestBody = "The request body is invalid or empty.";
         public const string DeserializationFailed = "JSON deserialization failed.";

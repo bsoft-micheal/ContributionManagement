@@ -14,6 +14,7 @@ public class StatusDto
     public DateTime? CreatedOn { get; set; }
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
+    public bool IsReferred { get; set; }
 }
 
 public class CreateStatusRequestDto

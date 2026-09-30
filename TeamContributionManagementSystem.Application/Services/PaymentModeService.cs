@@ -73,6 +73,7 @@ public class PaymentModeService : IPaymentModeService
             {
                 var matchingEntity = entities.FirstOrDefault(e => e.PaymentModeId == dto.PaymentModeId);
                 EnrichPaymentMode(dto, matchingEntity);
+                dto.IsReferred = await _repository.IsInUseAsync(dto.PaymentModeName, cancellationToken);
             }
 
             return dtos;
@@ -196,6 +197,11 @@ public class PaymentModeService : IPaymentModeService
         {
             var entity = await _repository.GetByIdAsync(id, cancellationToken)
                 ?? throw new KeyNotFoundException(string.Format(CommonMessages.PaymentModes.NotFoundFormat, id));
+
+            if (await _repository.IsInUseAsync(entity.PaymentModeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete payment mode '{entity.PaymentModeName}' because transactions or contributions have been recorded using this payment mode.");
+            }
 
             _repository.Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.Domain.Entities;
@@ -15,7 +16,8 @@ public class RoleRight
     public string SubModule { get; set; } = string.Empty;
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string Page { get; set; } = string.Empty;
-    public string Access { get; set; } = string.Empty; // "readOnly", "readWrite", "deny"
+
+    public string Access { get; set; } = "readWrite"; // "readOnly", "readWrite", "deny"
     public AccessType AccessType { get; set; } = AccessType.ReadWrite;
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;

@@ -61,6 +61,25 @@ public class SystemSettingService : ISystemSettingService
             if (map.TryGetValue(CommonConstants.SettingKeys.LogConfigChanges, out var logConfigChanges)) dto.LogConfigChanges = bool.TryParse(logConfigChanges, out var lcc) ? lcc : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.RetentionPeriod, out var retentionPeriod)) dto.RetentionPeriod = retentionPeriod;
 
+            if (map.TryGetValue(CommonConstants.SettingKeys.EmailSubject, out var emailSubject)) dto.EmailSubject = emailSubject;
+            if (map.TryGetValue(CommonConstants.SettingKeys.EmailDescription, out var emailDescription)) dto.EmailDescription = emailDescription;
+            if (map.TryGetValue(CommonConstants.SettingKeys.SelectedTemplateCategoryId, out var selCatId)) dto.SelectedTemplateCategoryId = selCatId;
+            if (map.TryGetValue(CommonConstants.SettingKeys.EnableMonthlyEmail, out var enableMonthlyEmail)) dto.EnableMonthlyEmail = bool.TryParse(enableMonthlyEmail, out var eme) ? eme : true;
+            if (map.TryGetValue(CommonConstants.SettingKeys.EnableReminderEmail, out var enableReminderEmail)) dto.EnableReminderEmail = bool.TryParse(enableReminderEmail, out var ere) ? ere : true;
+            if (map.TryGetValue(CommonConstants.SettingKeys.ReminderIntervalDays, out var remDays)) dto.ReminderIntervalDays = remDays;
+            if (map.TryGetValue(CommonConstants.SettingKeys.MaxReminders, out var maxRem)) dto.MaxReminders = maxRem;
+            if (map.TryGetValue(CommonConstants.SettingKeys.CategoryTemplates, out var catTemplates) && !string.IsNullOrWhiteSpace(catTemplates))
+            {
+                try
+                {
+                    dto.CategoryTemplates = System.Text.Json.JsonSerializer.Deserialize<object>(catTemplates);
+                }
+                catch
+                {
+                    dto.CategoryTemplates = catTemplates;
+                }
+            }
+
             return dto;
         }
         catch (Exception ex)
@@ -74,6 +93,14 @@ public class SystemSettingService : ISystemSettingService
     {
         try
         {
+            string catTemplatesJson = settings.CategoryTemplates switch
+            {
+                null => string.Empty,
+                string s => s,
+                System.Text.Json.JsonElement elem => elem.GetRawText(),
+                _ => System.Text.Json.JsonSerializer.Serialize(settings.CategoryTemplates)
+            };
+
             var dict = new Dictionary<string, (string Value, string Category)>
             {
                 [CommonConstants.SettingKeys.OrgName] = (settings.OrgName, CommonConstants.SettingCategories.General),
@@ -101,7 +128,15 @@ public class SystemSettingService : ISystemSettingService
                 [CommonConstants.SettingKeys.LogUserLogin] = (settings.LogUserLogin.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Audit),
                 [CommonConstants.SettingKeys.LogDataChanges] = (settings.LogDataChanges.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Audit),
                 [CommonConstants.SettingKeys.LogConfigChanges] = (settings.LogConfigChanges.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Audit),
-                [CommonConstants.SettingKeys.RetentionPeriod] = (settings.RetentionPeriod, CommonConstants.SettingCategories.Audit)
+                [CommonConstants.SettingKeys.RetentionPeriod] = (settings.RetentionPeriod, CommonConstants.SettingCategories.Audit),
+                [CommonConstants.SettingKeys.EmailSubject] = (settings.EmailSubject ?? string.Empty, CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.EmailDescription] = (settings.EmailDescription ?? string.Empty, CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.CategoryTemplates] = (catTemplatesJson, CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.SelectedTemplateCategoryId] = (settings.SelectedTemplateCategoryId ?? string.Empty, CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.EnableMonthlyEmail] = (settings.EnableMonthlyEmail.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.EnableReminderEmail] = (settings.EnableReminderEmail.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.ReminderIntervalDays] = (settings.ReminderIntervalDays ?? "10", CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.MaxReminders] = (settings.MaxReminders ?? "3", CommonConstants.SettingCategories.EmailTemplate)
             };
 
             var existingList = await _settingRepository.GetAllAsync(cancellationToken);

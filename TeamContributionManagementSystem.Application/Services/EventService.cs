@@ -1,9 +1,11 @@
+using System.Text.Json;
 using AutoMapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.Members;
+using TeamContributionManagementSystem.Application.DTOs.Settings;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -161,6 +163,7 @@ public class EventService : IEventService
                 EventName = (request.EventName ?? string.Empty).Trim(),
                 EventTypeId = eventType.EventTypeId,
                 EventDate = request.EventDate.Date,
+                EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null,
                 CreatedBy = user.UserId,
                 CreatedAt = DateTime.UtcNow,
                 Description = (request.Description ?? string.Empty).Trim(),
@@ -222,8 +225,11 @@ public class EventService : IEventService
                 var eventId = eventItem.EventId;
                 var eventName = eventItem.EventName;
                 var eventDate = eventItem.EventDate;
+                var eventDates = eventItem.EventDates;
                 var eventDescription = eventItem.Description;
                 var baseAmount = eventItem.BaseAmount;
+                var eventTypeId = eventType.EventTypeId;
+                var eventTypeName = eventType.EventTypeName;
                 bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventType.EventTypeName) &&
                     eventType.EventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase);
 
@@ -245,17 +251,18 @@ public class EventService : IEventService
                         string upiReceiverName = CommonConstants.Defaults.DefaultPayeeName;
                         string upiId = CommonConstants.Defaults.DefaultUpiId;
                         string qrImageUrl = string.Empty;
+                        SystemSettingsDto? systemSettings = null;
 
                         if (scopedSettingService != null)
                         {
                             try
                             {
-                                var settings = await scopedSettingService.GetSettingsAsync(CancellationToken.None);
-                                if (!string.IsNullOrWhiteSpace(settings.QrReceiverName)) upiReceiverName = settings.QrReceiverName;
-                                if (!string.IsNullOrWhiteSpace(settings.QrUpiId)) upiId = settings.QrUpiId;
-                                if (!string.IsNullOrWhiteSpace(settings.QrImage) && settings.QrImage.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                                systemSettings = await scopedSettingService.GetSettingsAsync(CancellationToken.None);
+                                if (!string.IsNullOrWhiteSpace(systemSettings.QrReceiverName)) upiReceiverName = systemSettings.QrReceiverName;
+                                if (!string.IsNullOrWhiteSpace(systemSettings.QrUpiId)) upiId = systemSettings.QrUpiId;
+                                if (!string.IsNullOrWhiteSpace(systemSettings.QrImage) && systemSettings.QrImage.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    qrImageUrl = settings.QrImage;
+                                    qrImageUrl = systemSettings.QrImage;
                                 }
                             }
                             catch (Exception ex)
@@ -263,6 +270,12 @@ public class EventService : IEventService
                                 scopedLogger.LogWarning(ex, CommonLogMessages.Events.SettingsLoadWarning);
                             }
                         }
+
+                        var orgName = !string.IsNullOrWhiteSpace(systemSettings?.OrgName)
+                            ? systemSettings.OrgName
+                            : "Unit 1A Residents Association";
+
+                        var (configuredSubject, configuredDescription) = ResolveConfiguredTemplate(systemSettings, eventTypeId, eventTypeName);
 
                         var gpayImagePath = ResolveGpayImagePath();
                         if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
@@ -410,36 +423,74 @@ public class EventService : IEventService
                             singleCelebrantDateStr = bdayDate.ToString("MMM dd");
                         }
 
-                        var emailTasks = particularContributors.Select(async contributor =>
+                        foreach (var contributor in particularContributors)
                         {
                             try
                             {
-                                string emailSubject = isBirthdayEvent
-                                    ? (targetCelebrants.Count == 1 
-                                        ? $"Birthday Celebration - {targetCelebrants[0].Name} ({singleCelebrantDateStr})"
-                                        : (!string.IsNullOrWhiteSpace(celebrantsFormatted) ? $"Birthday Celebration - {celebrantsFormatted}" : $"Event Detail: {eventName}"))
-                                    : $"Event Detail: {eventName}";
+                                var memberContributionAmount = contributor.ContributionAmount;
+                                var formattedAmount = memberContributionAmount % 1 == 0
+                                    ? $"₹{memberContributionAmount:N0}"
+                                    : $"₹{memberContributionAmount:F2}";
+                                var formattedDueDate = eventDate.ToString("dd/MM/yyyy");
 
-                                string emailHeader = isBirthdayEvent ? "Birthday Celebration" : "Event Detail";
+                                string emailSubject = configuredSubject
+                                    .Replace("{memberName}", contributor.Name)
+                                    .Replace("{categoryName}", eventTypeName)
+                                    .Replace("{eventName}", eventName)
+                                    .Replace("{amount}", formattedAmount)
+                                    .Replace("{dueDate}", formattedDueDate)
+                                    .Replace("{orgName}", orgName);
 
-                                string introText = isBirthdayEvent && !string.IsNullOrWhiteSpace(birthdayDatesSummary)
-                                    ? $"We are celebrating the birthdays of our team members this month: <strong>{birthdayDatesSummary}</strong>! Here are the event details and your contribution amount:"
-                                    : (isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
-                                        ? $"We are celebrating the birthdays of our team members this month: <strong>{celebrantsFormatted}</strong>! Here are the event details and your contribution amount:"
-                                        : "You have been added to a new event. Here are the event details and your contribution amount:");
+                                string emailHeader = isBirthdayEvent ? "Birthday Celebration" : $"{eventTypeName} Contribution";
 
-                                string eventDateLabel = isBirthdayEvent ? "Celebration Date:" : "Event Date:";
+                                string eventDateLabel = "Event Date:";
+                                string celebrantDatesCsv = !string.IsNullOrWhiteSpace(eventDates)
+                                    ? eventDates
+                                    : (isBirthdayEvent && targetCelebrants.Count > 0
+                                        ? string.Join(", ", targetCelebrants.OrderBy(c => c.DateOfBirth.Day).Select(c => $"{c.DateOfBirth.Day} {new DateTime(eventDate.Year, c.DateOfBirth.Month, 1):MMM}"))
+                                        : string.Empty);
+                                string eventDateValueDisplay = !string.IsNullOrWhiteSpace(celebrantDatesCsv)
+                                    ? celebrantDatesCsv
+                                    : $"{eventDate:MMMM dd, yyyy}";
 
                                 string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
                                     ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
                                     : $"Rs.{baseAmount:F2}";
 
-                                var memberContributionAmount = contributor.ContributionAmount;
                                 var upiPaymentUri = $"upi://pay?pa={upiId}&pn={Uri.EscapeDataString(upiReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString("Contribution for " + eventName)}";
                                 var memberQrCodeUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data={Uri.EscapeDataString(upiPaymentUri)}";
                                 var frontendBaseUrl = "http://localhost:5173";
                                 var confirmPaymentUrl = $"{frontendBaseUrl}/confirm-payment?eventId={eventId}&memberId={contributor.MemberId}&amount={memberContributionAmount:F2}";
                                 var hasInlineScanner = false;
+
+                                var paymentLinkInline = upiPaymentUri;
+                                var qrImageInlineTag = $@"
+                                    <div style=""text-align: center; margin: 18px 0;"">
+                                        <div style=""display: inline-block; padding: 12px; background: #ffffff; border: 2px solid #7c3aed; border-radius: 12px; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.12);"">
+                                            <a href=""{upiPaymentUri}"" style=""text-decoration: none; display: block;"">
+                                                <img src=""{memberQrCodeUrl}"" alt=""UPI Payment QR Code - {upiReceiverName}"" width=""220"" height=""220"" style=""display: block; margin: 0 auto; border-radius: 6px;"" />
+                                            </a>
+                                        </div>
+                                        <div style=""font-size: 12px; color: #64748b; margin-top: 6px;"">UPI ID: <strong style=""color: #312e81;"">{upiId}</strong> ({upiReceiverName})</div>
+                                    </div>";
+
+                                bool hasCustomQrCode = configuredDescription.Contains("{qrCode}");
+
+                                var interpolated = configuredDescription
+                                    .Replace("{memberName}", contributor.Name)
+                                    .Replace("{categoryName}", eventTypeName)
+                                    .Replace("{eventName}", eventName)
+                                    .Replace("{amount}", formattedAmount)
+                                    .Replace("{dueDate}", formattedDueDate)
+                                    .Replace("{orgName}", orgName)
+                                    .Replace("{paymentLink}", paymentLinkInline)
+                                    .Replace("{qrCode}", qrImageInlineTag);
+
+                                var formattedText = interpolated
+                                    .Replace("\r\n", "<br />")
+                                    .Replace("\n", "<br />");
+
+                                string customMessageHtml = $@"<div style=""font-size: 15px; line-height: 1.7; color: #334155; margin-bottom: 24px;"">{formattedText}</div>";
 
                                 var emailBody = $@"
 <!DOCTYPE html>
@@ -560,8 +611,7 @@ public class EventService : IEventService
             <h1>{emailHeader}</h1>
         </div>
         <div class=""content"">
-            <div class=""greeting"">Hello {contributor.Name},</div>
-            <div class=""intro"">{introText}</div>
+            {customMessageHtml}
             
             <div class=""details-card"">
                 <div class=""detail-row"">
@@ -571,7 +621,7 @@ public class EventService : IEventService
                 {celebrantsAndDatesHtml}
                 <div class=""detail-row"">
                     <span class=""detail-label"">{eventDateLabel}</span>
-                    <span class=""detail-value"">{eventDate:MMMM dd, yyyy}</span>
+                    <span class=""detail-value"" style=""font-weight: 600;"">{eventDateValueDisplay}</span>
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Total Amount:</span>
@@ -583,10 +633,19 @@ public class EventService : IEventService
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Contribution Amount:</span>
-                    <span class=""detail-value amount-highlight"">Rs.{contributor.ContributionAmount:F2}</span>
+                    <span class=""detail-value amount-highlight"">{formattedAmount}</span>
                 </div>
             </div>
 
+            {(hasCustomQrCode ? $@"
+            <div style=""margin: 20px 0; padding: 18px; background: #ffffff; border: 1.5px solid #ede9fe; border-radius: 12px; text-align: center;"">
+                <a href=""{upiPaymentUri}"" style=""display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 9px 24px; border-radius: 8px;"">Pay {formattedAmount} via UPI App</a>
+                <div style=""margin-top: 16px; padding-top: 14px; border-top: 1.5px dashed #e2e8f0;"">
+                    <div style=""font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 4px;"">Already Paid? Submit Payment Proof</div>
+                    <div style=""font-size: 12px; color: #64748b; margin-bottom: 10px;"">Submit your 12-digit UPI Reference / UTR Number to automatically update your payment status.</div>
+                    <a href=""{confirmPaymentUrl}"" target=""_blank"" style=""display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 22px; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);"">&#x2705; I Have Paid — Submit UTR / Ref No.</a>
+                </div>
+            </div>" : $@"
             <!-- Dynamic UPI QR Scanner Card -->
             <div class=""payment-card"" style=""background: #ffffff; border: 1.5px solid #ede9fe; border-radius: 14px; padding: 20px; margin: 22px 0; text-align: center; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08);"">
                 <div style=""font-family: 'Outfit', 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #4338ca; margin-bottom: 12px; letter-spacing: 0.5px; text-transform: uppercase;"">
@@ -615,7 +674,7 @@ public class EventService : IEventService
                                 Scan with Google Pay, PhonePe, Paytm, or Camera to pay automatically.
                             </div>
                             <div style=""margin-top: 10px;"">
-                                <a href=""{upiPaymentUri}"" style=""display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; font-size: 12.5px; font-weight: 700; padding: 7px 18px; border-radius: 6px;"">Open UPI App (Rs.{memberContributionAmount:F2})</a>
+                                <a href=""{upiPaymentUri}"" style=""display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; font-size: 12.5px; font-weight: 700; padding: 7px 18px; border-radius: 6px;"">Open UPI App ({formattedAmount})</a>
                             </div>
 
                             <!-- One-Click Confirmation Section -->
@@ -633,10 +692,10 @@ public class EventService : IEventService
                         </td>
                     </tr>
                 </table>
-            </div>
+            </div>")}
         </div>
         <div class=""footer"">
-            This is an automated notification from the Team Contribution Management System.
+            This is an automated notification from {orgName}.
         </div>
     </div>
 </body>
@@ -648,14 +707,13 @@ public class EventService : IEventService
 
                                 await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, inlineImages, CancellationToken.None);
                                 scopedLogger.LogInformation(CommonLogMessages.Events.EmailSentSuccess, contributor.Email, eventName);
+                                await Task.Delay(200);
                             }
                             catch (Exception ex)
                             {
                                 scopedLogger.LogError(ex, CommonLogMessages.Events.EmailSendFailed, contributor.Email);
                             }
-                        });
-
-                        await Task.WhenAll(emailTasks);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -686,6 +744,7 @@ public class EventService : IEventService
             eventItem.EventName = (request.EventName ?? string.Empty).Trim();
             eventItem.EventTypeId = eventType.EventTypeId;
             eventItem.EventDate = request.EventDate.Date;
+            eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
             eventItem.Description = (request.Description ?? string.Empty).Trim();
             if (request.Status != 0)
             {
@@ -714,7 +773,7 @@ public class EventService : IEventService
                 request.ContributionOverrides ?? new List<ContributionOverrideDto>());
 
             // 1. Synchronize Event Participants
-            var currentParticipants = eventItem.Participants.ToList();
+            var currentParticipants = eventItem.Participants.Where(p => !p.IsDeleted).ToList();
             var currentParticipantIds = currentParticipants.Select(p => p.MemberId).ToHashSet();
 
             // Remove participants no longer in the request
@@ -748,13 +807,13 @@ public class EventService : IEventService
             }
 
             // 2. Synchronize Contributions
-            var currentContributions = eventItem.Contributions.ToList();
-            var currentContributionLookup = currentContributions
+            var activeContributions = eventItem.Contributions.Where(c => !c.IsDeleted).ToList();
+            var memberContribLookup = activeContributions
                 .GroupBy(c => c.MemberId)
-                .ToDictionary(g => g.Key, g => g.First());
+                .ToDictionary(g => g.Key, g => g.ToList());
 
             // Remove contributions for removed participants
-            var contributionsToRemove = currentContributions
+            var contributionsToRemove = activeContributions
                 .Where(c => !newParticipantIds.Contains(c.MemberId))
                 .ToList();
             if (contributionsToRemove.Count > 0)
@@ -762,6 +821,8 @@ public class EventService : IEventService
                 _contributionRepository.DeleteRange(contributionsToRemove);
                 foreach (var c in contributionsToRemove)
                 {
+                    c.IsDeleted = true;
+                    c.ModifiedOn = DateTime.UtcNow;
                     eventItem.Contributions.Remove(c);
                 }
             }
@@ -774,12 +835,19 @@ public class EventService : IEventService
                     continue;
                 }
 
-                if (currentContributionLookup.TryGetValue(memberId, out var existingContribution))
+                if (memberContribLookup.TryGetValue(memberId, out var existingList) && existingList.Count > 0)
                 {
-                    if (!contributionsToRemove.Contains(existingContribution))
+                    var primary = existingList.First();
+                    if (!contributionsToRemove.Contains(primary))
                     {
-                        existingContribution.Amount = amount;
-                        existingContribution.ModifiedOn = DateTime.UtcNow;
+                        primary.Amount = amount;
+                        primary.ModifiedOn = DateTime.UtcNow;
+                    }
+
+                    for (int i = 1; i < existingList.Count; i++)
+                    {
+                        existingList[i].IsDeleted = true;
+                        existingList[i].ModifiedOn = DateTime.UtcNow;
                     }
                 }
                 else
@@ -820,10 +888,13 @@ public class EventService : IEventService
             eventItem.IsDeleted = true;
             eventItem.ModifiedOn = DateTime.UtcNow;
 
-            foreach (var contribution in eventItem.Contributions)
+            if (eventItem.Contributions != null)
             {
-                contribution.IsDeleted = true;
-                contribution.ModifiedOn = DateTime.UtcNow;
+                foreach (var contribution in eventItem.Contributions)
+                {
+                    contribution.IsDeleted = true;
+                    contribution.ModifiedOn = DateTime.UtcNow;
+                }
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -940,5 +1011,167 @@ public class EventService : IEventService
         }
 
         return null;
+    }
+
+    private static (string Subject, string Description) ResolveConfiguredTemplate(
+        SystemSettingsDto? settings,
+        Guid eventTypeId,
+        string eventTypeName,
+        string templateType = "initial")
+    {
+        string defaultBirthdaySubject = "Birthday Celebration Contribution - {categoryName}";
+        string defaultBirthdayDesc = "Dear {memberName},\n\nWe have upcoming birthdays this month in our team! Your planned contribution for {categoryName} is {amount}, due by {dueDate}.\n\nPlease scan the dynamic UPI QR code below or tap the payment link to contribute:\n{paymentLink}\n\n{qrCode}\n\nWarm regards,\n{orgName}";
+
+        string defaultGeneralSubject = "Contribution Notice - {categoryName}";
+        string defaultGeneralDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\nPlease scan the attached dynamic UPI QR code or click the payment link to pay:\n{paymentLink}\n\n{qrCode}\n\nThank you,\n{orgName}";
+
+        bool isBirthday = (eventTypeName ?? string.Empty).Contains("Birthday", StringComparison.OrdinalIgnoreCase);
+        string fallbackSubject = isBirthday ? defaultBirthdaySubject : defaultGeneralSubject;
+        string fallbackDesc = isBirthday ? defaultBirthdayDesc : defaultGeneralDesc;
+
+        if (settings == null) return (fallbackSubject, fallbackDesc);
+
+        JsonElement root = default;
+        bool hasJson = false;
+
+        if (settings.CategoryTemplates is JsonElement element && element.ValueKind == JsonValueKind.Object)
+        {
+            root = element;
+            hasJson = true;
+        }
+        else if (settings.CategoryTemplates is string jsonStr && !string.IsNullOrWhiteSpace(jsonStr))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonStr);
+                root = doc.RootElement.Clone();
+                hasJson = true;
+            }
+            catch { }
+        }
+        else if (settings.CategoryTemplates != null)
+        {
+            try
+            {
+                var raw = JsonSerializer.Serialize(settings.CategoryTemplates);
+                using var doc = JsonDocument.Parse(raw);
+                root = doc.RootElement.Clone();
+                hasJson = true;
+            }
+            catch { }
+        }
+
+        if (hasJson && root.ValueKind == JsonValueKind.Object)
+        {
+            var idKey = eventTypeId.ToString();
+            var typeNameClean = (eventTypeName ?? string.Empty).Trim().ToLowerInvariant();
+
+            JsonElement? matchedEntry = null;
+
+            // 1. Try matching by eventTypeId (Guid string)
+            foreach (var property in root.EnumerateObject())
+            {
+                if (string.Equals(property.Name.Trim(), idKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedEntry = property.Value;
+                    break;
+                }
+            }
+
+            // 2. Try exact category name match
+            if (matchedEntry == null && !string.IsNullOrWhiteSpace(typeNameClean))
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    if (string.Equals(property.Name.Trim(), typeNameClean, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedEntry = property.Value;
+                        break;
+                    }
+                }
+            }
+
+            // 3. Try loose category name match
+            if (matchedEntry == null && !string.IsNullOrWhiteSpace(typeNameClean))
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    var key = property.Name.Trim().ToLowerInvariant();
+                    if ((typeNameClean.Contains("birthday") && key.Contains("birthday")) ||
+                        (typeNameClean.Contains("dinner") && key.Contains("dinner")) ||
+                        (typeNameClean.Contains("farewell") && key.Contains("farewell")) ||
+                        (typeNameClean.Contains("outing") && key.Contains("outing")))
+                    {
+                        matchedEntry = property.Value;
+                        break;
+                    }
+                }
+            }
+
+            // 4. Try "all" fallback
+            if (matchedEntry == null)
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    if (string.Equals(property.Name.Trim(), "all", StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedEntry = property.Value;
+                        break;
+                    }
+                }
+            }
+
+            if (matchedEntry.HasValue && matchedEntry.Value.ValueKind == JsonValueKind.Object)
+            {
+                string? sub = null;
+                string? desc = null;
+
+                bool isReminder = string.Equals(templateType, "reminder", StringComparison.OrdinalIgnoreCase);
+
+                if (isReminder)
+                {
+                    if (matchedEntry.Value.TryGetProperty("reminderSubject", out var rSub) && rSub.ValueKind == JsonValueKind.String)
+                        sub = rSub.GetString();
+                    if (matchedEntry.Value.TryGetProperty("reminderDescription", out var rDesc) && rDesc.ValueKind == JsonValueKind.String)
+                        desc = rDesc.GetString();
+                }
+
+                if (string.IsNullOrWhiteSpace(sub))
+                {
+                    if (matchedEntry.Value.TryGetProperty("initialSubject", out var subProp) && subProp.ValueKind == JsonValueKind.String)
+                        sub = subProp.GetString();
+                    else if (matchedEntry.Value.TryGetProperty("subject", out var sProp) && sProp.ValueKind == JsonValueKind.String)
+                        sub = sProp.GetString();
+                }
+
+                if (string.IsNullOrWhiteSpace(desc))
+                {
+                    if (matchedEntry.Value.TryGetProperty("initialDescription", out var descProp) && descProp.ValueKind == JsonValueKind.String)
+                        desc = descProp.GetString();
+                    else if (matchedEntry.Value.TryGetProperty("description", out var dProp) && dProp.ValueKind == JsonValueKind.String)
+                        desc = dProp.GetString();
+                }
+
+                if (!string.IsNullOrWhiteSpace(sub) || !string.IsNullOrWhiteSpace(desc))
+                {
+                    return (
+                        !string.IsNullOrWhiteSpace(sub) ? sub : fallbackSubject,
+                        !string.IsNullOrWhiteSpace(desc) ? desc : fallbackDesc
+                    );
+                }
+            }
+        }
+
+        // 5. Fallback to settings.EmailSubject / settings.EmailDescription
+        if (!string.IsNullOrWhiteSpace(settings.EmailSubject) || !string.IsNullOrWhiteSpace(settings.EmailDescription))
+        {
+            return (
+                !string.IsNullOrWhiteSpace(settings.EmailSubject) ? settings.EmailSubject : fallbackSubject,
+                !string.IsNullOrWhiteSpace(settings.EmailDescription) ? settings.EmailDescription : fallbackDesc
+            );
+        }
+
+        // 6. Default fallback to standard templates (never null!)
+        return (fallbackSubject, fallbackDesc);
     }
 }

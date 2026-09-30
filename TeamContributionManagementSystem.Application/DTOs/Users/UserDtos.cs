@@ -25,6 +25,7 @@ public class UserDto
     public string? Gender { get; set; }
     public string? Phone { get; set; }
     public string? WorkType { get; set; }
+    public bool IsReferred { get; set; }
 }
 
 public class CreateUserRequestDto

@@ -42,6 +42,21 @@ public class PaymentModeRepository : IPaymentModeRepository
             .FirstOrDefaultAsync(x => x.PaymentModeName.ToLower() == name.ToLower() && !x.IsDeleted, cancellationToken);
     }
 
+    public async Task<bool> IsInUseAsync(string paymentModeName, CancellationToken cancellationToken = default)
+    {
+        var cleanName = paymentModeName.Trim().ToLower();
+
+        var hasTxns = await _context.PaymentTransactions
+            .AnyAsync(p => !p.IsDeleted && p.PaymentMode.ToLower() == cleanName, cancellationToken);
+        if (hasTxns) return true;
+
+        var hasContributions = await _context.Contributions
+            .AnyAsync(c => !c.IsDeleted && c.PaymentMode.ToString().ToLower() == cleanName, cancellationToken);
+        if (hasContributions) return true;
+
+        return false;
+    }
+
     public async Task AddAsync(PaymentModeItem paymentMode, CancellationToken cancellationToken = default)
     {
         await _context.PaymentModes.AddAsync(paymentMode, cancellationToken);

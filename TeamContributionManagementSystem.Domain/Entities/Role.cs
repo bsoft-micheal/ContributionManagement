@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using TeamContributionManagementSystem.Domain.Common;
 
 namespace TeamContributionManagementSystem.Domain.Entities;
@@ -6,7 +7,9 @@ public class Role : IAuditableEntity
 {
     public Guid RoleId { get; set; }
     public string RoleName { get; set; } = string.Empty;
-    public decimal DefaultContributionAmount { get; set; }
+
+    [NotMapped]
+    public decimal DefaultContributionAmount { get; set; } = 0;
 
     public ICollection<Member> Members { get; set; } = new List<Member>();
     public ICollection<RoleRight> RoleRights { get; set; } = new List<RoleRight>();

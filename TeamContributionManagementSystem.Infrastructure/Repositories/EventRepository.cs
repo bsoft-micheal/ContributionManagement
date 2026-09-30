@@ -37,7 +37,25 @@ public class EventRepository : IEventRepository
                 query = query.Where(x => x.EventDate.Year == year.Value);
             }
 
-            return await query
+            var paymentTxnEventNames = await _context.PaymentTransactions
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var expenseEventNames = await _context.Expenses
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var photoEventNames = await _context.GalleryPhotos
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var results = await query
                 .OrderByDescending(x => x.EventDate)
                 .Select(x => new EventSummaryDto
                 {
@@ -46,11 +64,12 @@ public class EventRepository : IEventRepository
                     EventTypeId = x.EventTypeId,
                     EventTypeName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
                     EventDate = x.EventDate,
+                    EventDates = x.EventDates,
                     Description = x.Description,
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
+                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
                     CreatedByName = x.CreatedByUser != null 
@@ -70,11 +89,22 @@ public class EventRepository : IEventRepository
                     {
                         Id = p.Id,
                         MemberId = p.MemberId,
-                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
-                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                        MemberName = p.Member != null ? p.Member.FullName : string.Empty,
+                        RoleName = p.Member != null ? (p.Member.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member") : string.Empty
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var r in results)
+            {
+                var cleanName = r.EventName.Trim().ToLower();
+                r.IsReferred = r.TotalPaidAmount > 0 
+                    || paymentTxnEventNames.Contains(cleanName) 
+                    || expenseEventNames.Contains(cleanName) 
+                    || photoEventNames.Contains(cleanName);
+            }
+
+            return results;
         }
         catch (Exception ex)
         {
@@ -137,8 +167,8 @@ public class EventRepository : IEventRepository
                     {
                         Id = p.Id,
                         MemberId = p.MemberId,
-                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
-                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                        MemberName = p.Member != null ? p.Member.FullName : string.Empty,
+                        RoleName = p.Member != null ? (p.Member.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member") : string.Empty
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
@@ -154,7 +184,25 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            return await _context.Events
+            var paymentTxnEventNames = await _context.PaymentTransactions
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var expenseEventNames = await _context.Expenses
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var photoEventNames = await _context.GalleryPhotos
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                .Select(x => x.EventName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var results = await _context.Events
                 .Where(x => !x.IsDeleted && x.EventDate >= DateTime.UtcNow.Date)
                 .OrderBy(x => x.EventDate)
                 .Take(count)
@@ -165,11 +213,12 @@ public class EventRepository : IEventRepository
                     EventTypeId = x.EventTypeId,
                     EventTypeName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
                     EventDate = x.EventDate,
+                    EventDates = x.EventDates,
                     Description = x.Description,
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
+                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
                     CreatedByName = x.CreatedByUser != null 
@@ -189,11 +238,22 @@ public class EventRepository : IEventRepository
                     {
                         Id = p.Id,
                         MemberId = p.MemberId,
-                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
-                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                        MemberName = p.Member != null ? p.Member.FullName : string.Empty,
+                        RoleName = p.Member != null ? (p.Member.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member") : string.Empty
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var r in results)
+            {
+                var cleanName = r.EventName.Trim().ToLower();
+                r.IsReferred = r.TotalPaidAmount > 0 
+                    || paymentTxnEventNames.Contains(cleanName) 
+                    || expenseEventNames.Contains(cleanName) 
+                    || photoEventNames.Contains(cleanName);
+            }
+
+            return results;
         }
         catch (Exception ex)
         {
@@ -206,7 +266,10 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            return await _context.Events.FirstOrDefaultAsync(x => x.EventId == eventId && !x.IsDeleted, cancellationToken);
+            return await _context.Events
+                .Include(x => x.Contributions)
+                .Include(x => x.Participants)
+                .FirstOrDefaultAsync(x => x.EventId == eventId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -228,11 +291,12 @@ public class EventRepository : IEventRepository
                     EventTypeId = x.EventTypeId,
                     EventTypeName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
                     EventDate = x.EventDate,
+                    EventDates = x.EventDates,
                     Description = x.Description,
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
+                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
                     CreatedByName = x.CreatedByUser != null 
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
@@ -251,8 +315,8 @@ public class EventRepository : IEventRepository
                     {
                         Id = p.Id,
                         MemberId = p.MemberId,
-                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
-                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                        MemberName = p.Member != null ? p.Member.FullName : string.Empty,
+                        RoleName = p.Member != null ? (p.Member.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member") : string.Empty
                     }).ToList(),
                     Contributions = x.Contributions.Where(c => !c.IsDeleted).Select(c => new ContributionDto
                     {
@@ -261,7 +325,7 @@ public class EventRepository : IEventRepository
                         EventName = x.EventName,
                         CategoryName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
                         MemberId = c.MemberId,
-                        MemberName = c.Member != null ? c.Member.Name : string.Empty,
+                        MemberName = c.Member != null ? c.Member.FullName : string.Empty,
                         Amount = c.Amount,
                         PaymentStatus = c.PaymentStatus,
                         PaymentDate = c.PaymentDate,
@@ -299,6 +363,62 @@ public class EventRepository : IEventRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(BirthdayEventExistsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasPaidContributionsAsync(Guid eventId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Contributions.AnyAsync(x => x.EventId == eventId && !x.IsDeleted && 
+                (x.PaymentStatus == PaymentStatus.Paid || (x.Amount > 0 && (x.CashAmount > 0 || x.UpiAmount > 0))), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasPaidContributionsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasPaymentTransactionsAsync(string eventName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventName.Trim().ToLower();
+            return await _context.PaymentTransactions.AnyAsync(x => !x.IsDeleted && x.EventName.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasPaymentTransactionsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasExpensesAsync(string eventName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventName.Trim().ToLower();
+            return await _context.Expenses.AnyAsync(x => !x.IsDeleted && x.EventName.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasExpensesAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasGalleryPhotosAsync(string eventName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventName.Trim().ToLower();
+            return await _context.GalleryPhotos.AnyAsync(x => !x.IsDeleted && x.EventName.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasGalleryPhotosAsync));
             throw;
         }
     }

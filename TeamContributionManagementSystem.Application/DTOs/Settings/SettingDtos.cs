@@ -51,4 +51,14 @@ public class SystemSettingsDto
     public bool LogDataChanges { get; set; } = true;
     public bool LogConfigChanges { get; set; } = true;
     public string RetentionPeriod { get; set; } = "365";
+
+    // Category-based Email Template & Automation
+    public string? EmailSubject { get; set; }
+    public string? EmailDescription { get; set; }
+    public string? SelectedTemplateCategoryId { get; set; }
+    public object? CategoryTemplates { get; set; }
+    public bool EnableMonthlyEmail { get; set; } = true;
+    public bool EnableReminderEmail { get; set; } = true;
+    public string ReminderIntervalDays { get; set; } = "10";
+    public string MaxReminders { get; set; } = "3";
 }

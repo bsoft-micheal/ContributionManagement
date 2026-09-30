@@ -24,6 +24,7 @@ public class ApplicationDbContextSeeder
 
         try
         {
+            await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS event_dates VARCHAR(500) NULL;", cancellationToken);
             await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN role_id DROP NOT NULL;", cancellationToken);
             await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN date_of_birth TYPE TIMESTAMPTZ USING date_of_birth::timestamptz;", cancellationToken);
             await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN joining_date TYPE TIMESTAMPTZ USING joining_date::timestamptz;", cancellationToken);
