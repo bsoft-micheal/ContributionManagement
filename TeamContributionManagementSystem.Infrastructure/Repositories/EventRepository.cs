@@ -69,7 +69,7 @@ public class EventRepository : IEventRepository
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
+                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
                     CreatedByName = x.CreatedByUser != null 
@@ -89,8 +89,8 @@ public class EventRepository : IEventRepository
                     {
                         Id = p.Id,
                         MemberId = p.MemberId,
-                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
-                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                        MemberName = p.Member != null ? p.Member.FullName : string.Empty,
+                        RoleName = p.Member != null ? (p.Member.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member") : string.Empty
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
@@ -167,8 +167,8 @@ public class EventRepository : IEventRepository
                     {
                         Id = p.Id,
                         MemberId = p.MemberId,
-                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
-                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                        MemberName = p.Member != null ? p.Member.FullName : string.Empty,
+                        RoleName = p.Member != null ? (p.Member.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member") : string.Empty
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
@@ -218,7 +218,7 @@ public class EventRepository : IEventRepository
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
+                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
                     CreatedByName = x.CreatedByUser != null 
@@ -238,8 +238,8 @@ public class EventRepository : IEventRepository
                     {
                         Id = p.Id,
                         MemberId = p.MemberId,
-                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
-                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                        MemberName = p.Member != null ? p.Member.FullName : string.Empty,
+                        RoleName = p.Member != null ? (p.Member.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member") : string.Empty
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
@@ -266,7 +266,10 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            return await _context.Events.FirstOrDefaultAsync(x => x.EventId == eventId && !x.IsDeleted, cancellationToken);
+            return await _context.Events
+                .Include(x => x.Contributions)
+                .Include(x => x.Participants)
+                .FirstOrDefaultAsync(x => x.EventId == eventId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -293,7 +296,7 @@ public class EventRepository : IEventRepository
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
+                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
                     CreatedByName = x.CreatedByUser != null 
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
@@ -312,8 +315,8 @@ public class EventRepository : IEventRepository
                     {
                         Id = p.Id,
                         MemberId = p.MemberId,
-                        MemberName = p.Member != null ? p.Member.Name : string.Empty,
-                        RoleName = (p.Member != null && p.Member.Role != null) ? p.Member.Role.RoleName : string.Empty
+                        MemberName = p.Member != null ? p.Member.FullName : string.Empty,
+                        RoleName = p.Member != null ? (p.Member.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member") : string.Empty
                     }).ToList(),
                     Contributions = x.Contributions.Where(c => !c.IsDeleted).Select(c => new ContributionDto
                     {
@@ -322,7 +325,7 @@ public class EventRepository : IEventRepository
                         EventName = x.EventName,
                         CategoryName = x.EventType != null ? x.EventType.EventTypeName : string.Empty,
                         MemberId = c.MemberId,
-                        MemberName = c.Member != null ? c.Member.Name : string.Empty,
+                        MemberName = c.Member != null ? c.Member.FullName : string.Empty,
                         Amount = c.Amount,
                         PaymentStatus = c.PaymentStatus,
                         PaymentDate = c.PaymentDate,

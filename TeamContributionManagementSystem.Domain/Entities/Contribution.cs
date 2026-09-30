@@ -16,7 +16,7 @@ public class Contribution
     public bool IsDeleted { get; set; }
 
     public Event? Event { get; set; }
-    public Member? Member { get; set; }
+    public AppUser? Member { get; set; }
     public bool IsActive { get; set; } = true;
 
     // Common Audit Properties

@@ -30,7 +30,6 @@ public class RoleRightRepository : IRoleRightRepository
                 .Where(x => x.FeatureID > 0)
                 .GroupBy(x => x.Role)
                 .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.FeatureID));
-            var rightsMap = rights.ToDictionary(x => $"{x.Role}|{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}", StringComparer.OrdinalIgnoreCase);
 
             var allMenuMap = navMenus.ToDictionary(m => m.FeatureID);
 
@@ -38,7 +37,7 @@ public class RoleRightRepository : IRoleRightRepository
             foreach (var role in Enum.GetValues<UserRole>())
             {
                 var roleFeatures = rightsByRoleAndFeature.TryGetValue(role, out var map) ? map : new Dictionary<int, RoleRight>();
-                result.AddRange(BuildRightsFromNavigation(role, navMenus, allMenuMap, roleFeatures, rightsMap));
+                result.AddRange(BuildRightsFromNavigation(role, navMenus, allMenuMap, roleFeatures));
             }
 
             return result;
@@ -57,11 +56,10 @@ public class RoleRightRepository : IRoleRightRepository
             var navMenus = await _context.NavigationMenus.ToListAsync(cancellationToken);
             var rights = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
             var rightsByFeature = rights.Where(x => x.FeatureID > 0).ToDictionary(x => x.FeatureID);
-            var rightsMap = rights.ToDictionary(x => $"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}", StringComparer.OrdinalIgnoreCase);
 
             var allMenuMap = navMenus.ToDictionary(m => m.FeatureID);
 
-            return BuildRightsFromNavigation(role, navMenus, allMenuMap, rightsByFeature, rightsMap);
+            return BuildRightsFromNavigation(role, navMenus, allMenuMap, rightsByFeature);
         }
         catch (Exception ex)
         {
@@ -74,8 +72,7 @@ public class RoleRightRepository : IRoleRightRepository
         UserRole role,
         List<NavigationMenu> navMenus,
         Dictionary<int, NavigationMenu> allMenuMap,
-        Dictionary<int, RoleRight> rightsByFeature,
-        Dictionary<string, RoleRight> rightsMap)
+        Dictionary<int, RoleRight> rightsByFeature)
     {
         var result = new List<RoleRightDto>();
 
@@ -160,13 +157,8 @@ public class RoleRightRepository : IRoleRightRepository
                 }
             }
 
-            var key = $"{moduleName.Trim()}|{subModuleName.Trim()}|{pageName.Trim()}";
-            var mapKey = rightsMap.ContainsKey(key) ? key : $"{role}|{key}";
-
             RoleRight? existing = null;
-            if ((menu.FeatureID > 0 && rightsByFeature.TryGetValue(menu.FeatureID, out existing))
-                || rightsMap.TryGetValue(mapKey, out existing)
-                || rightsMap.TryGetValue(key, out existing))
+            if (menu.FeatureID > 0 && rightsByFeature.TryGetValue(menu.FeatureID, out existing))
             {
                 result.Add(new RoleRightDto
                 {
@@ -217,45 +209,25 @@ public class RoleRightRepository : IRoleRightRepository
         {
             var existing = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
             var rightsList = rights
-                .GroupBy(r => r.FeatureID > 0 ? (object)r.FeatureID : $"{r.Module.Trim()}|{r.SubModule.Trim()}|{r.Page.Trim()}")
+                .Where(r => r.FeatureID > 0)
+                .GroupBy(r => r.FeatureID)
                 .Select(g => g.First())
                 .ToList();
 
             var rightsByFeature = existing.Where(x => x.FeatureID > 0).ToDictionary(x => x.FeatureID);
-            var existingMap = existing.ToDictionary(
-                x => $"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}",
-                StringComparer.OrdinalIgnoreCase);
-
-            var incomingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var incomingFeatureIds = new HashSet<int>();
+            var incomingFeatureIds = new HashSet<int>(rightsList.Select(r => r.FeatureID));
 
             foreach (var right in rightsList)
             {
-                var key = $"{right.Module.Trim()}|{right.SubModule.Trim()}|{right.Page.Trim()}";
-                incomingKeys.Add(key);
-                if (right.FeatureID > 0) incomingFeatureIds.Add(right.FeatureID);
-
                 // Determine effective AccessType & string Access
                 AccessType effectiveAccessType = (int)right.AccessType > 0 ? right.AccessType : (right.Access == "deny" ? AccessType.Deny : (right.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite));
                 string effectiveAccess = effectiveAccessType == AccessType.Deny ? "deny" : (effectiveAccessType == AccessType.ReadOnly ? "readOnly" : "readWrite");
 
-                RoleRight? existingRight = null;
-                if (right.FeatureID > 0 && rightsByFeature.TryGetValue(right.FeatureID, out existingRight))
+                if (rightsByFeature.TryGetValue(right.FeatureID, out var existingRight))
                 {
                     existingRight.Access = effectiveAccess;
                     existingRight.AccessType = effectiveAccessType;
-                    existingRight.Module = right.Module.Trim();
-                    existingRight.SubModule = right.SubModule.Trim();
-                    existingRight.Page = right.Page.Trim();
-                }
-                else if (existingMap.TryGetValue(key, out existingRight))
-                {
-                    existingRight.Access = effectiveAccess;
-                    existingRight.AccessType = effectiveAccessType;
-                    existingRight.FeatureID = right.FeatureID;
-                    existingRight.Module = right.Module.Trim();
-                    existingRight.SubModule = right.SubModule.Trim();
-                    existingRight.Page = right.Page.Trim();
+                    existingRight.ModifiedOn = DateTime.UtcNow;
                 }
                 else
                 {
@@ -264,18 +236,16 @@ public class RoleRightRepository : IRoleRightRepository
                         RoleRightId = Guid.NewGuid(),
                         Role = role,
                         FeatureID = right.FeatureID,
-                        Module = right.Module.Trim(),
-                        SubModule = right.SubModule.Trim(),
-                        Page = right.Page.Trim(),
                         Access = effectiveAccess,
-                        AccessType = effectiveAccessType
+                        AccessType = effectiveAccessType,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedOn = DateTime.UtcNow
                     }, cancellationToken);
                 }
             }
 
             var toDelete = existing
-                .Where(x => (x.FeatureID > 0 && !incomingFeatureIds.Contains(x.FeatureID)) &&
-                            !incomingKeys.Contains($"{x.Module.Trim()}|{x.SubModule.Trim()}|{x.Page.Trim()}"))
+                .Where(x => x.FeatureID > 0 && !incomingFeatureIds.Contains(x.FeatureID))
                 .ToList();
 
             if (toDelete.Count > 0)

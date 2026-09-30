@@ -280,16 +280,6 @@ public class MemberService : IMemberService
             var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
 
-            var referenced = await _userRepository.GetReferencedUserIdentifiersAsync(cancellationToken);
-            var isReferred = referenced.Contains(member.MemberId.ToString()) 
-                || referenced.Contains(member.Name.Trim().ToLowerInvariant()) 
-                || referenced.Contains(member.Email.Trim().ToLowerInvariant());
-
-            if (isReferred)
-            {
-                throw new InvalidOperationException($"Cannot delete member '{member.Name}' because they have associated contributions, event participation, expenses, or ticket records.");
-            }
-
             member.IsDeleted = true;
             member.IsActive = false;
 

@@ -277,26 +277,20 @@ public class AuthService : IAuthService
             await _unitOfWork.SaveChangesAsync(cancellationToken); // To save OTP clear if applicable
         }
 
-        var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
-        var response = _jwtTokenGenerator.GenerateToken(user, sessionId, member?.MemberId);
+        var response = _jwtTokenGenerator.GenerateToken(user, sessionId, user.UserId);
         response.UserId = user.UserId;
+        response.MemberId = user.UserId;
         response.Rights = await _roleRightsService.GetRoleRightAsyncByRole(user.Role.ToString(), cancellationToken);
         response.RequiresTwoFactor = false;
         response.IsFirstLogin = user.IsFirstLogin;
 
-        if (member != null)
-        {
-            response.MemberId = member.MemberId;
-            response.Phone = member.Phone;
-            response.DateOfBirth = member.DateOfBirth;
-            response.JoiningDate = member.JoiningDate;
-            response.Gender = member.Gender;
-            response.WorkType = member.WorkType;
-            if (member.Role != null && !string.IsNullOrWhiteSpace(member.Role.RoleName))
-            {
-                response.Role = member.Role.RoleName;
-            }
-        }
+        response.Phone = user.Phone;
+        response.DateOfBirth = user.DateOfBirth;
+        response.JoiningDate = user.JoiningDate;
+        response.Gender = user.Gender;
+        response.WorkType = user.WorkType;
+
+        response.Role = user.Role.ToString();
 
         return response;
     }

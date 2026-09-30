@@ -97,21 +97,29 @@ public class UserRepository : IUserRepository
             var referenced = await GetReferencedUserIdentifiersAsync(cancellationToken);
 
             var users = await _context.Users
-                .OrderBy(x => x.Username)
+                .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
+                .OrderBy(x => x.FullName)
                 .Select(x => new UserDto
                 {
                     UserId = x.UserId,
                     Username = x.Username,
                     FullName = x.FullName,
                     Email = x.Email,
-                    RoleName = x.Role.ToString(),
+                    RoleName = x.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member",
                     IsActive = x.IsActive,
                     IsDeleted = x.IsDeleted,
                     IsFirstLogin = x.IsFirstLogin,
                     ProfileImage = x.ProfileImage,
                     CreatedOn = x.CreatedOn,
                     CreatedAt = x.CreatedAt,
-                    CreatedBy = x.CreatedBy
+                    CreatedBy = x.CreatedBy,
+                    HasMemberProfile = true,
+                    MemberUsername = x.FullName,
+                    DateOfBirth = x.DateOfBirth,
+                    JoiningDate = x.JoiningDate,
+                    Gender = x.Gender,
+                    Phone = x.Phone,
+                    WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty
                 })
                 .ToListAsync(cancellationToken);
 
@@ -140,6 +148,8 @@ public class UserRepository : IUserRepository
         {
             return await _context.Users
                 .Include(u => u.MfaDevices)
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
                 .FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
         }
         catch (Exception ex)
@@ -154,6 +164,8 @@ public class UserRepository : IUserRepository
         try
         {
             return await _context.Users
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
                 .FirstOrDefaultAsync(x => x.Username.ToLower() == username.ToLower(), cancellationToken);
         }
         catch (Exception ex)
@@ -169,6 +181,8 @@ public class UserRepository : IUserRepository
         {
             return await _context.Users
                 .Include(u => u.MfaDevices)
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
                 .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         }
         catch (Exception ex)
@@ -182,7 +196,12 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            return await _context.Users.FirstOrDefaultAsync(x => x.Role == UserRole.Admin && x.IsActive, cancellationToken);
+            return await _context.Users
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
+                .FirstOrDefaultAsync(x => x.IsActive && !x.IsDeleted && (
+                    x.UserRoles.Any(ur => ur.Role != null && ur.Role.RoleName.ToLower() == "admin")
+                ), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -270,14 +289,14 @@ public class UserRepository : IUserRepository
                    OR ({userLower} <> '' AND LOWER(modified_by) = {userLower})", cancellationToken);
 
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
-                UPDATE members 
+                UPDATE users 
                 SET created_by = {newName} 
                 WHERE created_by = {userIdStr} 
                    OR LOWER(created_by) = {oldLower} 
                    OR ({userLower} <> '' AND LOWER(created_by) = {userLower})", cancellationToken);
 
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
-                UPDATE members 
+                UPDATE users 
                 SET modified_by = {newName} 
                 WHERE modified_by = {userIdStr} 
                    OR LOWER(modified_by) = {oldLower} 
