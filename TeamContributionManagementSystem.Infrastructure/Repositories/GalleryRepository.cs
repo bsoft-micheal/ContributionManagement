@@ -27,12 +27,14 @@ public class GalleryRepository : IGalleryRepository
 
             if (!string.IsNullOrWhiteSpace(eventName) && !eventName.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
+                var cleanEvent = eventName.Trim().ToLower();
+                query = query.Where(x => x.Event != null && x.Event.EventName.ToLower() == cleanEvent);
             }
 
             if (!string.IsNullOrWhiteSpace(category) && !category.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.Category.ToLower() == category.ToLower());
+                var cleanCat = category.Trim().ToLower();
+                query = query.Where(x => x.Event != null && x.Event.EventType != null && x.Event.EventType.EventTypeName.ToLower() == cleanCat);
             }
 
             return await query
@@ -41,8 +43,8 @@ public class GalleryRepository : IGalleryRepository
                 {
                     PhotoId = x.PhotoId,
                     Title = x.Title,
-                    EventName = x.EventName,
-                    Category = x.Category,
+                    EventName = x.Event != null ? x.Event.EventName : string.Empty,
+                    Category = x.Event != null && x.Event.EventType != null ? x.Event.EventType.EventTypeName : string.Empty,
                     ImageUrl = x.ImageUrl,
                     TakenDate = x.TakenDate,
                     Description = x.Description,

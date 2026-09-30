@@ -11,6 +11,9 @@ public class Role : IAuditableEntity
     [NotMapped]
     public decimal DefaultContributionAmount { get; set; } = 0;
 
+    [NotMapped]
+    public ICollection<Member> Members { get; set; } = new List<Member>();
+    public ICollection<RoleRight> RoleRights { get; set; } = new List<RoleRight>();
     public ICollection<AppUserRole> UserRoles { get; set; } = new List<AppUserRole>();
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;

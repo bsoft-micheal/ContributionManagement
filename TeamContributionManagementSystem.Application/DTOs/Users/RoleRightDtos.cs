@@ -6,10 +6,11 @@ namespace TeamContributionManagementSystem.Application.DTOs.Users;
 public class RoleRightDto
 {
     public Guid RoleRightId { get; set; }
+    public Guid RoleId { get; set; }
     public int FeatureID { get; set; }
 
     [Required]
-    [MaxLength(20)]
+    [MaxLength(100)]
     public string Role { get; set; } = string.Empty;
 
     [Required]
@@ -41,8 +42,10 @@ public class RoleRightDto
 
 public class UpdateRoleRightsRequestDto
 {
+    public Guid? RoleId { get; set; }
+
     [Required]
-    [MaxLength(20)]
+    [MaxLength(100)]
     public string RoleName { get; set; } = string.Empty;
 
     [Required]

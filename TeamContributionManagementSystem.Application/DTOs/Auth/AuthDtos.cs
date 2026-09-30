@@ -25,6 +25,8 @@ public class AuthResponseDto
     public string Email { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public List<string> Roles { get; set; } = new();
+    public List<Guid> RoleIds { get; set; } = new();
     public string? ProfileImage { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
     public IReadOnlyCollection<RoleRightDto> Rights { get; set; } = Array.Empty<RoleRightDto>();

@@ -1,7 +1,9 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using TeamContributionManagementSystem.Domain.Common;
 
 namespace TeamContributionManagementSystem.Domain.Entities;
 
+[NotMapped]
 public class Member : IAuditableEntity
 {
     public Guid MemberId { get; set; }

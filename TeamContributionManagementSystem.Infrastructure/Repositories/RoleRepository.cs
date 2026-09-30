@@ -126,12 +126,8 @@ public class RoleRepository : IRoleRepository
     {
         try
         {
-            var cleanName = roleName.Trim();
-            if (Enum.TryParse<TeamContributionManagementSystem.Domain.Enums.UserRole>(cleanName, true, out var parsedRole))
-            {
-                return await _context.RoleRights.AnyAsync(x => x.Role == parsedRole, cancellationToken);
-            }
-            return false;
+            var cleanName = roleName.Trim().ToLower();
+            return await _context.RoleRights.AnyAsync(x => x.Role != null && x.Role.RoleName.ToLower() == cleanName, cancellationToken);
         }
         catch (Exception ex)
         {

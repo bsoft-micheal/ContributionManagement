@@ -27,17 +27,20 @@ public class SupportTicketRepository : ISupportTicketRepository
 
             if (!string.IsNullOrWhiteSpace(status) && !status.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.Status.ToLower() == status.ToLower());
+                var cleanStatus = status.Trim().ToLower();
+                query = query.Where(x => x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanStatus);
             }
 
             if (!string.IsNullOrWhiteSpace(ticketType) && !ticketType.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.TicketType.ToLower() == ticketType.ToLower());
+                var cleanType = ticketType.Trim().ToLower();
+                query = query.Where(x => x.TicketTypeItem != null && x.TicketTypeItem.TypeName.ToLower() == cleanType);
             }
 
             if (!string.IsNullOrWhiteSpace(priority) && !priority.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.Priority.ToLower() == priority.ToLower());
+                var cleanPriority = priority.Trim().ToLower();
+                query = query.Where(x => x.PriorityItem != null && x.PriorityItem.PriorityName.ToLower() == cleanPriority);
             }
 
             return await query
@@ -46,14 +49,14 @@ public class SupportTicketRepository : ISupportTicketRepository
                 {
                     TicketId = x.TicketId,
                     TicketNo = x.TicketNo,
-                    MemberName = x.MemberName,
-                    MemberId = x.MemberId,
-                    RelatedEvent = x.RelatedEvent,
-                    TicketType = x.TicketType,
+                    MemberName = x.User != null ? (!string.IsNullOrWhiteSpace(x.User.FullName) ? x.User.FullName : x.User.Username) : string.Empty,
+                    MemberId = x.UserId != null ? x.UserId.ToString() : null,
+                    RelatedEvent = x.Event != null ? x.Event.EventName : null,
+                    TicketType = x.TicketTypeItem != null ? x.TicketTypeItem.TypeName : string.Empty,
                     Subject = x.Subject,
                     Description = x.Description,
-                    Status = x.Status,
-                    Priority = x.Priority,
+                    Status = x.StatusItem != null ? x.StatusItem.StatusName : string.Empty,
+                    Priority = x.PriorityItem != null ? x.PriorityItem.PriorityName : string.Empty,
                     RefNo = x.RefNo,
                     Utr = x.Utr,
                     Attachment = x.Attachment,
@@ -78,7 +81,13 @@ public class SupportTicketRepository : ISupportTicketRepository
     {
         try
         {
-            return await _context.SupportTickets.FirstOrDefaultAsync(x => x.TicketId == ticketId && !x.IsDeleted, cancellationToken);
+            return await _context.SupportTickets
+                .Include(x => x.User)
+                .Include(x => x.Event)
+                .Include(x => x.TicketTypeItem)
+                .Include(x => x.PriorityItem)
+                .Include(x => x.StatusItem)
+                .FirstOrDefaultAsync(x => x.TicketId == ticketId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -91,7 +100,13 @@ public class SupportTicketRepository : ISupportTicketRepository
     {
         try
         {
-            return await _context.SupportTickets.FirstOrDefaultAsync(x => x.TicketNo.ToLower() == ticketNo.ToLower() && !x.IsDeleted, cancellationToken);
+            return await _context.SupportTickets
+                .Include(x => x.User)
+                .Include(x => x.Event)
+                .Include(x => x.TicketTypeItem)
+                .Include(x => x.PriorityItem)
+                .Include(x => x.StatusItem)
+                .FirstOrDefaultAsync(x => x.TicketNo.ToLower() == ticketNo.ToLower() && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {

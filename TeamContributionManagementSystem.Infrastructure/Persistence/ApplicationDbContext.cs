@@ -44,6 +44,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Ignore<Member>();
+
         modelBuilder.Entity<Role>(entity =>
         {
             entity.HasKey(x => x.RoleId);
@@ -73,8 +75,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(150).IsRequired();
             entity.Ignore(x => x.Role);
-            entity.Ignore(x => x.RoleId);
-            entity.Ignore(x => x.RoleNavigation);
             entity.Property(x => x.ProfileImage).HasMaxLength(500);
             entity.Property(x => x.Phone).HasMaxLength(20);
             entity.Ignore(x => x.WorkType);
@@ -91,18 +91,31 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.Username).IsUnique();
             entity.HasMany(x => x.MfaDevices).WithOne(x => x.User).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(x => x.UserRoles).WithOne(x => x.User).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(x => x.Contributions).WithOne(x => x.User).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasMany(x => x.EventParticipants).WithOne(x => x.Member).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AppUserRole>(entity =>
         {
             entity.ToTable("user_roles");
-            entity.HasKey(x => new { x.UserId, x.RoleId });
+            entity.HasKey(x => x.UserRoleId);
+            entity.Property(x => x.UserRoleId).HasColumnName("user_role_id");
+            entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+            entity.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
+            entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(x => x.ModifiedBy).HasColumnName("modified_by");
+            entity.Property(x => x.ModifiedOn).HasColumnName("modified_on");
+            entity.HasIndex(x => new { x.UserId, x.RoleId }).IsUnique();
             entity.HasOne(x => x.User)
-                .WithMany(x => x.UserRoles)
+                .WithMany(u => u.UserRoles)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(x => x.Role)
-                .WithMany(x => x.UserRoles)
+                .WithMany(r => r.UserRoles)
                 .HasForeignKey(x => x.RoleId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
@@ -110,13 +123,19 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<RoleRight>(entity =>
         {
             entity.HasKey(x => x.RoleRightId);
-            entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
-            entity.Property(x => x.Access).HasMaxLength(20);
-            entity.Ignore(x => x.NavigationMenu);
+            entity.Property(x => x.RoleId).IsRequired();
+            entity.Property(x => x.FeatureID).IsRequired();
+            entity.Property(x => x.Access).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.AccessType).IsRequired();
             entity.Ignore(x => x.Module);
             entity.Ignore(x => x.SubModule);
             entity.Ignore(x => x.Page);
-            entity.HasIndex(x => new { x.Role, x.FeatureID });
+            entity.Ignore(x => x.NavigationMenu);
+            entity.HasIndex(x => new { x.RoleId, x.FeatureID }).IsUnique();
+            entity.HasOne(x => x.Role)
+                .WithMany(r => r.RoleRights)
+                .HasForeignKey(x => x.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<NavigationMenu>(entity =>
@@ -152,34 +171,51 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<EventParticipant>(entity =>
         {
             entity.HasKey(x => x.Id);
-            entity.HasIndex(x => new { x.EventId, x.MemberId }).IsUnique();
+            entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+            entity.Ignore(x => x.MemberId);
+            entity.HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
             entity.HasOne(x => x.Event)
                 .WithMany(x => x.Participants)
                 .HasForeignKey(x => x.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(x => x.Member)
                 .WithMany(x => x.EventParticipants)
-                .HasForeignKey(x => x.MemberId)
+                .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Contribution>(entity =>
         {
             entity.HasKey(x => x.ContributionId);
+            entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
             entity.Property(x => x.Amount).HasPrecision(12, 2);
             entity.Property(x => x.CashAmount).HasPrecision(12, 2);
             entity.Property(x => x.UpiAmount).HasPrecision(12, 2);
-            entity.Property(x => x.PaymentStatus).HasConversion<string>().HasMaxLength(20);
-            entity.Property(x => x.PaymentMode).HasConversion<string>().HasMaxLength(20);
-            entity.HasIndex(x => new { x.EventId, x.MemberId }).IsUnique();
-            entity.HasIndex(x => new { x.EventId, x.PaymentStatus });
+            entity.Ignore(x => x.MemberId);
+            entity.Ignore(x => x.Member);
+            entity.Ignore(x => x.PaymentStatus);
+            entity.Ignore(x => x.PaymentMode);
+            entity.Property(x => x.StatusId).HasColumnName("status_id");
+            entity.Property(x => x.PaymentModeId).HasColumnName("payment_mode_id");
+            entity.HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
             entity.HasOne(x => x.Event)
                 .WithMany(x => x.Contributions)
                 .HasForeignKey(x => x.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(x => x.Member)
-                .WithMany(x => x.Contributions)
-                .HasForeignKey(x => x.MemberId)
+            entity.HasOne(x => x.User)
+                .WithMany(u => u.Contributions)
+                .HasForeignKey(x => x.UserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.StatusItem)
+                .WithMany()
+                .HasForeignKey(x => x.StatusId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.PaymentModeItem)
+                .WithMany()
+                .HasForeignKey(x => x.PaymentModeId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -203,14 +239,19 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.TicketId);
             entity.Property(x => x.TicketNo).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.MemberName).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.MemberId).HasMaxLength(100);
-            entity.Property(x => x.RelatedEvent).HasMaxLength(200);
-            entity.Property(x => x.TicketType).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.Subject).HasMaxLength(300).IsRequired(false).HasDefaultValue("");
+            entity.Ignore(x => x.MemberName);
+            entity.Ignore(x => x.MemberId);
+            entity.Ignore(x => x.RelatedEvent);
+            entity.Ignore(x => x.TicketType);
+            entity.Ignore(x => x.Priority);
+            entity.Ignore(x => x.Status);
+            entity.Property(x => x.UserId).HasColumnName("user_id");
+            entity.Property(x => x.EventId).HasColumnName("event_id");
+            entity.Property(x => x.TicketTypeId).HasColumnName("ticket_type_id");
+            entity.Property(x => x.PriorityId).HasColumnName("priority_id");
+            entity.Property(x => x.StatusId).HasColumnName("status_id");
+            entity.Property(x => x.Subject).HasMaxLength(300).IsRequired(false);
             entity.Property(x => x.Description).HasMaxLength(2000).IsRequired();
-            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.Priority).HasMaxLength(50).IsRequired();
             entity.Property(x => x.AssignedTo).HasMaxLength(150);
             entity.Property(x => x.RefNo).HasMaxLength(100);
             entity.Property(x => x.Utr).HasMaxLength(100);
@@ -219,7 +260,31 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.TicketNo).IsUnique();
-            entity.HasIndex(x => new { x.Status, x.Priority });
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Event)
+                .WithMany()
+                .HasForeignKey(x => x.EventId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.TicketTypeItem)
+                .WithMany()
+                .HasForeignKey(x => x.TicketTypeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.PriorityItem)
+                .WithMany()
+                .HasForeignKey(x => x.PriorityId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.StatusItem)
+                .WithMany()
+                .HasForeignKey(x => x.StatusId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SystemSetting>(entity =>
@@ -238,32 +303,61 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.TransactionId);
             entity.Property(x => x.TxnNumber).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.MemberName).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
+            entity.Ignore(x => x.MemberName);
+            entity.Ignore(x => x.EventName);
+            entity.Ignore(x => x.PaymentMode);
+            entity.Ignore(x => x.Status);
+            entity.Property(x => x.UserId).HasColumnName("user_id");
+            entity.Property(x => x.EventId).HasColumnName("event_id");
+            entity.Property(x => x.PaymentModeId).HasColumnName("payment_mode_id");
+            entity.Property(x => x.StatusId).HasColumnName("status_id");
             entity.Property(x => x.Amount).HasPrecision(12, 2);
-            entity.Property(x => x.PaymentMode).HasMaxLength(50).IsRequired();
             entity.Property(x => x.Utr).HasMaxLength(100);
-            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
             entity.Property(x => x.VerifiedBy).HasMaxLength(150);
             entity.Property(x => x.Notes).HasMaxLength(1000);
             entity.Property(x => x.Screenshot).HasColumnType("text");
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.TxnNumber).IsUnique();
-            entity.HasIndex(x => new { x.PaymentDate, x.Status });
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Event)
+                .WithMany()
+                .HasForeignKey(x => x.EventId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.PaymentModeItem)
+                .WithMany()
+                .HasForeignKey(x => x.PaymentModeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.StatusItem)
+                .WithMany()
+                .HasForeignKey(x => x.StatusId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<GalleryPhoto>(entity =>
         {
             entity.HasKey(x => x.PhotoId);
             entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
-            entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
-            entity.Property(x => x.Category).HasMaxLength(100).IsRequired();
+            entity.Ignore(x => x.EventName);
+            entity.Ignore(x => x.Category);
+            entity.Property(x => x.EventId).HasColumnName("event_id");
+            entity.HasOne(x => x.Event)
+                .WithMany()
+                .HasForeignKey(x => x.EventId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.ImageUrl).HasColumnType("text").IsRequired();
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
-            entity.HasIndex(x => new { x.EventName, x.Category });
+            entity.HasIndex(x => x.EventId);
         });
 
         modelBuilder.Entity<DeviceDetail>(entity =>
@@ -298,7 +392,13 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasKey(x => x.BudgetCalculationId);
             entity.Property(x => x.ExpenseItem).HasMaxLength(150).IsRequired();
             entity.Property(x => x.Rate).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
-            entity.Property(x => x.Category).HasMaxLength(100);
+            entity.Ignore(x => x.Category);
+            entity.Property(x => x.EventTypeId).HasColumnName("event_type_id");
+            entity.HasOne(x => x.EventType)
+                .WithMany()
+                .HasForeignKey(x => x.EventTypeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.CreatedBy).HasMaxLength(150);
             entity.Property(x => x.ModifiedBy).HasMaxLength(150);
             entity.HasIndex(x => x.ExpenseItem);

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Auth;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -277,20 +278,64 @@ public class AuthService : IAuthService
             await _unitOfWork.SaveChangesAsync(cancellationToken); // To save OTP clear if applicable
         }
 
-        var response = _jwtTokenGenerator.GenerateToken(user, sessionId, user.UserId);
+        var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
+        var activeUserRoles = user.UserRoles?.Where(ur => ur.IsActive && !ur.IsDeleted).ToList() ?? new List<AppUserRole>();
+        var roleNames = activeUserRoles.Select(ur => ur.Role?.RoleName).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var roleGuids = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
+
+        if (roleNames.Count == 0 && user.Role != 0)
+        {
+            roleNames.Add(user.Role.ToString());
+        }
+
+        var response = _jwtTokenGenerator.GenerateToken(user, sessionId, member?.MemberId, roleNames, roleGuids);
         response.UserId = user.UserId;
-        response.MemberId = user.UserId;
-        response.Rights = await _roleRightsService.GetRoleRightAsyncByRole(user.Role.ToString(), cancellationToken);
         response.RequiresTwoFactor = false;
         response.IsFirstLogin = user.IsFirstLogin;
 
-        response.Phone = user.Phone;
-        response.DateOfBirth = user.DateOfBirth;
-        response.JoiningDate = user.JoiningDate;
-        response.Gender = user.Gender;
-        response.WorkType = user.WorkType;
+        // Aggregate rights across all user's role_ids
+        var aggregatedRights = new Dictionary<int, RoleRightDto>();
+        foreach (var rId in roleGuids)
+        {
+            var rights = await _roleRightsService.GetRoleRightAsyncByRoleId(rId, cancellationToken);
+            foreach (var r in rights)
+            {
+                if (!aggregatedRights.TryGetValue(r.FeatureID, out var existing))
+                {
+                    aggregatedRights[r.FeatureID] = r;
+                }
+                else
+                {
+                    // Highest privilege wins: ReadWrite (2) > ReadOnly (1) > Deny (3)
+                    int currentWeight = existing.AccessType == 2 ? 3 : (existing.AccessType == 1 ? 2 : 1);
+                    int newWeight = r.AccessType == 2 ? 3 : (r.AccessType == 1 ? 2 : 1);
+                    if (newWeight > currentWeight)
+                    {
+                        aggregatedRights[r.FeatureID] = r;
+                    }
+                }
+            }
+        }
 
-        response.Role = user.Role.ToString();
+        if (aggregatedRights.Count == 0 && roleNames.Count > 0)
+        {
+            var rights = await _roleRightsService.GetRoleRightAsyncByRole(response.Role, cancellationToken);
+            response.Rights = rights;
+        }
+        else
+        {
+            response.Rights = aggregatedRights.Values.ToList();
+        }
+
+        if (member != null)
+        {
+            response.MemberId = member.MemberId;
+            response.Phone = member.Phone;
+            response.DateOfBirth = member.DateOfBirth;
+            response.JoiningDate = member.JoiningDate;
+            response.Gender = member.Gender;
+            response.WorkType = member.WorkType;
+        }
 
         return response;
     }

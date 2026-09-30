@@ -9,26 +9,22 @@ public class AppUser
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
-    private UserRole? _role;
-
     [NotMapped]
     public UserRole Role
     {
         get
         {
-            if (_role.HasValue) return _role.Value;
-            var firstRoleName = UserRoles.FirstOrDefault()?.Role?.RoleName 
-                             ?? RoleNavigation?.RoleName;
-            if (!string.IsNullOrWhiteSpace(firstRoleName) && Enum.TryParse<UserRole>(firstRoleName, true, out var r))
+            var roleName = UserRoles?.FirstOrDefault(ur => ur.IsActive && !ur.IsDeleted)?.Role?.RoleName;
+            if (!string.IsNullOrEmpty(roleName) && Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var r))
+            {
                 return r;
+            }
             return UserRole.Member;
         }
-        set
-        {
-            _role = value;
-        }
+        set { }
     }
 
+    public ICollection<AppUserRole> UserRoles { get; set; } = new List<AppUserRole>();
     public string FullName { get; set; } = string.Empty;
 
     [NotMapped]
@@ -106,7 +102,6 @@ public class AppUser
     public DateTime JoiningDate { get; set; }
     public bool IsExited { get; set; } = false;
 
-    public ICollection<AppUserRole> UserRoles { get; set; } = new List<AppUserRole>();
     public ICollection<UserMfaDevice> MfaDevices { get; set; } = new List<UserMfaDevice>();
     public ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
     public ICollection<EventParticipant> EventParticipants { get; set; } = new List<EventParticipant>();

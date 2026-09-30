@@ -24,20 +24,22 @@ public class RoleRightRepository : IRoleRightRepository
     {
         try
         {
+            var roles = await _context.Roles.Where(r => !r.IsDeleted).ToListAsync(cancellationToken);
             var navMenus = await _context.NavigationMenus.ToListAsync(cancellationToken);
             var rights = await _context.RoleRights.ToListAsync(cancellationToken);
+
             var rightsByRoleAndFeature = rights
                 .Where(x => x.FeatureID > 0)
-                .GroupBy(x => x.Role)
+                .GroupBy(x => x.RoleId)
                 .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.FeatureID));
 
             var allMenuMap = navMenus.ToDictionary(m => m.FeatureID);
 
             var result = new List<RoleRightDto>();
-            foreach (var role in Enum.GetValues<UserRole>())
+            foreach (var role in roles)
             {
-                var roleFeatures = rightsByRoleAndFeature.TryGetValue(role, out var map) ? map : new Dictionary<int, RoleRight>();
-                result.AddRange(BuildRightsFromNavigation(role, navMenus, allMenuMap, roleFeatures));
+                var roleFeatures = rightsByRoleAndFeature.TryGetValue(role.RoleId, out var map) ? map : new Dictionary<int, RoleRight>();
+                result.AddRange(BuildRightsFromNavigation(role.RoleId, role.RoleName, navMenus, allMenuMap, roleFeatures));
             }
 
             return result;
@@ -49,27 +51,60 @@ public class RoleRightRepository : IRoleRightRepository
         }
     }
 
-    public async Task<List<RoleRightDto>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
+    public async Task<List<RoleRightDto>> GetByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
         try
         {
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleId == roleId, cancellationToken);
+            var roleName = role?.RoleName ?? "Role";
+
             var navMenus = await _context.NavigationMenus.ToListAsync(cancellationToken);
-            var rights = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+            var rights = await _context.RoleRights.Where(x => x.RoleId == roleId).ToListAsync(cancellationToken);
             var rightsByFeature = rights.Where(x => x.FeatureID > 0).ToDictionary(x => x.FeatureID);
 
             var allMenuMap = navMenus.ToDictionary(m => m.FeatureID);
 
-            return BuildRightsFromNavigation(role, navMenus, allMenuMap, rightsByFeature);
+            return BuildRightsFromNavigation(roleId, roleName, navMenus, allMenuMap, rightsByFeature);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByRoleAsync));
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByRoleIdAsync));
             throw;
         }
     }
 
+    public async Task<List<RoleRightDto>> GetByRoleNameAsync(string roleName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var trimmedName = roleName?.Trim() ?? string.Empty;
+            var role = await _context.Roles.FirstOrDefaultAsync(r => EF.Functions.ILike(r.RoleName, trimmedName), cancellationToken);
+            if (role == null)
+            {
+                if (Guid.TryParse(trimmedName, out var roleGuid))
+                {
+                    return await GetByRoleIdAsync(roleGuid, cancellationToken);
+                }
+                return new List<RoleRightDto>();
+            }
+
+            return await GetByRoleIdAsync(role.RoleId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByRoleNameAsync));
+            throw;
+        }
+    }
+
+    public async Task<List<RoleRightDto>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
+    {
+        return await GetByRoleNameAsync(role.ToString(), cancellationToken);
+    }
+
     private static List<RoleRightDto> BuildRightsFromNavigation(
-        UserRole role,
+        Guid roleId,
+        string roleName,
         List<NavigationMenu> navMenus,
         Dictionary<int, NavigationMenu> allMenuMap,
         Dictionary<int, RoleRight> rightsByFeature)
@@ -78,8 +113,8 @@ public class RoleRightRepository : IRoleRightRepository
 
         // Build hierarchical ordering: Parent (MenuType 1) -> SubModule (MenuType 2) -> Action (MenuType 3)
         var orderedNavMenus = new List<NavigationMenu>();
-        var rootMenus = navMenus.Where(m => m.ParentID == 0).OrderBy(m => m.MainModuleID).ThenBy(m => m.FeatureID).ToList();
-        var childrenByParent = navMenus.Where(m => m.ParentID != 0).GroupBy(m => m.ParentID).ToDictionary(g => g.Key, g => g.OrderBy(m => m.FeatureID).ToList());
+        var rootMenus = navMenus.Where(m => m.ParentID == 0).OrderBy(m => m.MainModuleID).ThenBy(m => m.DisplayOrder).ThenBy(m => m.FeatureID).ToList();
+        var childrenByParent = navMenus.Where(m => m.ParentID != 0).GroupBy(m => m.ParentID).ToDictionary(g => g.Key, g => g.OrderBy(m => m.DisplayOrder).ThenBy(m => m.FeatureID).ToList());
 
         foreach (var root in rootMenus)
         {
@@ -158,12 +193,13 @@ public class RoleRightRepository : IRoleRightRepository
             }
 
             RoleRight? existing = null;
-            if (menu.FeatureID > 0 && rightsByFeature.TryGetValue(menu.FeatureID, out existing))
+            if (rightsByFeature.TryGetValue(menu.FeatureID, out existing))
             {
                 result.Add(new RoleRightDto
                 {
                     RoleRightId = existing.RoleRightId,
-                    Role = role.ToString(),
+                    RoleId = roleId,
+                    Role = roleName,
                     FeatureID = menu.FeatureID,
                     Module = moduleName,
                     SubModule = subModuleName,
@@ -180,12 +216,14 @@ public class RoleRightRepository : IRoleRightRepository
             else
             {
                 // Default access fallback if not yet stored in DB
-                AccessType defaultAccessType = (role == UserRole.Admin || role == UserRole.Organizer) ? AccessType.ReadWrite : AccessType.ReadOnly;
+                bool isAdminOrOrg = roleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) || roleName.Equals("Organizer", StringComparison.OrdinalIgnoreCase);
+                AccessType defaultAccessType = isAdminOrOrg ? AccessType.ReadWrite : AccessType.ReadOnly;
                 string defaultAccess = defaultAccessType == AccessType.ReadWrite ? "readWrite" : "readOnly";
                 result.Add(new RoleRightDto
                 {
                     RoleRightId = Guid.NewGuid(),
-                    Role = role.ToString(),
+                    RoleId = roleId,
+                    Role = roleName,
                     FeatureID = menu.FeatureID,
                     Module = moduleName,
                     SubModule = subModuleName,
@@ -203,11 +241,11 @@ public class RoleRightRepository : IRoleRightRepository
         return result;
     }
 
-    public async Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default)
+    public async Task SaveRoleRightsAsync(Guid roleId, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default)
     {
         try
         {
-            var existing = await _context.RoleRights.Where(x => x.Role == role).ToListAsync(cancellationToken);
+            var existing = await _context.RoleRights.Where(x => x.RoleId == roleId).ToListAsync(cancellationToken);
             var rightsList = rights
                 .Where(r => r.FeatureID > 0)
                 .GroupBy(r => r.FeatureID)
@@ -215,10 +253,12 @@ public class RoleRightRepository : IRoleRightRepository
                 .ToList();
 
             var rightsByFeature = existing.Where(x => x.FeatureID > 0).ToDictionary(x => x.FeatureID);
-            var incomingFeatureIds = new HashSet<int>(rightsList.Select(r => r.FeatureID));
+            var incomingFeatureIds = new HashSet<int>();
 
             foreach (var right in rightsList)
             {
+                incomingFeatureIds.Add(right.FeatureID);
+
                 // Determine effective AccessType & string Access
                 AccessType effectiveAccessType = (int)right.AccessType > 0 ? right.AccessType : (right.Access == "deny" ? AccessType.Deny : (right.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite));
                 string effectiveAccess = effectiveAccessType == AccessType.Deny ? "deny" : (effectiveAccessType == AccessType.ReadOnly ? "readOnly" : "readWrite");
@@ -234,7 +274,7 @@ public class RoleRightRepository : IRoleRightRepository
                     await _context.RoleRights.AddAsync(new RoleRight
                     {
                         RoleRightId = Guid.NewGuid(),
-                        Role = role,
+                        RoleId = roleId,
                         FeatureID = right.FeatureID,
                         Access = effectiveAccess,
                         AccessType = effectiveAccessType,
@@ -245,7 +285,7 @@ public class RoleRightRepository : IRoleRightRepository
             }
 
             var toDelete = existing
-                .Where(x => x.FeatureID > 0 && !incomingFeatureIds.Contains(x.FeatureID))
+                .Where(x => !incomingFeatureIds.Contains(x.FeatureID))
                 .ToList();
 
             if (toDelete.Count > 0)
@@ -258,5 +298,16 @@ public class RoleRightRepository : IRoleRightRepository
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(SaveRoleRightsAsync));
             throw;
         }
+    }
+
+    public async Task SaveRoleRightsAsync(UserRole role, IEnumerable<RoleRight> rights, CancellationToken cancellationToken = default)
+    {
+        var roleName = role.ToString();
+        var roleEntity = await _context.Roles.FirstOrDefaultAsync(r => EF.Functions.ILike(r.RoleName, roleName), cancellationToken);
+        if (roleEntity == null)
+        {
+            throw new InvalidOperationException($"Role {role} not found in database.");
+        }
+        await SaveRoleRightsAsync(roleEntity.RoleId, rights, cancellationToken);
     }
 }

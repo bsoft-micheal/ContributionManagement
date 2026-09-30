@@ -48,6 +48,19 @@ public class UserRightsController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves the access rights assigned to a specific role by RoleId.
+    /// </summary>
+    /// <param name="roleId">The GUID of the role.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("getRoleRightAsyncByRoleId/{roleId:guid}")]
+    [ActionName(nameof(GetUserRightAsyncByRoleId))]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<RoleRightDto>>>> GetUserRightAsyncByRoleId(Guid roleId, CancellationToken cancellationToken)
+    {
+        var result = await _roleRightsService.GetRoleRightAsyncByRoleId(roleId, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<RoleRightDto>>.SuccessResult(result, CommonMessages.UserRights.GetByRoleSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
     /// Saves or updates the granular access rights for a specific role.
     /// </summary>
     /// <param name="request">The role and its new rights configuration.</param>

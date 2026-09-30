@@ -20,6 +20,7 @@ public class SupportTicketService : ISupportTicketService
     private readonly IMapper _mapper;
     private readonly ICurrentUserService? _currentUserService;
     private readonly IMemberRepository? _memberRepository;
+    private readonly IEventRepository? _eventRepository;
 
     public SupportTicketService(
         ILogger<SupportTicketService> logger,
@@ -30,7 +31,8 @@ public class SupportTicketService : ISupportTicketService
         ITicketTypeRepository? ticketTypeRepository = null,
         IPriorityRepository? priorityRepository = null,
         ICurrentUserService? currentUserService = null,
-        IMemberRepository? memberRepository = null)
+        IMemberRepository? memberRepository = null,
+        IEventRepository? eventRepository = null)
     {
         _logger = logger;
         _ticketRepository = ticketRepository;
@@ -41,6 +43,7 @@ public class SupportTicketService : ISupportTicketService
         _priorityRepository = priorityRepository;
         _currentUserService = currentUserService;
         _memberRepository = memberRepository;
+        _eventRepository = eventRepository;
     }
 
     public async Task<IReadOnlyCollection<SupportTicketDto>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default)
@@ -135,19 +138,40 @@ public class SupportTicketService : ISupportTicketService
             var ticketNo = await _ticketRepository.GenerateNextTicketNoAsync(cancellationToken);
 
             var ticketType = request.TicketType?.Trim();
-            if (string.IsNullOrWhiteSpace(ticketType) && _ticketTypeRepository != null)
+            Guid? ticketTypeId = null;
+            if (_ticketTypeRepository != null)
             {
-                var dbTicketTypes = await _ticketTypeRepository.GetAllAsync(true, cancellationToken);
-                ticketType = dbTicketTypes.FirstOrDefault()?.TypeName ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(ticketType))
+                {
+                    var dbTicketTypes = await _ticketTypeRepository.GetAllAsync(true, cancellationToken);
+                    var firstType = dbTicketTypes.FirstOrDefault();
+                    ticketType = firstType?.TypeName ?? string.Empty;
+                    ticketTypeId = firstType?.TicketTypeId;
+                }
+                else
+                {
+                    var matched = await _ticketTypeRepository.GetByNameAsync(ticketType, cancellationToken);
+                    ticketTypeId = matched?.TicketTypeId;
+                }
             }
 
             var status = request.Status?.Trim();
-            if (string.IsNullOrWhiteSpace(status) && _statusRepository != null)
+            Guid? statusId = null;
+            if (_statusRepository != null)
             {
-                var dbStatuses = await _statusRepository.GetAllAsync(true, cancellationToken);
-                status = dbStatuses.FirstOrDefault(s => s.StatusName.Equals("Open", StringComparison.OrdinalIgnoreCase))?.StatusName
-                    ?? dbStatuses.FirstOrDefault()?.StatusName
-                    ?? "Open";
+                if (string.IsNullOrWhiteSpace(status))
+                {
+                    var dbStatuses = await _statusRepository.GetAllAsync(true, cancellationToken);
+                    var matched = dbStatuses.FirstOrDefault(s => s.StatusName.Equals("Open", StringComparison.OrdinalIgnoreCase))
+                        ?? dbStatuses.FirstOrDefault();
+                    status = matched?.StatusName ?? "Open";
+                    statusId = matched?.StatusId;
+                }
+                else
+                {
+                    var matched = await _statusRepository.GetByNameAsync(status, cancellationToken);
+                    statusId = matched?.StatusId;
+                }
             }
             else if (string.IsNullOrWhiteSpace(status))
             {
@@ -155,12 +179,22 @@ public class SupportTicketService : ISupportTicketService
             }
 
             var priority = request.Priority?.Trim();
-            if (string.IsNullOrWhiteSpace(priority) && _priorityRepository != null)
+            Guid? priorityId = null;
+            if (_priorityRepository != null)
             {
-                var dbPriorities = await _priorityRepository.GetAllAsync(true, cancellationToken);
-                priority = dbPriorities.FirstOrDefault(p => p.PriorityName.Equals("Medium", StringComparison.OrdinalIgnoreCase))?.PriorityName
-                    ?? dbPriorities.FirstOrDefault()?.PriorityName
-                    ?? "Medium";
+                if (string.IsNullOrWhiteSpace(priority))
+                {
+                    var dbPriorities = await _priorityRepository.GetAllAsync(true, cancellationToken);
+                    var matched = dbPriorities.FirstOrDefault(p => p.PriorityName.Equals("Medium", StringComparison.OrdinalIgnoreCase))
+                        ?? dbPriorities.FirstOrDefault();
+                    priority = matched?.PriorityName ?? "Medium";
+                    priorityId = matched?.PriorityId;
+                }
+                else
+                {
+                    var matched = await _priorityRepository.GetByNameAsync(priority, cancellationToken);
+                    priorityId = matched?.PriorityId;
+                }
             }
             else if (string.IsNullOrWhiteSpace(priority))
             {
@@ -173,10 +207,44 @@ public class SupportTicketService : ISupportTicketService
                 refNo = await _ticketRepository.GenerateNextRefNoAsync(cancellationToken);
             }
 
+            Guid? userId = null;
+            if (!string.IsNullOrWhiteSpace(request.MemberId) && Guid.TryParse(request.MemberId, out var parsedGuid))
+            {
+                userId = parsedGuid;
+            }
+            else if (!string.IsNullOrWhiteSpace(request.MemberName) && _memberRepository != null)
+            {
+                var userObj = await _memberRepository.GetUserByNameAsync(request.MemberName.Trim(), cancellationToken);
+                userId = userObj?.UserId;
+            }
+            if (userId == null && _currentUserService != null)
+            {
+                if (_currentUserService.MemberId.HasValue)
+                {
+                    userId = _currentUserService.MemberId.Value;
+                }
+                else if (Guid.TryParse(_currentUserService.UserId, out var curUserGuid))
+                {
+                    userId = curUserGuid;
+                }
+            }
+
+            Guid? eventId = null;
+            if (!string.IsNullOrWhiteSpace(request.RelatedEvent) && _eventRepository != null)
+            {
+                var eventObj = await _eventRepository.GetByNameAsync(request.RelatedEvent.Trim(), cancellationToken);
+                eventId = eventObj?.EventId;
+            }
+
             var ticket = new SupportTicket
             {
                 TicketId = Guid.NewGuid(),
                 TicketNo = ticketNo,
+                UserId = userId,
+                EventId = eventId,
+                TicketTypeId = ticketTypeId,
+                PriorityId = priorityId,
+                StatusId = statusId,
                 MemberName = request.MemberName.Trim(),
                 MemberId = request.MemberId?.Trim(),
                 RelatedEvent = request.RelatedEvent?.Trim(),
@@ -219,21 +287,44 @@ public class SupportTicketService : ISupportTicketService
             if (!string.IsNullOrWhiteSpace(request.MemberName))
             {
                 ticket.MemberName = request.MemberName.Trim();
+                if (_memberRepository != null)
+                {
+                    var userObj = await _memberRepository.GetUserByNameAsync(ticket.MemberName, cancellationToken);
+                    if (userObj != null) ticket.UserId = userObj.UserId;
+                }
             }
 
             if (request.MemberId != null)
             {
                 ticket.MemberId = string.IsNullOrWhiteSpace(request.MemberId) ? null : request.MemberId.Trim();
+                if (Guid.TryParse(ticket.MemberId, out var parsedGuid))
+                {
+                    ticket.UserId = parsedGuid;
+                }
             }
 
             if (request.RelatedEvent != null)
             {
                 ticket.RelatedEvent = string.IsNullOrWhiteSpace(request.RelatedEvent) ? null : request.RelatedEvent.Trim();
+                if (!string.IsNullOrWhiteSpace(ticket.RelatedEvent) && _eventRepository != null)
+                {
+                    var eventObj = await _eventRepository.GetByNameAsync(ticket.RelatedEvent, cancellationToken);
+                    ticket.EventId = eventObj?.EventId;
+                }
+                else if (string.IsNullOrWhiteSpace(ticket.RelatedEvent))
+                {
+                    ticket.EventId = null;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(request.TicketType))
             {
                 ticket.TicketType = request.TicketType.Trim();
+                if (_ticketTypeRepository != null)
+                {
+                    var typeObj = await _ticketTypeRepository.GetByNameAsync(ticket.TicketType, cancellationToken);
+                    if (typeObj != null) ticket.TicketTypeId = typeObj.TicketTypeId;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(request.Subject))
@@ -249,11 +340,21 @@ public class SupportTicketService : ISupportTicketService
             if (!string.IsNullOrWhiteSpace(request.Status))
             {
                 ticket.Status = request.Status.Trim();
+                if (_statusRepository != null)
+                {
+                    var statusObj = await _statusRepository.GetByNameAsync(ticket.Status, cancellationToken);
+                    if (statusObj != null) ticket.StatusId = statusObj.StatusId;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(request.Priority))
             {
                 ticket.Priority = request.Priority.Trim();
+                if (_priorityRepository != null)
+                {
+                    var priorityObj = await _priorityRepository.GetByNameAsync(ticket.Priority, cancellationToken);
+                    if (priorityObj != null) ticket.PriorityId = priorityObj.PriorityId;
+                }
             }
 
             if (request.RefNo != null)
@@ -316,6 +417,11 @@ public class SupportTicketService : ISupportTicketService
             if (!string.IsNullOrWhiteSpace(request.Status))
             {
                 ticket.Status = request.Status.Trim();
+                if (_statusRepository != null)
+                {
+                    var statusObj = await _statusRepository.GetByNameAsync(ticket.Status, cancellationToken);
+                    if (statusObj != null) ticket.StatusId = statusObj.StatusId;
+                }
             }
 
             ticket.ModifiedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();

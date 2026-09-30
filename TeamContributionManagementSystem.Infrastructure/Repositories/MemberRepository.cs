@@ -213,6 +213,20 @@ public class MemberRepository : IMemberRepository
         }
     }
 
+    public async Task<AppUser?> GetUserByNameAsync(string fullName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(x => x.FullName.ToLower() == fullName.ToLower() && !x.IsDeleted, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetUserByNameAsync));
+            throw;
+        }
+    }
+
     public async Task<List<MemberDto>> GetActiveBirthdaysInMonthAsync(int month, CancellationToken cancellationToken = default)
     {
         try

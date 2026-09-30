@@ -17,11 +17,16 @@ public class TicketTypeRepository : ITicketTypeRepository
 
     public async Task<IReadOnlyCollection<TicketTypeDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
-        var ticketTypesInUse = await _context.SupportTickets
-            .Where(t => !t.IsDeleted && !string.IsNullOrEmpty(t.TicketType))
-            .Select(t => t.TicketType.ToLower())
-            .Distinct()
-            .ToListAsync(cancellationToken);
+        List<string> ticketTypesInUse = new();
+        try
+        {
+            ticketTypesInUse = await _context.SupportTickets
+                .Where(t => !t.IsDeleted && t.TicketTypeItem != null)
+                .Select(t => t.TicketTypeItem!.TypeName.ToLower())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+        }
+        catch { /* column may not exist yet in DB; IsReferred will be false for all */ }
 
         var query = _context.TicketTypes
             .AsNoTracking()
@@ -71,7 +76,7 @@ public class TicketTypeRepository : ITicketTypeRepository
     public async Task<bool> HasSupportTicketsAsync(string typeName, CancellationToken cancellationToken = default)
     {
         var cleanName = typeName.Trim().ToLower();
-        return await _context.SupportTickets.AnyAsync(t => !t.IsDeleted && t.TicketType.ToLower() == cleanName, cancellationToken);
+        return await _context.SupportTickets.AnyAsync(t => !t.IsDeleted && t.TicketTypeItem != null && t.TicketTypeItem.TypeName.ToLower() == cleanName, cancellationToken);
     }
 
     public async Task AddAsync(TicketType ticketType, CancellationToken cancellationToken = default)

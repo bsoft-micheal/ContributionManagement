@@ -47,11 +47,11 @@ public class PaymentModeRepository : IPaymentModeRepository
         var cleanName = paymentModeName.Trim().ToLower();
 
         var hasTxns = await _context.PaymentTransactions
-            .AnyAsync(p => !p.IsDeleted && p.PaymentMode.ToLower() == cleanName, cancellationToken);
+            .AnyAsync(p => !p.IsDeleted && p.PaymentModeItem != null && p.PaymentModeItem.PaymentModeName.ToLower() == cleanName, cancellationToken);
         if (hasTxns) return true;
 
         var hasContributions = await _context.Contributions
-            .AnyAsync(c => !c.IsDeleted && c.PaymentMode.ToString().ToLower() == cleanName, cancellationToken);
+            .AnyAsync(c => !c.IsDeleted && c.PaymentModeItem != null && c.PaymentModeItem.PaymentModeName.ToLower() == cleanName, cancellationToken);
         if (hasContributions) return true;
 
         return false;

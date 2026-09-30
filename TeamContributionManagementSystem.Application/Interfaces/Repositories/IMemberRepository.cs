@@ -10,6 +10,7 @@ public interface IMemberRepository
     Task<List<Member>> GetByIdsAsync(IEnumerable<Guid> memberIds, CancellationToken cancellationToken = default);
     Task<Member?> GetByIdAsync(Guid memberId, CancellationToken cancellationToken = default);
     Task<Member?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
+    Task<AppUser?> GetUserByNameAsync(string fullName, CancellationToken cancellationToken = default);
     Task<List<MemberDto>> GetActiveBirthdaysInMonthAsync(int month, CancellationToken cancellationToken = default);
     Task<List<MemberDto>> GetMembersWithoutUserAccountAsync(CancellationToken cancellationToken = default);
     Task AddAsync(Member member, CancellationToken cancellationToken = default);

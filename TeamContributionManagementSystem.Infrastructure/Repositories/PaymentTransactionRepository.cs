@@ -23,21 +23,26 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
     {
         try
         {
-            var query = _context.PaymentTransactions.Where(x => !x.IsDeleted).AsQueryable();
+            var query = _context.PaymentTransactions
+                .Where(x => !x.IsDeleted)
+                .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(eventName) && !eventName.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.EventName.ToLower() == eventName.ToLower());
+                var cleanEvent = eventName.Trim().ToLower();
+                query = query.Where(x => x.Event != null && x.Event.EventName.ToLower() == cleanEvent);
             }
 
             if (!string.IsNullOrWhiteSpace(mode) && !mode.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.PaymentMode.ToLower() == mode.ToLower());
+                var cleanMode = mode.Trim().ToLower();
+                query = query.Where(x => x.PaymentModeItem != null && x.PaymentModeItem.PaymentModeName.ToLower() == cleanMode);
             }
 
             if (!string.IsNullOrWhiteSpace(status) && !status.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.Status.ToLower() == status.ToLower());
+                var cleanStatus = status.Trim().ToLower();
+                query = query.Where(x => x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanStatus);
             }
 
             if (startDate.HasValue)
@@ -56,13 +61,13 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
                 {
                     TransactionId = x.TransactionId,
                     TxnNumber = x.TxnNumber,
-                    MemberName = x.MemberName,
-                    EventName = x.EventName,
+                    MemberName = x.User != null ? (!string.IsNullOrWhiteSpace(x.User.FullName) ? x.User.FullName : x.User.Username) : string.Empty,
+                    EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     Amount = x.Amount,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentMode,
+                    PaymentMode = x.PaymentModeItem != null ? x.PaymentModeItem.PaymentModeName : string.Empty,
                     Utr = x.Utr,
-                    Status = x.Status,
+                    Status = x.StatusItem != null ? x.StatusItem.StatusName : string.Empty,
                     VerifiedBy = x.VerifiedBy,
                     VerifiedOn = x.VerifiedOn,
                     Notes = x.Notes,
@@ -87,7 +92,12 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
     {
         try
         {
-            return await _context.PaymentTransactions.FirstOrDefaultAsync(x => x.TransactionId == transactionId && !x.IsDeleted, cancellationToken);
+            return await _context.PaymentTransactions
+                .Include(x => x.User)
+                .Include(x => x.Event)
+                .Include(x => x.PaymentModeItem)
+                .Include(x => x.StatusItem)
+                .FirstOrDefaultAsync(x => x.TransactionId == transactionId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {

@@ -44,12 +44,12 @@ public class RoleRightsService : IRoleRightsService
     {
         try
         {
-            if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var role))
+            if (Guid.TryParse(roleName, out var roleId))
             {
-                throw new ArgumentException(string.Format(CommonMessages.Roles.InvalidRoleFormat, roleName));
+                return await _roleRightRepository.GetByRoleIdAsync(roleId, cancellationToken);
             }
 
-            return await _roleRightRepository.GetByRoleAsync(role, cancellationToken);
+            return await _roleRightRepository.GetByRoleNameAsync(roleName, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -58,30 +58,54 @@ public class RoleRightsService : IRoleRightsService
         }
     }
 
+    public async Task<IReadOnlyCollection<RoleRightDto>> GetRoleRightAsyncByRoleId(Guid roleId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _roleRightRepository.GetByRoleIdAsync(roleId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetRoleRightAsyncByRoleId));
+            throw;
+        }
+    }
+
     public async Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
+            Guid targetRoleId = request.RoleId ?? Guid.Empty;
+            if (targetRoleId == Guid.Empty)
+            {
+                var roleRights = await _roleRightRepository.GetByRoleNameAsync(request.RoleName, cancellationToken);
+                var first = roleRights.FirstOrDefault();
+                if (first != null && first.RoleId != Guid.Empty)
+                {
+                    targetRoleId = first.RoleId;
+                }
+            }
+
+            if (targetRoleId == Guid.Empty)
             {
                 throw new ArgumentException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
             }
 
-        var entities = request.Rights.Select(r => new RoleRight
-        {
-            RoleRightId = Guid.NewGuid(),
-            Role = role,
-            FeatureID = r.FeatureID,
-            Module = r.Module,
-            SubModule = r.SubModule,
-            Page = r.Page,
-            Access = r.Access,
-            AccessType = r.AccessType > 0 ? (AccessType)r.AccessType : (r.Access == "deny" ? AccessType.Deny : (r.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite)),
-            CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
-            CreatedAt = DateTime.UtcNow
-        }).ToList();
+            var entities = request.Rights.Select(r => new RoleRight
+            {
+                RoleRightId = Guid.NewGuid(),
+                RoleId = targetRoleId,
+                FeatureID = r.FeatureID,
+                Module = r.Module,
+                SubModule = r.SubModule,
+                Page = r.Page,
+                Access = r.Access,
+                AccessType = r.AccessType > 0 ? (AccessType)r.AccessType : (r.Access == "deny" ? AccessType.Deny : (r.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite)),
+                CreatedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim(),
+                CreatedAt = DateTime.UtcNow
+            }).ToList();
 
-            await _roleRightRepository.SaveRoleRightsAsync(role, entities, cancellationToken);
+            await _roleRightRepository.SaveRoleRightsAsync(targetRoleId, entities, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)

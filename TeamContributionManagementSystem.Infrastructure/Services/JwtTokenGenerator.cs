@@ -19,7 +19,12 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         _configuration = configuration;
     }
 
-    public AuthResponseDto GenerateToken(AppUser user, Guid? sessionId = null, Guid? memberId = null)
+    public AuthResponseDto GenerateToken(
+        AppUser user, 
+        Guid? sessionId = null, 
+        Guid? memberId = null, 
+        IEnumerable<string>? roles = null, 
+        IEnumerable<Guid>? roleIds = null)
     {
         var secret = _configuration[CommonConstants.ConfigKeys.JwtSecret]
             ?? throw new InvalidOperationException(CommonMessages.Auth.JwtSecretNotConfigured);
@@ -29,6 +34,31 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         var expiryMinutes = int.TryParse(_configuration[CommonConstants.ConfigKeys.JwtExpiryMinutes], out var configuredValue) ? configuredValue : 120;
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(expiryMinutes);
 
+        var roleNamesFromEntity = user.UserRoles?.Select(ur => ur.Role?.RoleName).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!) ?? new[] { user.Role.ToString() };
+        var resolvedRoles = (roles ?? roleNamesFromEntity)
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Select(r => r!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (resolvedRoles.Count == 0)
+        {
+            resolvedRoles.Add(user.Role.ToString());
+        }
+
+        var resolvedRoleIds = (roleIds ?? user.UserRoles?.Select(ur => ur.RoleId) ?? Enumerable.Empty<Guid>())
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        string primaryRole = resolvedRoles.Contains(CommonRoles.Admin, StringComparer.OrdinalIgnoreCase)
+            ? CommonRoles.Admin
+            : (resolvedRoles.Contains("Organizer", StringComparer.OrdinalIgnoreCase)
+                ? "Organizer"
+                : (resolvedRoles.Contains(CommonRoles.Member, StringComparer.OrdinalIgnoreCase)
+                    ? CommonRoles.Member
+                    : (resolvedRoles.FirstOrDefault() ?? CommonRoles.Member)));
+
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
@@ -36,17 +66,29 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
             new(ClaimTypes.Name, user.FullName),
             new(ClaimTypes.Email, user.Email),
-            new(ClaimTypes.Role, user.Role.ToString())
+            new("role", primaryRole)
         };
+
+        foreach (var r in resolvedRoles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, r));
+        }
+
+        foreach (var rId in resolvedRoleIds)
+        {
+            claims.Add(new Claim("role_id", rId.ToString()));
+        }
+
+        claims.Add(new Claim("user_id", user.UserId.ToString()));
+        claims.Add(new Claim("userId", user.UserId.ToString()));
+
+        var effectiveMemberId = memberId ?? user.UserId;
+        claims.Add(new Claim("member_id", effectiveMemberId.ToString()));
+        claims.Add(new Claim("memberId", effectiveMemberId.ToString()));
 
         if (sessionId.HasValue)
         {
             claims.Add(new Claim(CommonConstants.Defaults.SessionIdClaim, sessionId.Value.ToString()));
-        }
-
-        if (memberId.HasValue)
-        {
-            claims.Add(new Claim("member_id", memberId.Value.ToString()));
         }
 
         var credentials = new SigningCredentials(
@@ -62,10 +104,14 @@ public class JwtTokenGenerator : IJwtTokenGenerator
 
         return new AuthResponseDto
         {
+            UserId = user.UserId,
+            MemberId = effectiveMemberId,
             Token = new JwtSecurityTokenHandler().WriteToken(token),
             Email = user.Email,
             FullName = user.FullName,
-            Role = user.Role.ToString(),
+            Role = primaryRole,
+            Roles = resolvedRoles,
+            RoleIds = resolvedRoleIds,
             ProfileImage = user.ProfileImage,
             ExpiresAtUtc = expiresAtUtc,
             IsFirstLogin = user.IsFirstLogin

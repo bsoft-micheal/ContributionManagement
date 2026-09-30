@@ -36,7 +36,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                     BudgetCalculationId = x.BudgetCalculationId,
                     ExpenseItem = x.ExpenseItem,
                     Rate = x.Rate,
-                    Category = x.Category,
+                    Category = x.EventType != null ? x.EventType.EventTypeName : null,
                     IsActive = x.IsActive,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
@@ -86,7 +86,8 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
 
             if (!string.IsNullOrWhiteSpace(category))
             {
-                query = query.Where(x => x.Category != null && x.Category.ToLower() == category.ToLower());
+                var cleanCat = category.Trim().ToLower();
+                query = query.Where(x => x.EventType != null && x.EventType.EventTypeName.ToLower() == cleanCat);
             }
 
             return await query.FirstOrDefaultAsync(cancellationToken);

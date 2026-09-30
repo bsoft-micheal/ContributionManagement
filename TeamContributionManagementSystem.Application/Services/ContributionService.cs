@@ -18,6 +18,8 @@ public class ContributionService : IContributionService
     private readonly IMapper _mapper;
     private readonly ICurrentUserService? _currentUserService;
     private readonly IMemberRepository? _memberRepository;
+    private readonly IStatusRepository? _statusRepository;
+    private readonly IPaymentModeRepository? _paymentModeRepository;
 
     public ContributionService(
         ILogger<ContributionService> logger,
@@ -25,7 +27,9 @@ public class ContributionService : IContributionService
         IUnitOfWork unitOfWork,
         IMapper mapper,
         ICurrentUserService? currentUserService = null,
-        IMemberRepository? memberRepository = null)
+        IMemberRepository? memberRepository = null,
+        IStatusRepository? statusRepository = null,
+        IPaymentModeRepository? paymentModeRepository = null)
     {
         _logger = logger;
         _contributionRepository = contributionRepository;
@@ -33,6 +37,8 @@ public class ContributionService : IContributionService
         _mapper = mapper;
         _currentUserService = currentUserService;
         _memberRepository = memberRepository;
+        _statusRepository = statusRepository;
+        _paymentModeRepository = paymentModeRepository;
     }
 
     public async Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default)
@@ -132,6 +138,26 @@ public class ContributionService : IContributionService
 
             var paymentDate = request.PaymentDate?.ToUniversalTime() ?? DateTime.UtcNow;
 
+            Guid? paidStatusId = null;
+            if (_statusRepository != null)
+            {
+                var st = await _statusRepository.GetByNameAsync("Paid", cancellationToken);
+                paidStatusId = st?.StatusId;
+            }
+
+            Guid? paymentModeId = null;
+            if (_paymentModeRepository != null)
+            {
+                var modeName = request.PaymentMode switch
+                {
+                    PaymentMode.Cash => "Cash",
+                    PaymentMode.Split => "Split",
+                    _ => "UPI"
+                };
+                var pm = await _paymentModeRepository.GetByNameAsync(modeName, cancellationToken);
+                paymentModeId = pm?.PaymentModeId;
+            }
+
             // Handle Multi-Event Settlement (PreviousArrears / AllOutstanding)
             if (!string.IsNullOrWhiteSpace(request.PaymentScope) &&
                 (request.PaymentScope.Equals(CommonConstants.PaymentScopes.PreviousArrears, StringComparison.OrdinalIgnoreCase) ||
@@ -178,6 +204,8 @@ public class ContributionService : IContributionService
                     decimal paidForThis = Math.Min(remainingAllocation, dueForThis);
                     remainingAllocation -= paidForThis;
 
+                    item.StatusId = paidStatusId;
+                    item.PaymentModeId = paymentModeId;
                     item.PaymentStatus = PaymentStatus.Paid;
                     item.PaymentDate = paymentDate;
                     item.PaymentMode = request.PaymentMode;
@@ -200,6 +228,8 @@ public class ContributionService : IContributionService
                 // If current contribution wasn't in pendingToPay (already paid), update its details
                 if (!pendingToPay.Any(x => x.ContributionId == contribution.ContributionId))
                 {
+                    contribution.StatusId = paidStatusId;
+                    contribution.PaymentModeId = paymentModeId;
                     contribution.PaymentDate = paymentDate;
                     contribution.PaymentMode = request.PaymentMode;
                     if (request.PaymentMode == PaymentMode.Split)
@@ -231,6 +261,8 @@ public class ContributionService : IContributionService
                 contribution.Amount = request.Amount.Value;
             }
 
+            contribution.StatusId = paidStatusId;
+            contribution.PaymentModeId = paymentModeId;
             contribution.PaymentStatus = PaymentStatus.Paid;
             contribution.PaymentDate = paymentDate;
             contribution.PaymentMode = request.PaymentMode;
