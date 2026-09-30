@@ -68,17 +68,22 @@ public class CurrentUserService : ICurrentUserService
                 return memberGuid;
             }
 
-            // Fallback: resolve MemberId via Email lookup
+            if (Guid.TryParse(UserId, out var userGuid))
+            {
+                return userGuid;
+            }
+
+            // Fallback: resolve via Email lookup
             var email = Email;
             if (!string.IsNullOrWhiteSpace(email) && _httpContextAccessor.HttpContext?.RequestServices != null)
             {
-                var memberRepo = _httpContextAccessor.HttpContext.RequestServices.GetService<IMemberRepository>();
-                if (memberRepo != null)
+                var userRepo = _httpContextAccessor.HttpContext.RequestServices.GetService<IUserRepository>();
+                if (userRepo != null)
                 {
-                    var m = memberRepo.GetByEmailAsync(email.Trim()).GetAwaiter().GetResult();
-                    if (m != null)
+                    var u = userRepo.GetByEmailAsync(email.Trim()).GetAwaiter().GetResult();
+                    if (u != null)
                     {
-                        return m.MemberId;
+                        return u.UserId;
                     }
                 }
             }

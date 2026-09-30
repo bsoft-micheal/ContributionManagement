@@ -23,15 +23,15 @@ public class RoleRepository : IRoleRepository
     {
         try
         {
-            var memberRoleIds = await _context.Members
-                .Where(m => !m.IsDeleted && m.RoleId != null)
-                .Select(m => m.RoleId!.Value)
+            var memberRoleIds = await _context.UserRoles
+                .Where(ur => ur.User != null && !ur.User.IsDeleted)
+                .Select(ur => ur.RoleId)
                 .Distinct()
                 .ToListAsync(cancellationToken);
 
-            var userRoleNames = await _context.Users
-                .Where(u => !u.IsDeleted)
-                .Select(u => u.Role.ToString().ToLower())
+            var userRoleNames = await _context.UserRoles
+                .Where(ur => ur.User != null && !ur.User.IsDeleted && ur.Role != null)
+                .Select(ur => ur.Role!.RoleName.ToLower())
                 .Distinct()
                 .ToListAsync(cancellationToken);
 
@@ -46,7 +46,7 @@ public class RoleRepository : IRoleRepository
                 {
                     RoleId = x.RoleId,
                     RoleName = x.RoleName,
-                    DefaultContributionAmount = x.DefaultContributionAmount,
+                    DefaultContributionAmount = 0,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
@@ -100,7 +100,7 @@ public class RoleRepository : IRoleRepository
     {
         try
         {
-            return await _context.Members.AnyAsync(x => x.RoleId == roleId && !x.IsDeleted, cancellationToken);
+            return await _context.UserRoles.AnyAsync(x => x.RoleId == roleId && x.User != null && !x.User.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -113,11 +113,7 @@ public class RoleRepository : IRoleRepository
     {
         try
         {
-            var cleanName = roleName.Trim();
-            var enumParsed = Enum.TryParse<TeamContributionManagementSystem.Domain.Enums.UserRole>(cleanName, true, out var parsedRole);
-
-            return await _context.Users.AnyAsync(x => !x.IsDeleted && 
-                (enumParsed && x.Role == parsedRole), cancellationToken);
+            return await _context.UserRoles.AnyAsync(ur => ur.RoleId == roleId && ur.User != null && !ur.User.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {

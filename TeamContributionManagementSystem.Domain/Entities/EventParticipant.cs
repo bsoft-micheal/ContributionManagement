@@ -7,7 +7,7 @@ public class EventParticipant
     public Guid MemberId { get; set; }
 
     public Event? Event { get; set; }
-    public Member? Member { get; set; }
+    public AppUser? Member { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
 

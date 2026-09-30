@@ -23,24 +23,24 @@ public class MemberRepository : IMemberRepository
     {
         try
         {
-            return await _context.Members
+            return await _context.Users
                 .Where(x => !x.IsDeleted)
-                .OrderBy(x => x.Name)
+                .OrderBy(x => x.FullName)
                 .Select(x => new MemberDto
                 {
-                    MemberId = x.MemberId,
-                    Name = x.Name,
+                    MemberId = x.UserId,
+                    Name = x.FullName,
                     Email = x.Email,
                     Phone = x.Phone,
-                    RoleId = x.RoleId,
-                    RoleName = x.Role != null ? x.Role.RoleName : string.Empty,
-                    DefaultContributionAmount = x.Role != null ? x.Role.DefaultContributionAmount : 0,
+                    RoleId = x.UserRoles.Select(ur => (Guid?)ur.RoleId).FirstOrDefault(),
+                    RoleName = x.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member",
+                    DefaultContributionAmount = 0,
                     DateOfBirth = x.DateOfBirth,
                     JoiningDate = x.JoiningDate,
                     Gender = x.Gender,
                     IsActive = x.IsActive,
                     IsExited = x.IsExited,
-                    WorkType = x.WorkType,
+                    WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,
@@ -60,24 +60,24 @@ public class MemberRepository : IMemberRepository
     {
         try
         {
-            return await _context.Members
-                .Where(x => !x.IsDeleted && x.IsActive)
-                .OrderBy(x => x.Name)
+            return await _context.Users
+                .Where(x => !x.IsDeleted && x.IsActive && !x.IsExited)
+                .OrderBy(x => x.FullName)
                 .Select(x => new MemberDto
                 {
-                    MemberId = x.MemberId,
-                    Name = x.Name,
+                    MemberId = x.UserId,
+                    Name = x.FullName,
                     Email = x.Email,
                     Phone = x.Phone,
-                    RoleId = x.RoleId,
-                    RoleName = x.Role != null ? x.Role.RoleName : string.Empty,
-                    DefaultContributionAmount = x.Role != null ? x.Role.DefaultContributionAmount : 0,
+                    RoleId = x.UserRoles.Select(ur => (Guid?)ur.RoleId).FirstOrDefault(),
+                    RoleName = x.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member",
+                    DefaultContributionAmount = 0,
                     DateOfBirth = x.DateOfBirth,
                     JoiningDate = x.JoiningDate,
                     Gender = x.Gender,
                     IsActive = x.IsActive,
                     IsExited = x.IsExited,
-                    WorkType = x.WorkType,
+                    WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,
@@ -98,10 +98,33 @@ public class MemberRepository : IMemberRepository
         try
         {
             var ids = memberIds.ToList();
-            return await _context.Members
-                .Include(x => x.Role)
-                .Where(x => ids.Contains(x.MemberId) && !x.IsDeleted)
+            var users = await _context.Users
+                .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(x => x.WorkTypeNavigation)
+                .Where(x => ids.Contains(x.UserId) && !x.IsDeleted)
                 .ToListAsync(cancellationToken);
+
+            return users.Select(user => new Member
+            {
+                MemberId = user.UserId,
+                Name = user.FullName,
+                Email = user.Email,
+                Phone = user.Phone,
+                RoleId = user.RoleId,
+                Role = user.RoleNavigation,
+                DateOfBirth = user.DateOfBirth,
+                JoiningDate = user.JoiningDate,
+                Gender = user.Gender,
+                IsActive = user.IsActive,
+                IsExited = user.IsExited,
+                IsDeleted = user.IsDeleted,
+                WorkType = user.WorkType,
+                CreatedBy = user.CreatedBy,
+                CreatedAt = user.CreatedAt,
+                CreatedOn = user.CreatedOn,
+                ModifiedBy = user.ModifiedBy,
+                ModifiedOn = user.ModifiedOn
+            }).ToList();
         }
         catch (Exception ex)
         {
@@ -114,9 +137,34 @@ public class MemberRepository : IMemberRepository
     {
         try
         {
-            return await _context.Members
-                .Include(x => x.Role)
-                .FirstOrDefaultAsync(x => x.MemberId == memberId && !x.IsDeleted, cancellationToken);
+            var user = await _context.Users
+                .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(x => x.WorkTypeNavigation)
+                .FirstOrDefaultAsync(x => x.UserId == memberId && !x.IsDeleted, cancellationToken);
+
+            if (user == null) return null;
+
+            return new Member
+            {
+                MemberId = user.UserId,
+                Name = user.FullName,
+                Email = user.Email,
+                Phone = user.Phone,
+                RoleId = user.RoleId,
+                Role = user.RoleNavigation,
+                DateOfBirth = user.DateOfBirth,
+                JoiningDate = user.JoiningDate,
+                Gender = user.Gender,
+                IsActive = user.IsActive,
+                IsExited = user.IsExited,
+                IsDeleted = user.IsDeleted,
+                WorkType = user.WorkType,
+                CreatedBy = user.CreatedBy,
+                CreatedAt = user.CreatedAt,
+                CreatedOn = user.CreatedOn,
+                ModifiedBy = user.ModifiedBy,
+                ModifiedOn = user.ModifiedOn
+            };
         }
         catch (Exception ex)
         {
@@ -129,9 +177,34 @@ public class MemberRepository : IMemberRepository
     {
         try
         {
-            return await _context.Members
-                .Include(x => x.Role)
+            var user = await _context.Users
+                .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(x => x.WorkTypeNavigation)
                 .FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower() && !x.IsDeleted, cancellationToken);
+
+            if (user == null) return null;
+
+            return new Member
+            {
+                MemberId = user.UserId,
+                Name = user.FullName,
+                Email = user.Email,
+                Phone = user.Phone,
+                RoleId = user.RoleId,
+                Role = user.RoleNavigation,
+                DateOfBirth = user.DateOfBirth,
+                JoiningDate = user.JoiningDate,
+                Gender = user.Gender,
+                IsActive = user.IsActive,
+                IsExited = user.IsExited,
+                IsDeleted = user.IsDeleted,
+                WorkType = user.WorkType,
+                CreatedBy = user.CreatedBy,
+                CreatedAt = user.CreatedAt,
+                CreatedOn = user.CreatedOn,
+                ModifiedBy = user.ModifiedBy,
+                ModifiedOn = user.ModifiedOn
+            };
         }
         catch (Exception ex)
         {
@@ -144,24 +217,24 @@ public class MemberRepository : IMemberRepository
     {
         try
         {
-            return await _context.Members
-                .Where(x => !x.IsDeleted && x.IsActive && x.DateOfBirth.Month == month)
+            return await _context.Users
+                .Where(x => !x.IsDeleted && x.IsActive && !x.IsExited && x.DateOfBirth.Month == month)
                 .OrderBy(x => x.DateOfBirth.Day)
                 .Select(x => new MemberDto
                 {
-                    MemberId = x.MemberId,
-                    Name = x.Name,
+                    MemberId = x.UserId,
+                    Name = x.FullName,
                     Email = x.Email,
                     Phone = x.Phone,
-                    RoleId = x.RoleId,
-                    RoleName = x.Role != null ? x.Role.RoleName : string.Empty,
-                    DefaultContributionAmount = x.Role != null ? x.Role.DefaultContributionAmount : 0,
+                    RoleId = x.UserRoles.Select(ur => (Guid?)ur.RoleId).FirstOrDefault(),
+                    RoleName = x.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member",
+                    DefaultContributionAmount = 0,
                     DateOfBirth = x.DateOfBirth,
                     JoiningDate = x.JoiningDate,
                     Gender = x.Gender,
                     IsActive = x.IsActive,
                     IsExited = x.IsExited,
-                    WorkType = x.WorkType,
+                    WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,
@@ -181,28 +254,24 @@ public class MemberRepository : IMemberRepository
     {
         try
         {
-            var userEmails = _context.Users
-                .Where(u => !u.IsDeleted)
-                .Select(u => u.Email.ToLower());
-
-            return await _context.Members
-                .Where(m => !m.IsDeleted && m.IsActive && !userEmails.Contains(m.Email.ToLower()))
-                .OrderBy(m => m.Name)
+            return await _context.Users
+                .Where(m => !m.IsDeleted && m.IsActive && string.IsNullOrEmpty(m.PasswordHash))
+                .OrderBy(m => m.FullName)
                 .Select(x => new MemberDto
                 {
-                    MemberId = x.MemberId,
-                    Name = x.Name,
+                    MemberId = x.UserId,
+                    Name = x.FullName,
                     Email = x.Email,
                     Phone = x.Phone,
-                    RoleId = x.RoleId,
-                    RoleName = x.Role != null ? x.Role.RoleName : string.Empty,
-                    DefaultContributionAmount = x.Role != null ? x.Role.DefaultContributionAmount : 0,
+                    RoleId = x.UserRoles.Select(ur => (Guid?)ur.RoleId).FirstOrDefault(),
+                    RoleName = x.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault() ?? "Member",
+                    DefaultContributionAmount = 0,
                     DateOfBirth = x.DateOfBirth,
                     JoiningDate = x.JoiningDate,
                     Gender = x.Gender,
                     IsActive = x.IsActive,
                     IsExited = x.IsExited,
-                    WorkType = x.WorkType,
+                    WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,
@@ -218,25 +287,30 @@ public class MemberRepository : IMemberRepository
         }
     }
 
-    private static bool _roleColumnAltered = false;
-
     public async Task AddAsync(Member member, CancellationToken cancellationToken = default)
     {
         try
         {
-            if (!_roleColumnAltered)
+            var user = new AppUser
             {
-                try
-                {
-                    await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS members ALTER COLUMN role_id DROP NOT NULL;", cancellationToken);
-                    _roleColumnAltered = true;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not execute ALTER TABLE to drop NOT NULL on role_id");
-                }
-            }
-            await _context.Members.AddAsync(member, cancellationToken);
+                UserId = member.MemberId == Guid.Empty ? Guid.NewGuid() : member.MemberId,
+                Username = member.Email.Split('@')[0],
+                Email = member.Email,
+                FullName = member.Name,
+                Phone = member.Phone,
+                Gender = member.Gender,
+                WorkType = member.WorkType,
+                RoleId = member.RoleId,
+                DateOfBirth = member.DateOfBirth,
+                JoiningDate = member.JoiningDate,
+                IsActive = member.IsActive,
+                IsExited = member.IsExited,
+                IsDeleted = member.IsDeleted,
+                CreatedBy = member.CreatedBy,
+                CreatedAt = member.CreatedAt,
+                CreatedOn = member.CreatedOn ?? DateTime.UtcNow
+            };
+            await _context.Users.AddAsync(user, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -249,7 +323,56 @@ public class MemberRepository : IMemberRepository
     {
         try
         {
-            _context.Members.Update(member);
+            var existingUser = _context.Users.Local.FirstOrDefault(u => u.UserId == member.MemberId);
+            if (existingUser != null)
+            {
+                existingUser.FullName = member.Name;
+                existingUser.Email = member.Email;
+                existingUser.Phone = member.Phone;
+                existingUser.Gender = member.Gender;
+                existingUser.WorkType = member.WorkType;
+                existingUser.RoleId = member.RoleId;
+                existingUser.DateOfBirth = member.DateOfBirth;
+                existingUser.JoiningDate = member.JoiningDate;
+                existingUser.IsActive = member.IsActive;
+                existingUser.IsExited = member.IsExited;
+                existingUser.IsDeleted = member.IsDeleted;
+                existingUser.ModifiedBy = member.ModifiedBy;
+                existingUser.ModifiedOn = member.ModifiedOn ?? DateTime.UtcNow;
+            }
+            else
+            {
+                var user = new AppUser
+                {
+                    UserId = member.MemberId,
+                    FullName = member.Name,
+                    Email = member.Email,
+                    Phone = member.Phone,
+                    Gender = member.Gender,
+                    WorkType = member.WorkType,
+                    RoleId = member.RoleId,
+                    DateOfBirth = member.DateOfBirth,
+                    JoiningDate = member.JoiningDate,
+                    IsActive = member.IsActive,
+                    IsExited = member.IsExited,
+                    IsDeleted = member.IsDeleted,
+                    ModifiedBy = member.ModifiedBy,
+                    ModifiedOn = member.ModifiedOn ?? DateTime.UtcNow
+                };
+                _context.Users.Attach(user);
+                _context.Entry(user).Property(x => x.FullName).IsModified = true;
+                _context.Entry(user).Property(x => x.Email).IsModified = true;
+                _context.Entry(user).Property(x => x.Phone).IsModified = true;
+                _context.Entry(user).Property(x => x.Gender).IsModified = true;
+                _context.Entry(user).Property(x => x.WorkTypeId).IsModified = true;
+                _context.Entry(user).Property(x => x.DateOfBirth).IsModified = true;
+                _context.Entry(user).Property(x => x.JoiningDate).IsModified = true;
+                _context.Entry(user).Property(x => x.IsActive).IsModified = true;
+                _context.Entry(user).Property(x => x.IsExited).IsModified = true;
+                _context.Entry(user).Property(x => x.IsDeleted).IsModified = true;
+                _context.Entry(user).Property(x => x.ModifiedBy).IsModified = true;
+                _context.Entry(user).Property(x => x.ModifiedOn).IsModified = true;
+            }
         }
         catch (Exception ex)
         {

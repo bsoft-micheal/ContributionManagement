@@ -9,8 +9,34 @@ public class AppUser
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
-    public UserRole Role { get; set; } = UserRole.Member;
+    private UserRole? _role;
+
+    [NotMapped]
+    public UserRole Role
+    {
+        get
+        {
+            if (_role.HasValue) return _role.Value;
+            var firstRoleName = UserRoles.FirstOrDefault()?.Role?.RoleName 
+                             ?? RoleNavigation?.RoleName;
+            if (!string.IsNullOrWhiteSpace(firstRoleName) && Enum.TryParse<UserRole>(firstRoleName, true, out var r))
+                return r;
+            return UserRole.Member;
+        }
+        set
+        {
+            _role = value;
+        }
+    }
+
     public string FullName { get; set; } = string.Empty;
+
+    [NotMapped]
+    public string Name
+    {
+        get => FullName;
+        set => FullName = value;
+    }
     public bool IsActive { get; set; } = true;
     public string? ProfileImage { get; set; }
     public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
@@ -20,22 +46,72 @@ public class AppUser
     public bool IsTwoFactorEnabled { get; set; } = false;
     public bool IsFirstLogin { get; set; } = true;
 
+    // Member profile fields merged directly into AppUser
+    public string Phone { get; set; } = string.Empty;
+    public string Gender { get; set; } = string.Empty;
+    public Guid? WorkTypeId { get; set; }
+    public WorkType? WorkTypeNavigation { get; set; }
+
+    private string? _workType;
+
+    [NotMapped]
+    public string WorkType
+    {
+        get => !string.IsNullOrWhiteSpace(_workType) ? _workType : (WorkTypeNavigation?.WorkTypeName ?? string.Empty);
+        set => _workType = value;
+    }
+    [NotMapped]
+    public Guid? RoleId
+    {
+        get => UserRoles.FirstOrDefault()?.RoleId;
+        set
+        {
+            if (value.HasValue)
+            {
+                var existing = UserRoles.FirstOrDefault();
+                if (existing != null)
+                {
+                    existing.RoleId = value.Value;
+                }
+                else
+                {
+                    UserRoles.Add(new AppUserRole { UserId = UserId, RoleId = value.Value });
+                }
+            }
+        }
+    }
+
+    [NotMapped]
+    public Role? RoleNavigation
+    {
+        get => UserRoles.FirstOrDefault()?.Role;
+        set
+        {
+            if (value != null)
+            {
+                var existing = UserRoles.FirstOrDefault();
+                if (existing != null)
+                {
+                    existing.RoleId = value.RoleId;
+                    existing.Role = value;
+                }
+                else
+                {
+                    UserRoles.Add(new AppUserRole { UserId = UserId, RoleId = value.RoleId, Role = value });
+                }
+            }
+        }
+    }
+    public DateTime DateOfBirth { get; set; }
+    public DateTime JoiningDate { get; set; }
+    public bool IsExited { get; set; } = false;
+
+    public ICollection<AppUserRole> UserRoles { get; set; } = new List<AppUserRole>();
     public ICollection<UserMfaDevice> MfaDevices { get; set; } = new List<UserMfaDevice>();
-
     public ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
+    public ICollection<EventParticipant> EventParticipants { get; set; } = new List<EventParticipant>();
+    public ICollection<Contribution> Contributions { get; set; } = new List<Contribution>();
 
-    /// <summary>
-    /// Linked Member records (matched by Email).
-    /// Kept unmapped to prevent EF Core from issuing ALTER TABLE / DB foreign key constraints.
-    /// </summary>
-    [NotMapped]
-    public ICollection<Member> Members { get; set; } = new List<Member>();
-
-    /// <summary>
-    /// Convenience accessor for the primary linked member profile.
-    /// </summary>
-    [NotMapped]
-    public Member? MemberProfile => Members?.FirstOrDefault();
     public bool IsDeleted { get; set; } = false;
 
     // Common Audit Properties

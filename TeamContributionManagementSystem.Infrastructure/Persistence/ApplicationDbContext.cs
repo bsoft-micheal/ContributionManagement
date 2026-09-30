@@ -18,13 +18,13 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         _currentUserService = currentUserService;
     }
 
-    public DbSet<Member> Members => Set<Member>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<EventType> EventTypes => Set<EventType>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<EventParticipant> EventParticipants => Set<EventParticipant>();
     public DbSet<Contribution> Contributions => Set<Contribution>();
     public DbSet<AppUser> Users => Set<AppUser>();
+    public DbSet<AppUserRole> UserRoles => Set<AppUserRole>();
     public DbSet<RoleRight> RoleRights => Set<RoleRight>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
@@ -48,24 +48,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.RoleId);
             entity.Property(x => x.RoleName).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.DefaultContributionAmount).HasPrecision(12, 2);
+            entity.Ignore(x => x.DefaultContributionAmount);
             entity.HasIndex(x => x.RoleName).IsUnique();
-        });
-
-        modelBuilder.Entity<Member>(entity =>
-        {
-            entity.HasKey(x => x.MemberId);
-            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.Email).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.Phone).HasMaxLength(20).IsRequired();
-            entity.HasIndex(x => x.Email).IsUnique();
-            entity.HasIndex(x => new { x.RoleId, x.IsActive });
-            entity.Property(x => x.WorkType).HasColumnName("member_type").HasMaxLength(20);
-            entity.HasOne(x => x.Role)
-                .WithMany(x => x.Members)
-                .HasForeignKey(x => x.RoleId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<EventType>(entity =>
@@ -88,8 +72,18 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.Email).HasMaxLength(150).IsRequired();
             entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
+            entity.Ignore(x => x.Role);
+            entity.Ignore(x => x.RoleId);
+            entity.Ignore(x => x.RoleNavigation);
             entity.Property(x => x.ProfileImage).HasMaxLength(500);
+            entity.Property(x => x.Phone).HasMaxLength(20);
+            entity.Ignore(x => x.WorkType);
+            entity.Property(x => x.WorkTypeId).HasColumnName("work_type_id");
+            entity.HasOne(x => x.WorkTypeNavigation)
+                .WithMany()
+                .HasForeignKey(x => x.WorkTypeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.CreatedOn);
             entity.Property(x => x.PasswordResetOtp).HasMaxLength(10);
             entity.Property(x => x.PasswordResetOtpExpiry);
@@ -99,16 +93,30 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasMany(x => x.MfaDevices).WithOne(x => x.User).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<AppUserRole>(entity =>
+        {
+            entity.ToTable("user_roles");
+            entity.HasKey(x => new { x.UserId, x.RoleId });
+            entity.HasOne(x => x.User)
+                .WithMany(x => x.UserRoles)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.Role)
+                .WithMany(x => x.UserRoles)
+                .HasForeignKey(x => x.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<RoleRight>(entity =>
         {
             entity.HasKey(x => x.RoleRightId);
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
-            entity.Property(x => x.Module).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.SubModule).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.Page).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.Access).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Access).HasMaxLength(20);
             entity.Ignore(x => x.NavigationMenu);
-            entity.HasIndex(x => new { x.Role, x.Module, x.SubModule, x.Page }).IsUnique();
+            entity.Ignore(x => x.Module);
+            entity.Ignore(x => x.SubModule);
+            entity.Ignore(x => x.Page);
+            entity.HasIndex(x => new { x.Role, x.FeatureID });
         });
 
         modelBuilder.Entity<NavigationMenu>(entity =>

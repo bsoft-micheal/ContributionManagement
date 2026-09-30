@@ -116,12 +116,21 @@ public static class CommonConstants
         public const string LogDataChanges = "logDataChanges";
         public const string LogConfigChanges = "logConfigChanges";
         public const string RetentionPeriod = "retentionPeriod";
+        public const string EmailSubject = "emailSubject";
+        public const string EmailDescription = "emailDescription";
+        public const string CategoryTemplates = "categoryTemplates";
+        public const string SelectedTemplateCategoryId = "selectedTemplateCategoryId";
+        public const string EnableMonthlyEmail = "enableMonthlyEmail";
+        public const string EnableReminderEmail = "enableReminderEmail";
+        public const string ReminderIntervalDays = "reminderIntervalDays";
+        public const string MaxReminders = "maxReminders";
     }
 
     public static class SettingCategories
     {
         public const string General = "General";
         public const string Email = "Email";
+        public const string EmailTemplate = "EmailTemplate";
         public const string Security = "Security";
         public const string Notifications = "Notifications";
         public const string PaymentQr = "PaymentQr";

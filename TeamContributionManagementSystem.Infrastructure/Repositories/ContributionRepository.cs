@@ -34,7 +34,7 @@ public class ContributionRepository : IContributionRepository
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
                     MemberId = x.MemberId,
-                    MemberName = x.Member != null ? x.Member.Name : string.Empty,
+                    MemberName = x.Member != null ? x.Member.FullName : string.Empty,
                     Amount = x.Amount,
                     PaymentStatus = x.PaymentStatus,
                     PaymentDate = x.PaymentDate,
@@ -60,7 +60,7 @@ public class ContributionRepository : IContributionRepository
         {
             return await _context.Contributions
                 .Where(x => x.EventId == eventId && !x.IsDeleted)
-                .OrderBy(x => x.Member!.Name)
+                .OrderBy(x => x.Member!.FullName)
                 .Select(x => new ContributionDto
                 {
                     ContributionId = x.ContributionId,
@@ -68,7 +68,7 @@ public class ContributionRepository : IContributionRepository
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
                     MemberId = x.MemberId,
-                    MemberName = x.Member != null ? x.Member.Name : string.Empty,
+                    MemberName = x.Member != null ? x.Member.FullName : string.Empty,
                     Amount = x.Amount,
                     PaymentStatus = x.PaymentStatus,
                     PaymentDate = x.PaymentDate,
@@ -130,7 +130,7 @@ public class ContributionRepository : IContributionRepository
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
                     MemberId = x.MemberId,
-                    MemberName = x.Member != null ? x.Member.Name : string.Empty,
+                    MemberName = x.Member != null ? x.Member.FullName : string.Empty,
                     Amount = x.Amount,
                     PaymentStatus = x.PaymentStatus,
                     PaymentDate = x.PaymentDate,
@@ -203,7 +203,7 @@ public class ContributionRepository : IContributionRepository
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
                     MemberId = x.MemberId,
-                    MemberName = x.Member != null ? x.Member.Name : string.Empty,
+                    MemberName = x.Member != null ? x.Member.FullName : string.Empty,
                     Amount = x.Amount,
                     PaymentStatus = x.PaymentStatus,
                     PaymentDate = x.PaymentDate,

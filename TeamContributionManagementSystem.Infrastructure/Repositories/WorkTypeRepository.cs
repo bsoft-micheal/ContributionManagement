@@ -17,9 +17,9 @@ public class WorkTypeRepository : IWorkTypeRepository
 
     public async Task<IReadOnlyCollection<WorkTypeDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
-        var memberWorkTypes = await _context.Members
-            .Where(m => !m.IsDeleted && !string.IsNullOrEmpty(m.WorkType))
-            .Select(m => m.WorkType.ToLower())
+        var memberWorkTypes = await _context.Users
+            .Where(m => !m.IsDeleted && m.WorkTypeId != null && m.WorkTypeNavigation != null)
+            .Select(m => m.WorkTypeNavigation!.WorkTypeName.ToLower())
             .Distinct()
             .ToListAsync(cancellationToken);
 
@@ -71,7 +71,7 @@ public class WorkTypeRepository : IWorkTypeRepository
     public async Task<bool> HasMembersAsync(string workTypeName, CancellationToken cancellationToken = default)
     {
         var cleanName = workTypeName.Trim().ToLower();
-        return await _context.Members.AnyAsync(m => !m.IsDeleted && m.WorkType.ToLower() == cleanName, cancellationToken);
+        return await _context.Users.AnyAsync(m => !m.IsDeleted && m.WorkTypeNavigation != null && m.WorkTypeNavigation.WorkTypeName.ToLower() == cleanName, cancellationToken);
     }
 
     public async Task AddAsync(WorkType workType, CancellationToken cancellationToken = default)
