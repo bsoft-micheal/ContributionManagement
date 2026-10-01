@@ -6,6 +6,8 @@ public class PaymentTransactionDto
 {
     public Guid TransactionId { get; set; }
     public string TxnNumber { get; set; } = string.Empty;
+    public Guid? EventId { get; set; }
+    public Guid? UserId { get; set; }
     public string MemberName { get; set; } = string.Empty;
     public string EventName { get; set; } = string.Empty;
     public decimal Amount { get; set; }
