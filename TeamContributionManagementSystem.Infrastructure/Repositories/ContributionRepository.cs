@@ -41,11 +41,11 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    PaymentStatus = ((x.PaymentDate != null && (x.PaymentModeId != null || x.CashAmount > 0 || x.UpiAmount > 0)) || (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed"))) ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentModeItem != null 
+                    PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
-                        : PaymentMode.None,
+                        : (x.CashAmount > 0 && x.UpiAmount > 0 ? PaymentMode.Split : (x.CashAmount > 0 ? PaymentMode.Cash : (x.UpiAmount > 0 ? PaymentMode.Upi : (x.PaymentDate != null ? PaymentMode.Cash : PaymentMode.None)))),
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
@@ -92,11 +92,11 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    PaymentStatus = ((x.PaymentDate != null && (x.PaymentModeId != null || x.CashAmount > 0 || x.UpiAmount > 0)) || (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed"))) ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentModeItem != null 
+                    PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
-                        : PaymentMode.None,
+                        : (x.CashAmount > 0 && x.UpiAmount > 0 ? PaymentMode.Split : (x.CashAmount > 0 ? PaymentMode.Cash : (x.UpiAmount > 0 ? PaymentMode.Upi : (x.PaymentDate != null ? PaymentMode.Cash : PaymentMode.None)))),
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
@@ -105,8 +105,85 @@ public class ContributionRepository : IContributionRepository
                 })
                 .ToListAsync(cancellationToken);
 
+            if (items.Count == 0)
+            {
+                var ev = await _context.Events
+                    .Include(e => e.Participants)
+                    .Include(e => e.EventType)
+                    .FirstOrDefaultAsync(e => e.EventId == eventId && !e.IsDeleted, cancellationToken);
+
+                if (ev != null)
+                {
+                    var participantUserIds = ev.Participants.Where(p => !p.IsDeleted).Select(p => p.UserId).Distinct().ToList();
+                    if (participantUserIds.Count == 0)
+                    {
+                        participantUserIds = await _context.Users
+                            .Where(u => !u.IsDeleted && u.IsActive)
+                            .Select(u => u.UserId)
+                            .ToListAsync(cancellationToken);
+                    }
+
+                    if (participantUserIds.Count > 0)
+                    {
+                        var baseAmount = ev.BaseAmount;
+                        var perMemberAmount = participantUserIds.Count > 0 ? Math.Round(baseAmount / participantUserIds.Count, 2) : 0m;
+
+                        var newContribs = new List<Contribution>();
+                        foreach (var uid in participantUserIds)
+                        {
+                            var contrib = new Contribution
+                            {
+                                ContributionId = Guid.NewGuid(),
+                                EventId = ev.EventId,
+                                UserId = uid,
+                                Amount = perMemberAmount,
+                                PaymentStatus = PaymentStatus.Pending,
+                                PaymentMode = PaymentMode.None,
+                                IsActive = true,
+                                IsDeleted = false,
+                                CreatedBy = ev.CreatedBy,
+                                CreatedAt = ev.CreatedAt
+                            };
+                            newContribs.Add(contrib);
+                        }
+
+                        await _context.Contributions.AddRangeAsync(newContribs, cancellationToken);
+                        await _context.SaveChangesAsync(cancellationToken);
+
+                        items = await _context.Contributions
+                            .Where(x => x.EventId == eventId && !x.IsDeleted)
+                            .OrderBy(x => x.User != null ? x.User.FullName : string.Empty)
+                            .Select(x => new ContributionDto
+                            {
+                                ContributionId = x.ContributionId,
+                                EventId = x.EventId,
+                                EventName = x.Event != null ? x.Event.EventName : string.Empty,
+                                CategoryName = (x.Event != null && x.Event.EventType != null) ? x.Event.EventType.EventTypeName : string.Empty,
+                                MemberId = x.UserId,
+                                MemberName = x.User != null ? x.User.FullName : string.Empty,
+                                Amount = x.Amount,
+                                PaymentStatus = ((x.PaymentDate != null && (x.PaymentModeId != null || x.CashAmount > 0 || x.UpiAmount > 0)) || (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed"))) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                                PaymentDate = x.PaymentDate,
+                                PaymentMode = x.PaymentModeItem != null
+                                    ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
+                                    : (x.CashAmount > 0 && x.UpiAmount > 0 ? PaymentMode.Split : (x.CashAmount > 0 ? PaymentMode.Cash : (x.UpiAmount > 0 ? PaymentMode.Upi : (x.PaymentDate != null ? PaymentMode.Cash : PaymentMode.None)))),
+                                CashAmount = x.CashAmount,
+                                UpiAmount = x.UpiAmount,
+                                CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
+                                CreatedAt = x.CreatedAt,
+                                CreatedOn = x.CreatedAt
+                            })
+                            .ToListAsync(cancellationToken);
+                    }
+                }
+            }
+
             foreach (var item in items)
             {
+                if (string.IsNullOrWhiteSpace(item.MemberName) && users.TryGetValue(item.MemberId, out var mName))
+                {
+                    item.MemberName = mName;
+                }
                 if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
                 {
                     item.CreatedBy = cName;
@@ -173,11 +250,11 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    PaymentStatus = ((x.PaymentDate != null && (x.PaymentModeId != null || x.CashAmount > 0 || x.UpiAmount > 0)) || (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed"))) ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentModeItem != null 
+                    PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
-                        : PaymentMode.None,
+                        : (x.CashAmount > 0 && x.UpiAmount > 0 ? PaymentMode.Split : (x.CashAmount > 0 ? PaymentMode.Cash : (x.UpiAmount > 0 ? PaymentMode.Upi : (x.PaymentDate != null ? PaymentMode.Cash : PaymentMode.None)))),
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
@@ -276,11 +353,11 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    PaymentStatus = ((x.PaymentDate != null && (x.PaymentModeId != null || x.CashAmount > 0 || x.UpiAmount > 0)) || (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed"))) ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentDate = x.PaymentDate,
-                    PaymentMode = x.PaymentModeItem != null 
+                    PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
-                        : PaymentMode.None,
+                        : (x.CashAmount > 0 && x.UpiAmount > 0 ? PaymentMode.Split : (x.CashAmount > 0 ? PaymentMode.Cash : (x.UpiAmount > 0 ? PaymentMode.Upi : (x.PaymentDate != null ? PaymentMode.Cash : PaymentMode.None)))),
                     CashAmount = x.CashAmount,
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,

@@ -64,7 +64,6 @@ public class EventTypeService : IEventTypeService
                 EventTypeId = Guid.NewGuid(),
                 EventTypeName = request.EventTypeName.Trim(),
                 IsActive = request.IsActive,
-                BaseAmount = request.BaseAmount,
                 HasTenureRule = request.HasTenureRule,
                 TenureThresholdYears = request.TenureThresholdYears > 0 ? request.TenureThresholdYears : 1.0m,
                 NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m,
@@ -101,7 +100,6 @@ public class EventTypeService : IEventTypeService
 
             eventType.EventTypeName = request.EventTypeName.Trim();
             eventType.IsActive = request.IsActive;
-            eventType.BaseAmount = request.BaseAmount;
             eventType.HasTenureRule = request.HasTenureRule;
             eventType.TenureThresholdYears = request.TenureThresholdYears > 0 ? request.TenureThresholdYears : 1.0m;
             eventType.NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m;

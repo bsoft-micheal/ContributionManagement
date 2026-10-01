@@ -132,19 +132,15 @@ public class UserRepository : IUserRepository
                 .Select(x =>
                 {
                     var assignedRoles = x.UserRoles?.Where(ur => ur.Role != null).ToList() ?? new List<AppUserRole>();
-                    var primaryRoleNames = assignedRoles.Where(ur => ur.IsPrimary).Select(ur => ur.Role!.RoleName).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                    var secondaryRoleNames = assignedRoles.Where(ur => ur.IsSecondary).Select(ur => ur.Role!.RoleName).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                    var allRoleNames = primaryRoleNames
-                        .Concat(secondaryRoleNames)
-                        .Concat(assignedRoles.Select(ur => ur.Role!.RoleName))
-                        .Where(r => !string.IsNullOrWhiteSpace(r))
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToList();
+                    var primaryRoleIds = assignedRoles.Where(ur => ur.IsPrimary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
+                    var secondaryRoleIds = assignedRoles.Where(ur => ur.IsSecondary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
+                    var allRoleIds = assignedRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
 
-                    var activeRole = (x.RoleId.HasValue ? assignedRoles.FirstOrDefault(ur => ur.RoleId == x.RoleId.Value)?.Role?.RoleName : null)
-                        ?? primaryRoleNames.FirstOrDefault()
-                        ?? assignedRoles.FirstOrDefault()?.Role?.RoleName
-                        ?? "Member";
+                    var activeRoleId = x.RoleId ?? primaryRoleIds.FirstOrDefault();
+                    if (activeRoleId == Guid.Empty && allRoleIds.Count > 0)
+                    {
+                        activeRoleId = allRoleIds.First();
+                    }
 
                     return new UserDto
                     {
@@ -152,11 +148,10 @@ public class UserRepository : IUserRepository
                         Username = x.Username,
                         FullName = x.FullName,
                         Email = x.Email,
-                        RoleName = activeRole,
-                        Roles = allRoleNames,
-                        RoleIds = assignedRoles.Select(ur => ur.RoleId).Distinct().ToList(),
-                        PrimaryRoles = primaryRoleNames,
-                        SecondaryRoles = secondaryRoleNames,
+                        RoleId = activeRoleId != Guid.Empty ? activeRoleId : null,
+                        RoleIds = allRoleIds,
+                        PrimaryRoleIds = primaryRoleIds,
+                        SecondaryRoleIds = secondaryRoleIds,
                         EnableMultipleRoles = x.EnableMultipleRoles,
                         IsPrimary = x.IsPrimary || assignedRoles.Any(ur => ur.IsPrimary),
                         IsSecondary = x.IsSecondary || assignedRoles.Any(ur => ur.IsSecondary),
@@ -190,13 +185,13 @@ public class UserRepository : IUserRepository
 
                 u.IsReferred = referenced.Contains(uid) || referenced.Contains(uname) || referenced.Contains(fname) || referenced.Contains(email);
 
-                if (u.Roles.Count == 0 && !string.IsNullOrWhiteSpace(u.RoleName))
+                if (u.RoleIds.Count == 0 && u.RoleId.HasValue)
                 {
-                    u.Roles.Add(u.RoleName);
+                    u.RoleIds.Add(u.RoleId.Value);
                 }
-                if (u.PrimaryRoles.Count == 0 && u.Roles.Count > 0)
+                if (u.PrimaryRoleIds.Count == 0 && u.RoleIds.Count > 0)
                 {
-                    u.PrimaryRoles.Add(u.Roles.First());
+                    u.PrimaryRoleIds.Add(u.RoleIds.First());
                     u.IsPrimary = true;
                 }
 

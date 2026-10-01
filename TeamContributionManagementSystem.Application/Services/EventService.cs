@@ -183,7 +183,12 @@ public class EventService : IEventService
                 {
                     Id = Guid.NewGuid(),
                     EventId = eventItem.EventId,
-                    MemberId = member.MemberId
+                    UserId = member.MemberId,
+                    MemberId = member.MemberId,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = user.UserId
                 });
             }
 
@@ -200,12 +205,21 @@ public class EventService : IEventService
             {
                 ContributionId = Guid.NewGuid(),
                 EventId = eventItem.EventId,
+                UserId = member.MemberId,
                 MemberId = member.MemberId,
                 Amount = memberAmounts.TryGetValue(member.MemberId, out var amount) ? amount : 0m,
                 PaymentStatus = PaymentStatus.Pending,
+                PaymentMode = PaymentMode.None,
+                IsActive = true,
+                IsDeleted = false,
                 CreatedBy = user.UserId,
                 CreatedAt = DateTime.UtcNow
             }).ToList();
+
+            foreach (var c in contributions)
+            {
+                eventItem.Contributions.Add(c);
+            }
 
             await _eventRepository.AddAsync(eventItem, cancellationToken);
             await _contributionRepository.AddRangeAsync(contributions, cancellationToken);

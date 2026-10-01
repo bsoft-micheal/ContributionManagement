@@ -8,7 +8,6 @@ public class EventTypeDto
     public Guid EventTypeId { get; set; }
     public string EventTypeName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
-    public decimal BaseAmount { get; set; }
 
     // Calculation Rule Properties
     public bool HasTenureRule { get; set; }
@@ -32,9 +31,6 @@ public class CreateEventTypeRequestDto
     public string EventTypeName { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
-
-    [Range(1, 1000000, ErrorMessage = CommonValidationMessages.BaseAmountGreaterThanZero)]
-    public decimal BaseAmount { get; set; }
 
     // Calculation Rule Properties
     public bool HasTenureRule { get; set; } = false;

@@ -39,7 +39,7 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.ModifiedOn, opt => opt.MapFrom(src => src.ModifiedOn));
 
         CreateMap<AppUser, UserDto>()
-            .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.ToString()))
+            .ForMember(dest => dest.RoleId, opt => opt.MapFrom(src => src.RoleId))
             .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt ?? src.CreatedOn));
 
         CreateMap<EventType, EventTypeDto>()

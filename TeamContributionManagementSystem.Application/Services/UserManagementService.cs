@@ -84,46 +84,33 @@ public class UserManagementService : IUserManagementService
             ? user.WorkType
             : await ResolveDefaultWorkTypeAsync(cancellationToken);
 
-        var roleFromMapping = user.UserRoles?.Where(ur => ur.IsPrimary).Select(ur => ur.Role?.RoleName).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r))
-            ?? user.UserRoles?.Select(ur => ur.Role?.RoleName).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r));
-        if (!string.IsNullOrWhiteSpace(roleFromMapping))
-        {
-            dto.RoleName = roleFromMapping;
-        }
-        else if (user.RoleId.HasValue)
-        {
-            var role = await _roleRepository.GetByIdAsync(user.RoleId.Value, cancellationToken);
-            if (role != null)
-            {
-                dto.RoleName = role.RoleName;
-            }
-        }
-        else if (string.IsNullOrWhiteSpace(dto.RoleName))
-        {
-            dto.RoleName = user.Role.ToString();
-        }
-
         var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
-        var primaryRoleNames = activeUserRoles.Where(ur => ur.IsPrimary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var secondaryRoleNames = activeUserRoles.Where(ur => ur.IsSecondary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var allRoleNames = primaryRoleNames.Concat(secondaryRoleNames).Concat(activeUserRoles.Select(ur => ur.Role?.RoleName)).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var primaryRoleIds = activeUserRoles.Where(ur => ur.IsPrimary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
+        var secondaryRoleIds = activeUserRoles.Where(ur => ur.IsSecondary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
+        var allRoleIds = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
 
-        dto.Roles = allRoleNames;
-        dto.RoleIds = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
-        dto.PrimaryRoles = primaryRoleNames;
-        dto.SecondaryRoles = secondaryRoleNames;
+        var activeRoleId = user.RoleId ?? primaryRoleIds.FirstOrDefault();
+        if (activeRoleId == Guid.Empty && allRoleIds.Count > 0)
+        {
+            activeRoleId = allRoleIds.First();
+        }
+
+        dto.RoleId = activeRoleId != Guid.Empty ? activeRoleId : null;
+        dto.RoleIds = allRoleIds;
+        dto.PrimaryRoleIds = primaryRoleIds;
+        dto.SecondaryRoleIds = secondaryRoleIds;
         dto.EnableMultipleRoles = user.EnableMultipleRoles;
         dto.IsPrimary = user.IsPrimary || activeUserRoles.Any(ur => ur.IsPrimary);
         dto.IsSecondary = user.IsSecondary || activeUserRoles.Any(ur => ur.IsSecondary);
         dto.ActiveRoleId = user.RoleId;
 
-        if (dto.Roles.Count == 0 && !string.IsNullOrWhiteSpace(dto.RoleName))
+        if (dto.RoleIds.Count == 0 && dto.RoleId.HasValue)
         {
-            dto.Roles.Add(dto.RoleName);
+            dto.RoleIds.Add(dto.RoleId.Value);
         }
-        if (dto.PrimaryRoles.Count == 0 && dto.Roles.Count > 0)
+        if (dto.PrimaryRoleIds.Count == 0 && dto.RoleIds.Count > 0)
         {
-            dto.PrimaryRoles.Add(dto.Roles.First());
+            dto.PrimaryRoleIds.Add(dto.RoleIds.First());
             dto.IsPrimary = true;
         }
 
@@ -438,6 +425,10 @@ public class UserManagementService : IUserManagementService
                 }
             }
 
+            var primaryRoleIdsList = rolesToAdd.Where(ur => ur.IsPrimary).Select(ur => ur.RoleId).Distinct().ToList();
+            var secondaryRoleIdsList = rolesToAdd.Where(ur => ur.IsSecondary).Select(ur => ur.RoleId).Distinct().ToList();
+            var allRoleIdsList = rolesToAdd.Select(ur => ur.RoleId).Distinct().ToList();
+
             var returnDto = new UserDto
             {
                 UserId = appUser.UserId,
@@ -449,11 +440,10 @@ public class UserManagementService : IUserManagementService
                 WorkType = appUser.WorkType,
                 DateOfBirth = appUser.DateOfBirth,
                 JoiningDate = appUser.JoiningDate,
-                RoleName = primaryRoleNameForUser,
-                Roles = rolesToAdd.Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
-                RoleIds = rolesToAdd.Select(ur => ur.RoleId).ToList(),
-                PrimaryRoles = rolesToAdd.Where(ur => ur.IsPrimary).Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
-                SecondaryRoles = rolesToAdd.Where(ur => ur.IsSecondary).Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
+                RoleId = appUser.RoleId ?? primaryRoleIdsList.FirstOrDefault(),
+                RoleIds = allRoleIdsList,
+                PrimaryRoleIds = primaryRoleIdsList,
+                SecondaryRoleIds = secondaryRoleIdsList,
                 EnableMultipleRoles = appUser.EnableMultipleRoles,
                 IsPrimary = appUser.IsPrimary,
                 IsSecondary = appUser.IsSecondary,
@@ -727,6 +717,10 @@ public class UserManagementService : IUserManagementService
                 await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldUsername, username, cancellationToken);
             }
 
+            var primaryRoleIdsList = appUser.UserRoles.Where(ur => ur.IsPrimary).Select(ur => ur.RoleId).Distinct().ToList();
+            var secondaryRoleIdsList = appUser.UserRoles.Where(ur => ur.IsSecondary).Select(ur => ur.RoleId).Distinct().ToList();
+            var allRoleIdsList = appUser.UserRoles.Select(ur => ur.RoleId).Distinct().ToList();
+
             var returnDto = new UserDto
             {
                 UserId = appUser.UserId,
@@ -738,11 +732,10 @@ public class UserManagementService : IUserManagementService
                 WorkType = appUser.WorkType,
                 DateOfBirth = appUser.DateOfBirth,
                 JoiningDate = appUser.JoiningDate,
-                RoleName = primaryRoleNameForUser,
-                Roles = appUser.UserRoles.Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
-                RoleIds = appUser.UserRoles.Select(ur => ur.RoleId).ToList(),
-                PrimaryRoles = appUser.UserRoles.Where(ur => ur.IsPrimary).Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
-                SecondaryRoles = appUser.UserRoles.Where(ur => ur.IsSecondary).Select(ur => roleNamesDict.TryGetValue(ur.RoleId, out var rName) ? rName : (allRoles.FirstOrDefault(r => r.RoleId == ur.RoleId)?.RoleName ?? "")).Where(r => !string.IsNullOrEmpty(r)).ToList(),
+                RoleId = appUser.RoleId ?? primaryRoleIdsList.FirstOrDefault(),
+                RoleIds = allRoleIdsList,
+                PrimaryRoleIds = primaryRoleIdsList,
+                SecondaryRoleIds = secondaryRoleIdsList,
                 EnableMultipleRoles = appUser.EnableMultipleRoles,
                 IsPrimary = appUser.IsPrimary,
                 IsSecondary = appUser.IsSecondary,
