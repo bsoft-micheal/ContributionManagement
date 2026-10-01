@@ -87,9 +87,12 @@ public class AuthService : IAuthService
                     primaryRoleName = user.Role.ToString();
                 }
 
-                if (!string.Equals(primaryRoleName, "Member", StringComparison.OrdinalIgnoreCase))
+                bool isAllowedPrimaryRole = string.Equals(primaryRoleName, "Member", StringComparison.OrdinalIgnoreCase) ||
+                                            string.Equals(primaryRoleName, "Organizer", StringComparison.OrdinalIgnoreCase);
+
+                if (!isAllowedPrimaryRole)
                 {
-                    _logger.LogWarning("Mobile login rejected for user {Email}. Primary role is '{Role}', expected 'Member'.", request.Email, primaryRoleName ?? "None");
+                    _logger.LogWarning("Mobile login rejected for user {Email}. Primary role is '{Role}', expected 'Member' or 'Organizer'.", request.Email, primaryRoleName ?? "None");
                     throw new InvalidOperationException(CommonMessages.Auth.MobileAdminLoginNotAllowed);
                 }
             }
@@ -144,9 +147,12 @@ public class AuthService : IAuthService
                     primaryRoleName = user.Role.ToString();
                 }
 
-                if (!string.Equals(primaryRoleName, "Member", StringComparison.OrdinalIgnoreCase))
+                bool isAllowedPrimaryRole = string.Equals(primaryRoleName, "Member", StringComparison.OrdinalIgnoreCase) ||
+                                            string.Equals(primaryRoleName, "Organizer", StringComparison.OrdinalIgnoreCase);
+
+                if (!isAllowedPrimaryRole)
                 {
-                    _logger.LogWarning("Mobile 2FA verification rejected for user {Email}. Primary role is '{Role}', expected 'Member'.", request.Email, primaryRoleName ?? "None");
+                    _logger.LogWarning("Mobile 2FA verification rejected for user {Email}. Primary role is '{Role}', expected 'Member' or 'Organizer'.", request.Email, primaryRoleName ?? "None");
                     throw new InvalidOperationException(CommonMessages.Auth.MobileAdminLoginNotAllowed);
                 }
             }
@@ -587,6 +593,19 @@ public class AuthService : IAuthService
             string targetRoleName = matchedRoleMapping?.Role?.RoleName 
                 ?? request.RoleName 
                 ?? user.Role.ToString();
+
+            bool isMobileSwitch = request.IsFromMobile || (request.DeviceInfo != null && request.DeviceInfo.DeviceType == 2);
+            if (isMobileSwitch)
+            {
+                bool isAllowedMobileRole = string.Equals(targetRoleName, "Member", StringComparison.OrdinalIgnoreCase) ||
+                                           string.Equals(targetRoleName, "Organizer", StringComparison.OrdinalIgnoreCase);
+
+                if (!isAllowedMobileRole)
+                {
+                    _logger.LogWarning("Mobile role switch rejected for user {Email}. Target role '{Role}' is not allowed in Mobile App.", user.Email, targetRoleName);
+                    throw new InvalidOperationException(CommonMessages.Auth.MobileAdminRoleSwitchNotAllowed);
+                }
+            }
 
             Guid targetRoleId = matchedRoleMapping?.RoleId 
                 ?? (request.RoleId.HasValue && request.RoleId.Value != Guid.Empty ? request.RoleId.Value : Guid.Empty);
