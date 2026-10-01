@@ -307,39 +307,11 @@ public class ContributionReminderJobService : IContributionReminderJobService
             ? systemSettings.OrgName
             : "Team Contribution Management";
 
-        var upiReceiverName = !string.IsNullOrWhiteSpace(systemSettings?.QrReceiverName)
-            ? systemSettings.QrReceiverName
-            : CommonConstants.Defaults.DefaultPayeeName;
-
-        var upiId = !string.IsNullOrWhiteSpace(systemSettings?.QrUpiId)
-            ? systemSettings.QrUpiId
-            : CommonConstants.Defaults.DefaultUpiId;
-
         var formattedAmount = pendingAmount % 1 == 0
             ? $"₹{pendingAmount:N0}"
             : $"₹{pendingAmount:F2}";
 
         var formattedDueDate = eventDate.ToString("dd MMMM yyyy");
-
-        // Generate UPI payment deep link
-        var upiPaymentUri = $"upi://pay?pa={Uri.EscapeDataString(upiId)}&pn={Uri.EscapeDataString(upiReceiverName)}&am={pendingAmount:F2}&cu=INR&tn={Uri.EscapeDataString("Contribution for " + eventName)}";
-
-        // Generate dynamic high-resolution PNG QR Code using QRCoder
-        string qrDataUri = string.Empty;
-        try
-        {
-            using var qrGenerator = new QRCodeGenerator();
-            using var qrCodeData = qrGenerator.CreateQrCode(upiPaymentUri, QRCodeGenerator.ECCLevel.Q);
-            var pngQrCode = new PngByteQRCode(qrCodeData);
-            byte[] qrBytes = pngQrCode.GetGraphic(20);
-            string base64Qr = Convert.ToBase64String(qrBytes);
-            qrDataUri = $"data:image/png;base64,{base64Qr}";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to generate in-memory QRCoder PNG. Falling back to public QR API URL.");
-            qrDataUri = $"https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data={Uri.EscapeDataString(upiPaymentUri)}";
-        }
 
         var frontendBaseUrl = _configuration["Cors:AllowedOrigins:0"] ?? CommonConstants.Defaults.DefaultFrontendUrl;
         var portalPaymentUrl = $"{frontendBaseUrl}/contributions";
@@ -352,8 +324,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
             formattedAmount,
             formattedDueDate,
             orgName,
-            upiPaymentUri,
-            qrDataUri);
+            portalPaymentUrl);
 
         var subject = !string.IsNullOrWhiteSpace(resolvedSubject)
             ? resolvedSubject
@@ -592,24 +563,14 @@ public class ContributionReminderJobService : IContributionReminderJobService
                 </table>
             </div>
 
-            <div class=""qr-section"">
-                <div style=""font-size: 15px; font-weight: 700; color: #1e1b4b; margin-bottom: 14px;"">Scan QR Code via any UPI App</div>
-                <div class=""qr-wrapper"">
-                    <a href=""{upiPaymentUri}"" target=""_blank"" style=""display: block; text-decoration: none;"">
-                        <img src=""{qrDataUri}"" alt=""UPI Payment QR Code - {upiReceiverName}"" />
-                    </a>
-                </div>
-                <div class=""upi-details"">
-                    <div>UPI ID: <strong>{upiId}</strong></div>
-                    <div style=""margin-top: 3px; font-size: 12px; color: #6b7280;"">Receiver: <strong>{upiReceiverName}</strong></div>
-                </div>
+            <div style=""text-align: center; margin: 28px 0 20px 0;"">
+                <a href=""{portalPaymentUrl}"" target=""_blank"" style=""display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff !important; text-decoration: none; padding: 14px 34px; font-size: 15px; font-weight: 700; border-radius: 10px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35); letter-spacing: 0.3px;"">
+                    Go to Contribution Page &amp; Pay
+                </a>
             </div>
 
-            <a href=""{upiPaymentUri}"" class=""btn-pay"">&#x1F4B3; Pay {formattedAmount} via UPI App</a>
-            <a href=""{portalPaymentUrl}"" class=""btn-portal"">View on Team Portal &amp; Submit Proof</a>
-
             <div class=""notice"">
-                <strong>Important:</strong> If you have already made this payment via Cash or Bank Transfer, please submit your payment reference/UTR number on the portal or contact the organizer to verify your status.
+                <strong>Important:</strong> If you have already made this payment via Cash or Bank Transfer, please contact the organizer or verify your payment status on the portal.
             </div>
 
             <p style=""font-size: 14px; color: #475569; margin: 0;"">
@@ -642,8 +603,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
         string formattedAmount,
         string formattedDueDate,
         string orgName,
-        string upiPaymentUri,
-        string qrDataUri)
+        string portalContributionUrl)
     {
         string rawSubject = string.Empty;
         string rawDescription = string.Empty;
@@ -688,7 +648,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
         {
             rawDescription = !string.IsNullOrWhiteSpace(systemSettings?.EmailDescription)
                 ? systemSettings.EmailDescription
-                : "Dear {memberName},\n\nThis is a friendly reminder that your contribution of {amount} for {categoryName} is still pending.\nDue Date: {dueDate}\n\nPlease complete your payment at your earliest convenience using UPI:\n{paymentLink}\n\n{qrCode}\n\nThank you,\n{orgName}";
+                : "Dear {memberName},\n\nThis is a friendly reminder that your contribution of {amount} for {categoryName} is pending.\nDue Date: {dueDate}\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
         }
 
         string resolvedSubject = rawSubject
@@ -706,7 +666,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
             .Replace("{orgName}", orgName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{paymentLink}", upiPaymentUri, StringComparison.OrdinalIgnoreCase)
+            .Replace("{paymentLink}", portalContributionUrl, StringComparison.OrdinalIgnoreCase)
             .Replace("{qrCode}", string.Empty, StringComparison.OrdinalIgnoreCase);
 
         return (resolvedSubject, resolvedDescription);

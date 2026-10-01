@@ -364,9 +364,6 @@ public class EventService : IEventService
                 var scopedMemberRepo = scope.ServiceProvider.GetRequiredService<IMemberRepository>();
                 var scopedSettingService = scope.ServiceProvider.GetService<ISystemSettingService>();
 
-                string upiReceiverName = CommonConstants.Defaults.DefaultPayeeName;
-                string upiId = CommonConstants.Defaults.DefaultUpiId;
-                string qrImageUrl = string.Empty;
                 SystemSettingsDto? systemSettings = null;
 
                 if (scopedSettingService != null)
@@ -374,12 +371,6 @@ public class EventService : IEventService
                     try
                     {
                         systemSettings = await scopedSettingService.GetSettingsAsync(CancellationToken.None);
-                        if (!string.IsNullOrWhiteSpace(systemSettings.QrReceiverName)) upiReceiverName = systemSettings.QrReceiverName;
-                        if (!string.IsNullOrWhiteSpace(systemSettings.QrUpiId)) upiId = systemSettings.QrUpiId;
-                        if (!string.IsNullOrWhiteSpace(systemSettings.QrImage) && systemSettings.QrImage.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                        {
-                            qrImageUrl = systemSettings.QrImage;
-                        }
                     }
                     catch (Exception ex)
                     {
@@ -585,23 +576,8 @@ public class EventService : IEventService
                             ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
                             : $"Rs.{baseAmount:F2}";
 
-                        var upiPaymentUri = $"upi://pay?pa={upiId}&pn={Uri.EscapeDataString(upiReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString("Contribution for " + safeEventName)}";
-                        var memberQrCodeUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data={Uri.EscapeDataString(upiPaymentUri)}";
                         var frontendBaseUrl = "http://localhost:5173";
-                        var confirmPaymentUrl = $"{frontendBaseUrl}/confirm-payment?eventId={eventId}&memberId={contributor.MemberId}&amount={memberContributionAmount:F2}";
-
-                        var paymentLinkInline = upiPaymentUri;
-                        var qrImageInlineTag = $@"
-                            <div style=""text-align: center; margin: 18px 0;"">
-                                <div style=""display: inline-block; padding: 12px; background: #ffffff; border: 2px solid #7c3aed; border-radius: 12px; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.12);"">
-                                    <a href=""{upiPaymentUri}"" style=""text-decoration: none; display: block;"">
-                                        <img src=""{memberQrCodeUrl}"" alt=""UPI Payment QR Code - {upiReceiverName}"" width=""220"" height=""220"" style=""display: block; margin: 0 auto; border-radius: 6px;"" />
-                                    </a>
-                                </div>
-                                <div style=""font-size: 12px; color: #64748b; margin-top: 6px;"">UPI ID: <strong style=""color: #312e81;"">{upiId}</strong> ({upiReceiverName})</div>
-                            </div>";
-
-                        bool hasCustomQrCode = (configuredDescription ?? string.Empty).Contains("{qrCode}", StringComparison.OrdinalIgnoreCase);
+                        var portalContributionUrl = $"{frontendBaseUrl}/contributions";
 
                         var interpolated = (configuredDescription ?? string.Empty)
                             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
@@ -610,8 +586,8 @@ public class EventService : IEventService
                             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
                             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
                             .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{paymentLink}", paymentLinkInline, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{qrCode}", qrImageInlineTag, StringComparison.OrdinalIgnoreCase);
+                            .Replace("{paymentLink}", portalContributionUrl, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{qrCode}", string.Empty, StringComparison.OrdinalIgnoreCase);
 
                         var formattedText = interpolated
                             .Replace("\r\n", "<br />")
@@ -694,13 +670,17 @@ public class EventService : IEventService
             border-radius: 6px;
             display: inline-block;
         }}
-        .payment-card {{
-            background: linear-gradient(to right, #ffffff, #faf9fd);
-            border: 1.5px solid #e9e6f5;
+        .btn-portal {{
+            display: inline-block;
+            background: linear-gradient(135deg, #4a3f6b 0%, #2d2550 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 700;
+            padding: 14px 34px;
             border-radius: 10px;
-            padding: 18px 24px;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 10px rgba(74, 63, 107, 0.04);
+            box-shadow: 0 4px 14px rgba(74, 63, 107, 0.3);
+            letter-spacing: 0.3px;
         }}
         .footer {{
             background-color: #ffffff;
@@ -744,62 +724,11 @@ public class EventService : IEventService
                 </div>
             </div>
 
-            {(hasCustomQrCode ? $@"
-            <div style=""margin: 20px 0; padding: 18px; background: #ffffff; border: 1.5px solid #ede9fe; border-radius: 12px; text-align: center;"">
-                <a href=""{upiPaymentUri}"" style=""display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 9px 24px; border-radius: 8px;"">Pay {formattedAmount} via UPI App</a>
-                <div style=""margin-top: 16px; padding-top: 14px; border-top: 1.5px dashed #e2e8f0;"">
-                    <div style=""font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 4px;"">Already Paid? Submit Payment Proof</div>
-                    <div style=""font-size: 12px; color: #64748b; margin-bottom: 10px;"">Submit your 12-digit UPI Reference / UTR Number to automatically update your payment status.</div>
-                    <a href=""{confirmPaymentUrl}"" target=""_blank"" style=""display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 22px; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);"">&#x2705; I Have Paid — Submit UTR / Ref No.</a>
-                </div>
-            </div>" : $@"
-            <!-- Dynamic UPI QR Scanner Card -->
-            <div class=""payment-card"" style=""background: #ffffff; border: 1.5px solid #ede9fe; border-radius: 14px; padding: 20px; margin: 22px 0; text-align: center; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08);"">
-                <div style=""font-family: 'Outfit', 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #4338ca; margin-bottom: 12px; letter-spacing: 0.5px; text-transform: uppercase;"">
-                    Scan QR Code to Pay via UPI
-                </div>
-                <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"">
-                    <tr>
-                        <td align=""center"" style=""padding: 0 0 14px 0;"">
-                            <div style=""display: inline-block; padding: 12px; background: #ffffff; border: 2px solid #7c3aed; border-radius: 12px; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.12);"">
-                                <a href=""{upiPaymentUri}"" style=""text-decoration: none; display: block;"">
-                                    <img src=""{memberQrCodeUrl}"" alt=""UPI Payment QR Code - {upiReceiverName}"" width=""220"" height=""220"" style=""display: block; margin: 0 auto; border-radius: 6px;"" />
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td align=""center"" style=""padding: 4px 0; font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif;"">
-                            <div style=""font-size: 14px; color: #475569; margin-bottom: 6px;"">
-                                Payee: <strong style=""color: #0f172a;"">{upiReceiverName}</strong>
-                            </div>
-                            <div style=""font-size: 14px; color: #334155; margin-bottom: 8px;"">
-                                <span style=""font-weight: 600; color: #64748b; margin-right: 6px;"">UPI ID:</span>
-                                <span style=""color: #312e81; background-color: #eef2ff; font-weight: 700; padding: 4px 12px; border-radius: 6px; font-family: 'Outfit', 'Courier New', monospace; letter-spacing: 0.5px; border: 1px solid #c7d2fe;"">{upiId}</span>
-                            </div>
-                            <div style=""font-size: 12px; color: #64748b; margin-top: 4px;"">
-                                Scan with Google Pay, PhonePe, Paytm, or Camera to pay automatically.
-                            </div>
-                            <div style=""margin-top: 10px;"">
-                                <a href=""{upiPaymentUri}"" style=""display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; font-size: 12.5px; font-weight: 700; padding: 7px 18px; border-radius: 6px;"">Open UPI App ({formattedAmount})</a>
-                            </div>
-
-                            <!-- One-Click Confirmation Section -->
-                            <div style=""margin-top: 20px; padding-top: 16px; border-top: 1.5px dashed #e2e8f0; text-align: center;"">
-                                <div style=""font-size: 13.5px; font-weight: 700; color: #0f172a; margin-bottom: 4px;"">
-                                    Already Paid? Submit Payment Proof
-                                </div>
-                                <div style=""font-size: 12px; color: #64748b; margin-bottom: 12px;"">
-                                    Click below to submit your 12-digit UPI Reference / UTR Number to automatically update your payment status.
-                                </div>
-                                <a href=""{confirmPaymentUrl}"" target=""_blank"" style=""display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 22px; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);"">
-                                    &#x2705; I Have Paid — Submit UTR / Ref No.
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                </table>
-            </div>")}
+            <div style=""text-align: center; margin: 30px 0 10px 0;"">
+                <a href=""{portalContributionUrl}"" target=""_blank"" class=""btn-portal"">
+                    Go to Contribution Page &amp; Pay
+                </a>
+            </div>
         </div>
         <div class=""footer"">
             This is an automated notification from {safeOrgName}.
@@ -1142,10 +1071,10 @@ public class EventService : IEventService
         string templateType = "initial")
     {
         string defaultBirthdaySubject = "Birthday Celebration Contribution - {categoryName}";
-        string defaultBirthdayDesc = "Dear {memberName},\n\nWe have upcoming birthdays this month in our team! Your planned contribution for {categoryName} is {amount}, due by {dueDate}.\n\nPlease scan the dynamic UPI QR code below or tap the payment link to contribute:\n{paymentLink}\n\n{qrCode}\n\nWarm regards,\n{orgName}";
+        string defaultBirthdayDesc = "Dear {memberName},\n\nWe have upcoming birthdays this month in our team! Your planned contribution for {categoryName} is {amount}, due by {dueDate}.\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nWarm regards,\n{orgName}";
 
         string defaultGeneralSubject = "Contribution Notice - {categoryName}";
-        string defaultGeneralDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\nPlease scan the attached dynamic UPI QR code or click the payment link to pay:\n{paymentLink}\n\n{qrCode}\n\nThank you,\n{orgName}";
+        string defaultGeneralDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
 
         bool isBirthday = (eventTypeName ?? string.Empty).Contains("Birthday", StringComparison.OrdinalIgnoreCase);
         string fallbackSubject = isBirthday ? defaultBirthdaySubject : defaultGeneralSubject;

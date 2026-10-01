@@ -357,20 +357,9 @@ public class PaymentTransactionService : IPaymentTransactionService
         {
             var result = new PaymentContextDto();
 
-            // Load QR Settings
-            try
-            {
-                var settings = await _settingService.GetSettingsAsync(cancellationToken);
-                result.QrReceiverName = settings.QrReceiverName ?? CommonConstants.Defaults.DefaultPayeeName;
-                result.QrUpiId = settings.QrUpiId ?? CommonConstants.Defaults.DefaultUpiId;
-                result.QrImage = settings.QrImage ?? string.Empty;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, CommonLogMessages.Payments.SettingsLoadWarning);
-                result.QrReceiverName = CommonConstants.Defaults.DefaultPayeeName;
-                result.QrUpiId = CommonConstants.Defaults.DefaultUpiId;
-            }
+            result.QrReceiverName = CommonConstants.Defaults.DefaultPayeeName;
+            result.QrUpiId = CommonConstants.Defaults.DefaultUpiId;
+            result.QrImage = string.Empty;
 
             Event? ev = null;
             if (eventId.HasValue && eventId.Value != Guid.Empty)
