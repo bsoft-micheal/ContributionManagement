@@ -77,6 +77,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.Configure<SmtpSettings>(configuration.GetSection(CommonConstants.ConfigSections.Smtp));
         services.AddScoped<IEmailService, EmailService>();
+        services.AddScoped<IContributionReminderJobService, ContributionReminderJobService>();
         services.AddScoped<ApplicationDbContextSeeder>();
 
         services.AddAutoMapper(cfg => { }, typeof(MappingProfile));

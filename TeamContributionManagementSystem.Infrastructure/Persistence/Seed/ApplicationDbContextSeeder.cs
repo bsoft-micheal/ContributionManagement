@@ -19,6 +19,10 @@ public class ApplicationDbContextSeeder
         try
         {
             await _context.Database.ExecuteSqlRawAsync(@"
+                -- contributions reminder tracking
+                ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS last_reminder_sent_at TIMESTAMPTZ NULL;
+                ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS reminder_count INT NOT NULL DEFAULT 0;
+
                 -- system_settings
                 ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS allowed_multiple_event BOOLEAN NOT NULL DEFAULT FALSE;
 

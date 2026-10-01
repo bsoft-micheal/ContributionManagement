@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeamContributionManagementSystem.Application.Common;
@@ -77,5 +78,29 @@ public class ContributionsController : ControllerBase
     {
         var result = await _contributionService.SavePayContributionAsync(request, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<ContributionDto>.SuccessResult(result, CommonMessages.Contributions.PaySuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Manually triggers a contribution reminder email for a specific contribution (Admin or Organizer).
+    /// </summary>
+    /// <param name="contributionId">The unique identifier of the contribution.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [HttpPost(CommonRoutes.Contributions.SendReminder)]
+    [HttpPost(CommonRoutes.Contributions.SendReminderAsync)]
+    [ActionName(nameof(SendReminderAsync))]
+    public ActionResult<ApiResponse<object>> SendReminderAsync([FromRoute] Guid contributionId, CancellationToken cancellationToken)
+    {
+        var userName = User.FindFirstValue(ClaimTypes.Name) 
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier) 
+            ?? "Admin";
+
+        var jobId = BackgroundJob.Enqueue<IContributionReminderJobService>(
+            service => service.SendReminderForContributionAsync(contributionId, userName, CancellationToken.None));
+
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(
+            new { JobId = jobId, ContributionId = contributionId, Status = "Enqueued" },
+            "Contribution reminder job successfully enqueued.",
+            CommonStatusCodes.Status200OK));
     }
 }

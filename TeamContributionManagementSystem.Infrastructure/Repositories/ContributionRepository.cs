@@ -50,7 +50,9 @@ public class ContributionRepository : IContributionRepository
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
-                    CreatedOn = x.CreatedAt
+                    CreatedOn = x.CreatedAt,
+                    LastReminderSentAt = x.LastReminderSentAt,
+                    ReminderCount = x.ReminderCount
                 })
                 .ToListAsync(cancellationToken);
 
@@ -101,7 +103,9 @@ public class ContributionRepository : IContributionRepository
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
-                    CreatedOn = x.CreatedAt
+                    CreatedOn = x.CreatedAt,
+                    LastReminderSentAt = x.LastReminderSentAt,
+                    ReminderCount = x.ReminderCount
                 })
                 .ToListAsync(cancellationToken);
 
@@ -171,7 +175,9 @@ public class ContributionRepository : IContributionRepository
                                 UpiAmount = x.UpiAmount,
                                 CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                                 CreatedAt = x.CreatedAt,
-                                CreatedOn = x.CreatedAt
+                                CreatedOn = x.CreatedAt,
+                                LastReminderSentAt = x.LastReminderSentAt,
+                                ReminderCount = x.ReminderCount
                             })
                             .ToListAsync(cancellationToken);
                     }
@@ -259,7 +265,9 @@ public class ContributionRepository : IContributionRepository
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
-                    CreatedOn = x.CreatedAt
+                    CreatedOn = x.CreatedAt,
+                    LastReminderSentAt = x.LastReminderSentAt,
+                    ReminderCount = x.ReminderCount
                 })
                 .ToListAsync(cancellationToken);
 
@@ -362,7 +370,9 @@ public class ContributionRepository : IContributionRepository
                     UpiAmount = x.UpiAmount,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
-                    CreatedOn = x.CreatedAt
+                    CreatedOn = x.CreatedAt,
+                    LastReminderSentAt = x.LastReminderSentAt,
+                    ReminderCount = x.ReminderCount
                 })
                 .ToListAsync(cancellationToken);
 

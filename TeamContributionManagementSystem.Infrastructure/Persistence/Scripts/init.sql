@@ -202,6 +202,8 @@ CREATE TABLE IF NOT EXISTS contributions (
     payment_mode VARCHAR(20) NOT NULL,
     cash_amount NUMERIC(12,2) NULL,
     upi_amount NUMERIC(12,2) NULL,
+    last_reminder_sent_at TIMESTAMPTZ NULL,
+    reminder_count INT NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
@@ -211,6 +213,9 @@ CREATE TABLE IF NOT EXISTS contributions (
     modified_on TIMESTAMPTZ NULL,
     CONSTRAINT uq_contributions UNIQUE (event_id, member_id)
 );
+
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS last_reminder_sent_at TIMESTAMPTZ NULL;
+ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS reminder_count INT NOT NULL DEFAULT 0;
 
 -- 11. Role Rights Table
 CREATE TABLE IF NOT EXISTS role_rights (

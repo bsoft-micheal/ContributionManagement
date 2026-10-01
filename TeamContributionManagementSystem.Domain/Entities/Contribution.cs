@@ -27,6 +27,10 @@ public class Contribution
     public bool IsDeleted { get; set; }
     public bool IsActive { get; set; } = true;
 
+    // Reminder Tracking
+    public DateTime? LastReminderSentAt { get; set; }
+    public int ReminderCount { get; set; } = 0;
+
     // Unmapped properties for backward compatibility
     [NotMapped]
     public Guid MemberId

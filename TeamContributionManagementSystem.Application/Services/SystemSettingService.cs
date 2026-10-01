@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Settings;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
@@ -12,12 +13,18 @@ public class SystemSettingService : ISystemSettingService
     private readonly ILogger<SystemSettingService> _logger;
     private readonly ISystemSettingRepository _settingRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly SmtpSettings _smtpSettings;
 
-    public SystemSettingService(ILogger<SystemSettingService> logger, ISystemSettingRepository settingRepository, IUnitOfWork unitOfWork)
+    public SystemSettingService(
+        ILogger<SystemSettingService> logger,
+        ISystemSettingRepository settingRepository,
+        IUnitOfWork unitOfWork,
+        IOptions<SmtpSettings>? smtpOptions = null)
     {
         _logger = logger;
         _settingRepository = settingRepository;
         _unitOfWork = unitOfWork;
+        _smtpSettings = smtpOptions?.Value ?? new SmtpSettings();
     }
 
     public async Task<SystemSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
@@ -41,11 +48,47 @@ public class SystemSettingService : ISystemSettingService
             if (map.TryGetValue(CommonConstants.SettingKeys.DefaultCurrency, out var defaultCurrency)) dto.DefaultCurrency = defaultCurrency;
             if (map.TryGetValue(CommonConstants.SettingKeys.TimeZone, out var timeZone)) dto.TimeZone = timeZone;
 
-            if (map.TryGetValue(CommonConstants.SettingKeys.FromEmail, out var fromEmail)) dto.FromEmail = fromEmail;
-            if (map.TryGetValue(CommonConstants.SettingKeys.FromName, out var fromName)) dto.FromName = fromName;
-            if (map.TryGetValue(CommonConstants.SettingKeys.SmtpHost, out var smtpHost)) dto.SmtpHost = smtpHost;
-            if (map.TryGetValue(CommonConstants.SettingKeys.SmtpPort, out var smtpPort)) dto.SmtpPort = smtpPort;
-            if (map.TryGetValue(CommonConstants.SettingKeys.Encryption, out var encryption)) dto.Encryption = encryption;
+            // Email & SMTP configuration populated directly from backend secrets / SmtpSettings
+            var secretFromEmail = !string.IsNullOrWhiteSpace(_smtpSettings.FromAddress)
+                ? _smtpSettings.FromAddress
+                : (!string.IsNullOrWhiteSpace(_smtpSettings.Username) ? _smtpSettings.Username : string.Empty);
+            var secretFromName = !string.IsNullOrWhiteSpace(_smtpSettings.FromName)
+                ? _smtpSettings.FromName
+                : string.Empty;
+            var secretHost = !string.IsNullOrWhiteSpace(_smtpSettings.Host)
+                ? _smtpSettings.Host
+                : string.Empty;
+            var secretPort = _smtpSettings.Port > 0
+                ? _smtpSettings.Port.ToString()
+                : string.Empty;
+            var secretEncryption = _smtpSettings.EnableSsl ? "TLS" : string.Empty;
+
+            dto.FromEmail = !string.IsNullOrWhiteSpace(secretFromEmail) ? secretFromEmail : string.Empty;
+            dto.FromName = !string.IsNullOrWhiteSpace(secretFromName) ? secretFromName : string.Empty;
+            dto.SmtpHost = !string.IsNullOrWhiteSpace(secretHost) ? secretHost : string.Empty;
+            dto.SmtpPort = !string.IsNullOrWhiteSpace(secretPort) ? secretPort : string.Empty;
+            dto.Encryption = !string.IsNullOrWhiteSpace(secretEncryption) ? secretEncryption : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(dto.FromEmail) && map.TryGetValue(CommonConstants.SettingKeys.FromEmail, out var fromEmail) && !string.IsNullOrWhiteSpace(fromEmail) && !fromEmail.Contains("unit1a.com", StringComparison.OrdinalIgnoreCase))
+            {
+                dto.FromEmail = fromEmail;
+            }
+            if (string.IsNullOrWhiteSpace(dto.FromName) && map.TryGetValue(CommonConstants.SettingKeys.FromName, out var fromName) && !string.IsNullOrWhiteSpace(fromName) && !fromName.Contains("Unit 1A", StringComparison.OrdinalIgnoreCase))
+            {
+                dto.FromName = fromName;
+            }
+            if (string.IsNullOrWhiteSpace(dto.SmtpHost) && map.TryGetValue(CommonConstants.SettingKeys.SmtpHost, out var smtpHost) && !string.IsNullOrWhiteSpace(smtpHost))
+            {
+                dto.SmtpHost = smtpHost;
+            }
+            if (string.IsNullOrWhiteSpace(dto.SmtpPort) && map.TryGetValue(CommonConstants.SettingKeys.SmtpPort, out var smtpPort) && !string.IsNullOrWhiteSpace(smtpPort))
+            {
+                dto.SmtpPort = smtpPort;
+            }
+            if (string.IsNullOrWhiteSpace(dto.Encryption) && map.TryGetValue(CommonConstants.SettingKeys.Encryption, out var encryption) && !string.IsNullOrWhiteSpace(encryption))
+            {
+                dto.Encryption = encryption;
+            }
 
             if (map.TryGetValue(CommonConstants.SettingKeys.OtpExpiry, out var otpExpiry)) dto.OtpExpiry = otpExpiry;
             if (map.TryGetValue(CommonConstants.SettingKeys.MaxRetry, out var maxRetry)) dto.MaxRetry = maxRetry;
@@ -74,6 +117,9 @@ public class SystemSettingService : ISystemSettingService
             if (map.TryGetValue(CommonConstants.SettingKeys.EnableMonthlyEmail, out var enableMonthlyEmail)) dto.EnableMonthlyEmail = bool.TryParse(enableMonthlyEmail, out var eme) ? eme : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.EnableReminderEmail, out var enableReminderEmail)) dto.EnableReminderEmail = bool.TryParse(enableReminderEmail, out var ere) ? ere : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.ReminderIntervalDays, out var remDays)) dto.ReminderIntervalDays = remDays;
+            if (map.TryGetValue(CommonConstants.SettingKeys.ReminderIntervalValue, out var remVal)) dto.ReminderIntervalValue = remVal;
+            else dto.ReminderIntervalValue = dto.ReminderIntervalDays;
+            if (map.TryGetValue(CommonConstants.SettingKeys.ReminderIntervalUnit, out var remUnit)) dto.ReminderIntervalUnit = remUnit;
             if (map.TryGetValue(CommonConstants.SettingKeys.MaxReminders, out var maxRem)) dto.MaxReminders = maxRem;
             if (map.TryGetValue(CommonConstants.SettingKeys.CategoryTemplates, out var catTemplates) && !string.IsNullOrWhiteSpace(catTemplates))
             {
@@ -148,6 +194,8 @@ public class SystemSettingService : ISystemSettingService
                 [CommonConstants.SettingKeys.EnableMonthlyEmail] = (settings.EnableMonthlyEmail.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.EmailTemplate),
                 [CommonConstants.SettingKeys.EnableReminderEmail] = (settings.EnableReminderEmail.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.EmailTemplate),
                 [CommonConstants.SettingKeys.ReminderIntervalDays] = (settings.ReminderIntervalDays ?? "10", CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.ReminderIntervalValue] = (settings.ReminderIntervalValue ?? settings.ReminderIntervalDays ?? "10", CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.ReminderIntervalUnit] = (settings.ReminderIntervalUnit ?? "Days", CommonConstants.SettingCategories.EmailTemplate),
                 [CommonConstants.SettingKeys.MaxReminders] = (settings.MaxReminders ?? "3", CommonConstants.SettingCategories.EmailTemplate)
             };
 
@@ -207,7 +255,14 @@ public class SystemSettingService : ISystemSettingService
     {
         try
         {
-            var defaults = new SystemSettingsDto();
+            var defaults = new SystemSettingsDto
+            {
+                FromEmail = !string.IsNullOrWhiteSpace(_smtpSettings.FromAddress) ? _smtpSettings.FromAddress : _smtpSettings.Username,
+                FromName = !string.IsNullOrWhiteSpace(_smtpSettings.FromName) ? _smtpSettings.FromName : string.Empty,
+                SmtpHost = _smtpSettings.Host,
+                SmtpPort = _smtpSettings.Port > 0 ? _smtpSettings.Port.ToString() : string.Empty,
+                Encryption = _smtpSettings.EnableSsl ? "TLS" : string.Empty
+            };
             var result = await UpdateSettingsAsync(defaults, user, cancellationToken);
             _logger.LogInformation(CommonLogMessages.Settings.SettingsReset, user ?? string.Empty);
             return result;

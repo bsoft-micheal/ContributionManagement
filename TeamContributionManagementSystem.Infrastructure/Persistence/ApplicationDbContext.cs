@@ -208,6 +208,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Ignore(x => x.PaymentMode);
             entity.Property(x => x.StatusId).HasColumnName("status_id");
             entity.Property(x => x.PaymentModeId).HasColumnName("payment_mode_id");
+            entity.Property(x => x.LastReminderSentAt).HasColumnName("last_reminder_sent_at");
+            entity.Property(x => x.ReminderCount).HasColumnName("reminder_count").HasDefaultValue(0);
             entity.HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
             entity.HasOne(x => x.Event)
                 .WithMany(x => x.Contributions)

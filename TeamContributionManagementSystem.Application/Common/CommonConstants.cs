@@ -124,6 +124,8 @@ public static class CommonConstants
         public const string EnableMonthlyEmail = "enableMonthlyEmail";
         public const string EnableReminderEmail = "enableReminderEmail";
         public const string ReminderIntervalDays = "reminderIntervalDays";
+        public const string ReminderIntervalValue = "reminderIntervalValue";
+        public const string ReminderIntervalUnit = "reminderIntervalUnit";
         public const string MaxReminders = "maxReminders";
     }
 
