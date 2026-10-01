@@ -294,6 +294,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.SettingValue).IsRequired();
             entity.Property(x => x.Category).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(500);
+            entity.Property(x => x.AllowedMultipleEvent).HasColumnName("allowed_multiple_event").HasDefaultValue(false);
             entity.HasIndex(x => x.SettingKey).IsUnique();
         });
 

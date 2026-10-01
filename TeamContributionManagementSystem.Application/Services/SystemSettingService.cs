@@ -31,6 +31,12 @@ public class SystemSettingService : ISystemSettingService
 
             if (map.TryGetValue(CommonConstants.SettingKeys.OrgName, out var orgName)) dto.OrgName = orgName;
             if (map.TryGetValue(CommonConstants.SettingKeys.BirthdayMembersExempt, out var birthdayMembersExempt)) dto.BirthdayMembersExempt = bool.TryParse(birthdayMembersExempt, out var bme) ? bme : true;
+            if (map.TryGetValue(CommonConstants.SettingKeys.AllowedMultipleEvent, out var allowedMultipleEvent) ||
+                map.TryGetValue("allowedMultipleEvent", out allowedMultipleEvent) ||
+                map.TryGetValue("allowMultipleEvents", out allowedMultipleEvent))
+            {
+                dto.AllowedMultipleEvent = bool.TryParse(allowedMultipleEvent, out var ame) ? ame : false;
+            }
             if (map.TryGetValue(CommonConstants.SettingKeys.DefaultCurrency, out var defaultCurrency)) dto.DefaultCurrency = defaultCurrency;
             if (map.TryGetValue(CommonConstants.SettingKeys.TimeZone, out var timeZone)) dto.TimeZone = timeZone;
 
@@ -105,6 +111,7 @@ public class SystemSettingService : ISystemSettingService
             {
                 [CommonConstants.SettingKeys.OrgName] = (settings.OrgName, CommonConstants.SettingCategories.General),
                 [CommonConstants.SettingKeys.BirthdayMembersExempt] = (settings.BirthdayMembersExempt.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.General),
+                [CommonConstants.SettingKeys.AllowedMultipleEvent] = (settings.AllowedMultipleEvent.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.General),
                 [CommonConstants.SettingKeys.DefaultCurrency] = (settings.DefaultCurrency, CommonConstants.SettingCategories.General),
                 [CommonConstants.SettingKeys.TimeZone] = (settings.TimeZone, CommonConstants.SettingCategories.General),
                 [CommonConstants.SettingKeys.FromEmail] = (settings.FromEmail, CommonConstants.SettingCategories.Email),

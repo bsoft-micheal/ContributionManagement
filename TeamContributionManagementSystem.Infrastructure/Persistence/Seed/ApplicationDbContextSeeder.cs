@@ -19,6 +19,9 @@ public class ApplicationDbContextSeeder
         try
         {
             await _context.Database.ExecuteSqlRawAsync(@"
+                -- system_settings
+                ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS allowed_multiple_event BOOLEAN NOT NULL DEFAULT FALSE;
+
                 -- budget_calculations
                 ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS category VARCHAR(100) NULL;
                 ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS event_type_id UUID NULL;
