@@ -77,7 +77,7 @@ public class CreateEventRequestDto
 
     public EventStatus Status { get; set; } = EventStatus.Planned;
 
-    [Range(1, 1000000, ErrorMessage = CommonValidationMessages.BaseAmountGreaterThanZero)]
+    [Range(0, 1000000, ErrorMessage = "Base amount must be between 0 and 1,000,000.")]
     public decimal BaseAmount { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();

@@ -8,7 +8,7 @@ public interface IPaymentTransactionService
     Task<PaymentTransactionDto> GetByIdAsync(Guid transactionId, CancellationToken cancellationToken = default);
     Task<PaymentTransactionDto> CreateAsync(CreatePaymentTransactionRequestDto request, string? user = null, CancellationToken cancellationToken = default);
     Task<PaymentTransactionDto> SubmitProofAsync(SubmitPaymentProofDto request, CancellationToken cancellationToken = default);
-    Task<PaymentContextDto?> GetPaymentContextAsync(Guid? eventId, Guid? memberId, CancellationToken cancellationToken = default);
+    Task<PaymentContextDto?> GetPaymentContextAsync(Guid? eventId, Guid? memberId, string? eventName = null, string? memberName = null, CancellationToken cancellationToken = default);
     Task<PaymentTransactionDto> VerifyAsync(Guid transactionId, VerifyPaymentRequestDto request, string? user = null, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid transactionId, CancellationToken cancellationToken = default);
 
@@ -18,7 +18,7 @@ public interface IPaymentTransactionService
     Task<PaymentTransactionDto> GetPaymentAsyncById(Guid transactionId, CancellationToken cancellationToken = default) => GetByIdAsync(transactionId, cancellationToken);
     Task<PaymentTransactionDto> SavePaymentAsync(CreatePaymentTransactionRequestDto request, string? user = null, CancellationToken cancellationToken = default) => CreateAsync(request, user, cancellationToken);
     Task<PaymentTransactionDto> SubmitPaymentProofAsync(SubmitPaymentProofDto request, CancellationToken cancellationToken = default) => SubmitProofAsync(request, cancellationToken);
-    Task<PaymentContextDto?> GetPaymentContextDetailsAsync(Guid? eventId, Guid? memberId, CancellationToken cancellationToken = default) => GetPaymentContextAsync(eventId, memberId, cancellationToken);
+    Task<PaymentContextDto?> GetPaymentContextDetailsAsync(Guid? eventId, Guid? memberId, string? eventName = null, string? memberName = null, CancellationToken cancellationToken = default) => GetPaymentContextAsync(eventId, memberId, eventName, memberName, cancellationToken);
     Task<PaymentTransactionDto> VerifyPaymentAsync(Guid transactionId, VerifyPaymentRequestDto request, string? user = null, CancellationToken cancellationToken = default) => VerifyAsync(transactionId, request, user, cancellationToken);
     Task DeletePaymentAsyncById(Guid transactionId, CancellationToken cancellationToken = default) => DeleteAsync(transactionId, cancellationToken);
 }

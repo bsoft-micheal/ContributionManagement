@@ -216,6 +216,19 @@ public class ContributionRepository : IContributionRepository
         }
     }
 
+    public async Task AddAsync(Contribution contribution, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _context.Contributions.AddAsync(contribution, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddAsync));
+            throw;
+        }
+    }
+
     public void Update(Contribution contribution)
     {
         try
