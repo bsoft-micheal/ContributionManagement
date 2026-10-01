@@ -92,6 +92,7 @@ public static class CommonConstants
     {
         public const string OrgName = "orgName";
         public const string BirthdayMembersExempt = "birthdayMembersExempt";
+        public const string AllowedMultipleEvent = "allowed_multiple_event";
         public const string DefaultCurrency = "defaultCurrency";
         public const string TimeZone = "timeZone";
         public const string FromEmail = "fromEmail";

@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     setting_value TEXT NOT NULL,
     category VARCHAR(100) NOT NULL,
     description VARCHAR(500) NULL,
+    allowed_multiple_event BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
