@@ -85,6 +85,31 @@ public class AuthController : ControllerBase
                 ?? User.Identity?.Name 
                 ?? string.Empty;
 
+            var userAgent = Request.Headers["User-Agent"].ToString();
+            var deviceHeader = Request.Headers["X-Device-Type"].ToString();
+            var isMobileHeader = Request.Headers["X-Is-Mobile"].ToString();
+            var clientTypeHeader = Request.Headers["X-Client-Type"].ToString();
+
+            bool isMobileClient = request.IsFromMobile ||
+                                 (request.DeviceInfo != null && request.DeviceInfo.DeviceType == 2) ||
+                                 deviceHeader == "2" ||
+                                 string.Equals(isMobileHeader, "true", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(clientTypeHeader, "mobile", StringComparison.OrdinalIgnoreCase) ||
+                                 (!string.IsNullOrWhiteSpace(userAgent) && (
+                                     userAgent.Contains("Mobile", StringComparison.OrdinalIgnoreCase) ||
+                                     userAgent.Contains("Android", StringComparison.OrdinalIgnoreCase) ||
+                                     userAgent.Contains("iPhone", StringComparison.OrdinalIgnoreCase) ||
+                                     userAgent.Contains("CFNetwork", StringComparison.OrdinalIgnoreCase) ||
+                                     userAgent.Contains("Expo", StringComparison.OrdinalIgnoreCase) ||
+                                     userAgent.Contains("ReactNative", StringComparison.OrdinalIgnoreCase) ||
+                                     userAgent.Contains("okhttp", StringComparison.OrdinalIgnoreCase)
+                                 ));
+
+            if (isMobileClient)
+            {
+                request.IsFromMobile = true;
+            }
+
             var response = await _authService.SwitchRoleAsync(request, userEmail, cancellationToken);
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<AuthResponseDto>.SuccessResult(response, "Role switched successfully", CommonStatusCodes.Status200OK));
         }
