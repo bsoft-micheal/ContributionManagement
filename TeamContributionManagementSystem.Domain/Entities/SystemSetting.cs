@@ -7,6 +7,7 @@ public class SystemSetting
     public string SettingValue { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public bool AllowedMultipleEvent { get; set; } = false;
 
     // Default Audit Fields
     public bool IsActive { get; set; } = true;
