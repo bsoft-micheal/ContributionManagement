@@ -132,14 +132,19 @@ public class UserRepository : IUserRepository
                 .Select(x =>
                 {
                     var assignedRoles = x.UserRoles?.Where(ur => ur.Role != null).ToList() ?? new List<AppUserRole>();
-                    var activeRole = (x.RoleId.HasValue ? assignedRoles.FirstOrDefault(ur => ur.RoleId == x.RoleId.Value)?.Role?.RoleName : null)
-                        ?? assignedRoles.FirstOrDefault(ur => ur.IsPrimary)?.Role?.RoleName
-                        ?? assignedRoles.FirstOrDefault()?.Role?.RoleName
-                        ?? "Member";
-
-                    var allRoleNames = assignedRoles.Select(ur => ur.Role!.RoleName).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                     var primaryRoleNames = assignedRoles.Where(ur => ur.IsPrimary).Select(ur => ur.Role!.RoleName).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                     var secondaryRoleNames = assignedRoles.Where(ur => ur.IsSecondary).Select(ur => ur.Role!.RoleName).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var allRoleNames = primaryRoleNames
+                        .Concat(secondaryRoleNames)
+                        .Concat(assignedRoles.Select(ur => ur.Role!.RoleName))
+                        .Where(r => !string.IsNullOrWhiteSpace(r))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    var activeRole = (x.RoleId.HasValue ? assignedRoles.FirstOrDefault(ur => ur.RoleId == x.RoleId.Value)?.Role?.RoleName : null)
+                        ?? primaryRoleNames.FirstOrDefault()
+                        ?? assignedRoles.FirstOrDefault()?.Role?.RoleName
+                        ?? "Member";
 
                     return new UserDto
                     {

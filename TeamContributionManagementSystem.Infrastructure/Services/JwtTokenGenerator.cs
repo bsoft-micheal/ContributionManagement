@@ -86,19 +86,17 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         {
             effectiveActiveRole = activeRole;
         }
+        else if (user.RoleId.HasValue && activeUserRoles.Any(ur => ur.RoleId == user.RoleId.Value && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)))
+        {
+            effectiveActiveRole = activeUserRoles.First(ur => ur.RoleId == user.RoleId.Value).Role!.RoleName;
+        }
         else if (primaryRolesList.Count > 0)
         {
             effectiveActiveRole = primaryRolesList.First();
         }
         else
         {
-            effectiveActiveRole = resolvedRoles.Contains(CommonRoles.Admin, StringComparer.OrdinalIgnoreCase)
-                ? CommonRoles.Admin
-                : (resolvedRoles.Contains("Organizer", StringComparer.OrdinalIgnoreCase)
-                    ? "Organizer"
-                    : (resolvedRoles.Contains(CommonRoles.Member, StringComparer.OrdinalIgnoreCase)
-                        ? CommonRoles.Member
-                        : (resolvedRoles.FirstOrDefault() ?? CommonRoles.Member)));
+            effectiveActiveRole = resolvedRoles.FirstOrDefault() ?? CommonRoles.Member;
         }
 
         Guid? effectiveActiveRoleId = activeRoleId;

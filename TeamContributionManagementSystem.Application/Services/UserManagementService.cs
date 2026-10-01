@@ -104,10 +104,14 @@ public class UserManagementService : IUserManagementService
         }
 
         var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
-        dto.Roles = activeUserRoles.Select(ur => ur.Role?.RoleName).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var primaryRoleNames = activeUserRoles.Where(ur => ur.IsPrimary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var secondaryRoleNames = activeUserRoles.Where(ur => ur.IsSecondary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var allRoleNames = primaryRoleNames.Concat(secondaryRoleNames).Concat(activeUserRoles.Select(ur => ur.Role?.RoleName)).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        dto.Roles = allRoleNames;
         dto.RoleIds = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
-        dto.PrimaryRoles = activeUserRoles.Where(ur => ur.IsPrimary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        dto.SecondaryRoles = activeUserRoles.Where(ur => ur.IsSecondary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        dto.PrimaryRoles = primaryRoleNames;
+        dto.SecondaryRoles = secondaryRoleNames;
         dto.EnableMultipleRoles = user.EnableMultipleRoles;
         dto.IsPrimary = user.IsPrimary || activeUserRoles.Any(ur => ur.IsPrimary);
         dto.IsSecondary = user.IsSecondary || activeUserRoles.Any(ur => ur.IsSecondary);
@@ -534,6 +538,8 @@ public class UserManagementService : IUserManagementService
             if (isMultipleRoles && (request.PrimaryRoles != null || request.SecondaryRoles != null))
             {
                 primaryRoleNameForUser = primaryRolesReq.First();
+                var desiredRoles = new List<(Guid RoleId, bool IsPrimary, bool IsSecondary)>();
+
                 foreach (var pRoleName in primaryRolesReq)
                 {
                     if (!rolesDict.TryGetValue(pRoleName, out var roleId))
@@ -553,14 +559,7 @@ public class UserManagementService : IUserManagementService
                         rolesDict[pRoleName] = roleId;
                         roleNamesDict[roleId] = pRoleName;
                     }
-                    rolesToAdd.Add(new AppUserRole
-                    {
-                        UserId = appUser.UserId,
-                        RoleId = roleId,
-                        IsPrimary = true,
-                        IsSecondary = false,
-                        CreatedAt = DateTime.UtcNow
-                    });
+                    desiredRoles.Add((roleId, true, false));
                 }
 
                 foreach (var sRoleName in secondaryRolesReq)
@@ -582,30 +581,49 @@ public class UserManagementService : IUserManagementService
                         rolesDict[sRoleName] = roleId;
                         roleNamesDict[roleId] = sRoleName;
                     }
-                    rolesToAdd.Add(new AppUserRole
-                    {
-                        UserId = appUser.UserId,
-                        RoleId = roleId,
-                        IsPrimary = false,
-                        IsSecondary = true,
-                        CreatedAt = DateTime.UtcNow
-                    });
+                    desiredRoles.Add((roleId, false, true));
                 }
 
-                appUser.UserRoles.Clear();
-                foreach (var ur in rolesToAdd.GroupBy(r => r.RoleId).Select(g => g.First()))
+                var desiredMap = desiredRoles
+                    .GroupBy(d => d.RoleId)
+                    .ToDictionary(g => g.Key, g => (IsPrimary: g.Any(x => x.IsPrimary), IsSecondary: g.All(x => !x.IsPrimary) && g.Any(x => x.IsSecondary)));
+
+                var rolesToRemove = appUser.UserRoles.Where(ur => !desiredMap.ContainsKey(ur.RoleId)).ToList();
+                foreach (var ur in rolesToRemove)
                 {
-                    ur.UserId = appUser.UserId;
-                    appUser.UserRoles.Add(ur);
+                    appUser.UserRoles.Remove(ur);
                 }
+
+                foreach (var (rId, config) in desiredMap)
+                {
+                    var existing = appUser.UserRoles.FirstOrDefault(ur => ur.RoleId == rId);
+                    if (existing != null)
+                    {
+                        existing.IsPrimary = config.IsPrimary;
+                        existing.IsSecondary = config.IsSecondary;
+                    }
+                    else
+                    {
+                        appUser.UserRoles.Add(new AppUserRole
+                        {
+                            UserId = appUser.UserId,
+                            RoleId = rId,
+                            IsPrimary = config.IsPrimary,
+                            IsSecondary = config.IsSecondary,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
                 appUser.EnableMultipleRoles = true;
                 appUser.IsPrimary = true;
                 appUser.IsSecondary = secondaryRolesReq.Count > 0;
 
-                var matchedActiveRole = !string.IsNullOrWhiteSpace(request.RoleName)
-                    ? rolesToAdd.FirstOrDefault(ur => rolesDict.TryGetValue(request.RoleName.Trim(), out var rId) && ur.RoleId == rId)
-                    : null;
-                appUser.RoleId = matchedActiveRole?.RoleId ?? rolesToAdd.First().RoleId;
+                var primaryRoleId = desiredRoles.FirstOrDefault(d => d.IsPrimary).RoleId;
+                var matchedActiveRole = !string.IsNullOrWhiteSpace(request.RoleName) && rolesDict.TryGetValue(request.RoleName.Trim(), out var requestedActiveRoleId) && desiredMap.ContainsKey(requestedActiveRoleId)
+                    ? requestedActiveRoleId
+                    : primaryRoleId;
+                appUser.RoleId = matchedActiveRole != Guid.Empty ? matchedActiveRole : primaryRoleId;
             }
             else if (isMultipleRoles)
             {
@@ -616,6 +634,14 @@ public class UserManagementService : IUserManagementService
                     appUser.RoleId = activeRoleId;
                     primaryRoleNameForUser = request.RoleName.Trim();
                 }
+                else
+                {
+                    var existingPrimary = appUser.UserRoles.FirstOrDefault(ur => ur.IsPrimary);
+                    if (existingPrimary != null && roleNamesDict.TryGetValue(existingPrimary.RoleId, out var pName))
+                    {
+                        primaryRoleNameForUser = pName;
+                    }
+                }
             }
             else
             {
@@ -624,17 +650,28 @@ public class UserManagementService : IUserManagementService
                 primaryRoleNameForUser = matchedRole?.RoleName ?? roleName;
                 if (matchedRole != null)
                 {
-                    appUser.UserRoles.Clear();
-                    var singleRole = new AppUserRole
+                    var rolesToRemove = appUser.UserRoles.Where(ur => ur.RoleId != matchedRole.RoleId).ToList();
+                    foreach (var ur in rolesToRemove)
                     {
-                        UserId = appUser.UserId,
-                        RoleId = matchedRole.RoleId,
-                        IsPrimary = true,
-                        IsSecondary = false,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    appUser.UserRoles.Add(singleRole);
-                    rolesToAdd.Add(singleRole);
+                        appUser.UserRoles.Remove(ur);
+                    }
+                    var existing = appUser.UserRoles.FirstOrDefault(ur => ur.RoleId == matchedRole.RoleId);
+                    if (existing != null)
+                    {
+                        existing.IsPrimary = true;
+                        existing.IsSecondary = false;
+                    }
+                    else
+                    {
+                        appUser.UserRoles.Add(new AppUserRole
+                        {
+                            UserId = appUser.UserId,
+                            RoleId = matchedRole.RoleId,
+                            IsPrimary = true,
+                            IsSecondary = false,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
                     appUser.RoleId = matchedRole.RoleId;
                 }
                 appUser.EnableMultipleRoles = false;

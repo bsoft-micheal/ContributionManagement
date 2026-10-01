@@ -79,6 +79,7 @@ public class CreateEventRequestDto
 
     [Range(0, 1000000, ErrorMessage = "Base amount must be between 0 and 1,000,000.")]
     public decimal BaseAmount { get; set; }
+    public List<Guid>? EventTypeIds { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
 }

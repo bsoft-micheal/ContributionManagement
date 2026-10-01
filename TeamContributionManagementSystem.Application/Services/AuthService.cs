@@ -280,7 +280,9 @@ public class AuthService : IAuthService
 
         var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
         var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
-        var roleNames = activeUserRoles.Select(ur => ur.Role?.RoleName).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var primaryRoleNames = activeUserRoles.Where(ur => ur.IsPrimary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var secondaryRoleNames = activeUserRoles.Where(ur => ur.IsSecondary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var roleNames = primaryRoleNames.Concat(secondaryRoleNames).Concat(activeUserRoles.Select(ur => ur.Role?.RoleName)).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var roleGuids = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
 
         if (roleNames.Count == 0 && user.Role != 0)
@@ -556,7 +558,9 @@ public class AuthService : IAuthService
             }
 
             var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
-            var roleNames = activeUserRoles.Select(ur => ur.Role?.RoleName).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var primaryRoleNames = activeUserRoles.Where(ur => ur.IsPrimary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var secondaryRoleNames = activeUserRoles.Where(ur => ur.IsSecondary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var roleNames = primaryRoleNames.Concat(secondaryRoleNames).Concat(activeUserRoles.Select(ur => ur.Role?.RoleName)).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var roleGuids = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
 
             if (roleNames.Count == 0 && user.Role != 0)
