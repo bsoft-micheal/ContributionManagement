@@ -297,6 +297,11 @@ public class PaymentTransactionService : IPaymentTransactionService
             }
 
             var safeNotes = request.Notes?.Trim();
+            if (!string.IsNullOrEmpty(request.PaymentScope))
+            {
+                var scopeTag = $"[Scope: {request.PaymentScope.Trim()}]";
+                safeNotes = string.IsNullOrEmpty(safeNotes) ? scopeTag : $"{scopeTag} {safeNotes}";
+            }
             if (!string.IsNullOrEmpty(safeNotes) && safeNotes.Length > 990)
             {
                 safeNotes = safeNotes.Substring(0, 985) + "...";
@@ -683,6 +688,33 @@ public class PaymentTransactionService : IPaymentTransactionService
                 };
                 await _contributionRepository.AddAsync(newContrib, cancellationToken);
                 _logger.LogInformation("Created and synchronized new contribution record for {Member} - {Event}", entity.MemberName, entity.EventName);
+            }
+
+            // If payment scope covers All Outstanding or arrears, synchronize other event contributions for this member
+            var isAllOutstanding = !string.IsNullOrWhiteSpace(entity.Notes) && 
+                (entity.Notes.Contains("Scope: All", StringComparison.OrdinalIgnoreCase) || 
+                 entity.Notes.Contains("All Outstanding", StringComparison.OrdinalIgnoreCase) ||
+                 entity.Notes.Contains("alloutstanding", StringComparison.OrdinalIgnoreCase));
+
+            if (isAllOutstanding && entity.UserId.HasValue)
+            {
+                var allContribs = await _contributionRepository.GetAllAsync(cancellationToken);
+                var memberOtherEvents = allContribs.Where(c => c.MemberId == entity.UserId.Value && (match == null || c.ContributionId != match.ContributionId)).ToList();
+                foreach (var other in memberOtherEvents)
+                {
+                    var otherEntity = await _contributionRepository.GetByEventAndMemberAsync(other.EventId, other.MemberId, cancellationToken);
+                    if (otherEntity != null)
+                    {
+                        if (statusIdToAssign.HasValue) otherEntity.StatusId = statusIdToAssign.Value;
+                        if (entity.PaymentModeId.HasValue) otherEntity.PaymentModeId = entity.PaymentModeId.Value;
+                        otherEntity.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
+                        otherEntity.PaymentMode = match != null ? match.PaymentMode : (entity.PaymentMode.Contains("Cash", StringComparison.OrdinalIgnoreCase) ? PaymentMode.Cash : PaymentMode.Upi);
+                        otherEntity.PaymentStatus = isVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
+                        otherEntity.ModifiedBy = entity.ModifiedBy ?? entity.CreatedBy;
+                        otherEntity.ModifiedOn = DateTime.UtcNow;
+                        _contributionRepository.Update(otherEntity);
+                    }
+                }
             }
         }
         catch (Exception ex)

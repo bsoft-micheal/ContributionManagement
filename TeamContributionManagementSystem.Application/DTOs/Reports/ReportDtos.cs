@@ -37,6 +37,22 @@ public class MemberContributionHistoryDto
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn => CreatedAt;
+    public IReadOnlyCollection<MemberEventDetailDto> Events { get; set; } = Array.Empty<MemberEventDetailDto>();
+}
+
+public class MemberEventDetailDto
+{
+    public Guid ContributionId { get; set; }
+    public Guid EventId { get; set; }
+    public string EventName { get; set; } = string.Empty;
+    public string CategoryName { get; set; } = string.Empty;
+    public DateTime EventDate { get; set; }
+    public decimal ExpectedAmount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal PendingAmount { get; set; }
+    public string PaymentStatus { get; set; } = "Pending";
+    public DateTime? PaymentDate { get; set; }
+    public string? PaymentMode { get; set; }
 }
 
 public class PendingDueDto

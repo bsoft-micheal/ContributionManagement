@@ -13,6 +13,7 @@ public class ContributionDto
     public string MemberName { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public PaymentStatus PaymentStatus { get; set; }
+    public string StatusName { get; set; } = "Pending";
     public DateTime? PaymentDate { get; set; }
     public PaymentMode PaymentMode { get; set; }
     public decimal? CashAmount { get; set; }
