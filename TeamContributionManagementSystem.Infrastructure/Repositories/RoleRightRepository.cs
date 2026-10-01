@@ -144,7 +144,8 @@ public class RoleRightRepository : IRoleRightRepository
 
         foreach (var menu in orderedNavMenus)
         {
-            if (!menu.ShowingUserRight) continue;
+            bool isStandaloneRoot = menu.ParentID == 0 && !childrenByParent.ContainsKey(menu.FeatureID);
+            if (!menu.ShowingUserRight && !isStandaloneRoot) continue;
 
             string moduleName;
             string subModuleName;
@@ -152,7 +153,7 @@ public class RoleRightRepository : IRoleRightRepository
             string pageName;
             int menuType = menu.MenuType;
 
-            if (menu.ParentID == 0)
+            if (menu.ParentID == 0 || menu.MenuType == 1)
             {
                 moduleName = menu.Module ?? menu.Activity ?? string.Empty;
                 subModuleName = string.Empty;
@@ -160,36 +161,33 @@ public class RoleRightRepository : IRoleRightRepository
                 pageName = moduleName;
                 menuType = 1;
             }
-            else
+            else if (menu.MenuType == 2)
             {
                 allMenuMap.TryGetValue(menu.ParentID, out var parent);
-
-                if (menu.MenuType == 3)
+                moduleName = parent?.Module ?? string.Empty;
+                subModuleName = menu.SubModule ?? menu.Activity ?? string.Empty;
+                actionName = string.Empty;
+                pageName = subModuleName;
+                menuType = 2;
+            }
+            else
+            {
+                // Action level (MenuType == 3)
+                allMenuMap.TryGetValue(menu.ParentID, out var parent);
+                if (parent != null && parent.ParentID != 0)
                 {
-                    // Action level
-                    if (parent != null && parent.ParentID != 0)
-                    {
-                        allMenuMap.TryGetValue(parent.ParentID, out var grandParent);
-                        moduleName = grandParent?.Module ?? grandParent?.Activity ?? parent?.Module ?? string.Empty;
-                        subModuleName = !string.IsNullOrWhiteSpace(parent?.Activity) ? parent.Activity : (parent?.SubModule ?? string.Empty);
-                    }
-                    else
-                    {
-                        moduleName = parent?.Module ?? parent?.Activity ?? string.Empty;
-                        subModuleName = string.Empty;
-                    }
-                    actionName = !string.IsNullOrWhiteSpace(menu.SubModule) ? menu.SubModule : (menu.Activity ?? string.Empty);
-                    pageName = !string.IsNullOrWhiteSpace(actionName) ? actionName : (!string.IsNullOrWhiteSpace(subModuleName) ? subModuleName : moduleName);
+                    allMenuMap.TryGetValue(parent.ParentID, out var grandParent);
+                    moduleName = grandParent?.Module ?? parent?.Module ?? string.Empty;
+                    subModuleName = parent?.SubModule ?? parent?.Activity ?? string.Empty;
                 }
                 else
                 {
-                    // SubModule / Page level (MenuType == 2)
-                    moduleName = parent?.Module ?? parent?.Activity ?? string.Empty;
-                    subModuleName = !string.IsNullOrWhiteSpace(menu.Activity) ? menu.Activity : (menu.SubModule ?? string.Empty);
-                    actionName = string.Empty;
-                    pageName = !string.IsNullOrWhiteSpace(subModuleName) ? subModuleName : moduleName;
-                    menuType = 2;
+                    moduleName = parent?.Module ?? string.Empty;
+                    subModuleName = parent?.SubModule ?? string.Empty;
                 }
+                actionName = menu.Activity ?? menu.SubModule ?? string.Empty;
+                pageName = !string.IsNullOrWhiteSpace(actionName) ? actionName : subModuleName;
+                menuType = 3;
             }
 
             RoleRight? existing = null;

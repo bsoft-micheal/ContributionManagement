@@ -1,9 +1,11 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.API.Attributes;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
+using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.API.Controllers;
 
@@ -12,6 +14,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
+[RequireFeaturePermission(4, AccessType.ReadOnly)]
 [ApiVersion("1.0")]
 [Route(CommonRoutes.Events.Base)]
 public class EventsController : ControllerBase
@@ -56,6 +59,7 @@ public class EventsController : ControllerBase
     /// <param name="request">The event details and participant list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [RequireFeaturePermission(31, AccessType.ReadWrite)]
     [HttpPost(CommonRoutes.Events.Create)]
     [ActionName(nameof(SaveEventAsync))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> SaveEventAsync([FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
@@ -74,6 +78,7 @@ public class EventsController : ControllerBase
     /// <param name="request">The updated event details and participant list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [RequireFeaturePermission(32, AccessType.ReadWrite)]
     [HttpPut(CommonRoutes.Events.Update)]
     [ActionName(nameof(UpdateEventAsyncById))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> UpdateEventAsyncById(Guid id, [FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
@@ -88,6 +93,7 @@ public class EventsController : ControllerBase
     /// <param name="id">The unique identifier of the event to delete.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [RequireFeaturePermission(33, AccessType.ReadWrite)]
     [HttpDelete(CommonRoutes.Events.Delete)]
     [ActionName(nameof(DeleteEventAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteEventAsyncById(Guid id, CancellationToken cancellationToken)

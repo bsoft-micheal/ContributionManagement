@@ -11,6 +11,7 @@ public interface IContributionRepository
     Task<List<ContributionDto>> GetPendingAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default);
     Task<List<ContributionDto>> GetByMemberEmailAsync(string email, CancellationToken cancellationToken = default);
     Task AddRangeAsync(IEnumerable<Contribution> contributions, CancellationToken cancellationToken = default);
+    Task AddAsync(Contribution contribution, CancellationToken cancellationToken = default) => AddRangeAsync(new[] { contribution }, cancellationToken);
     void Update(Contribution contribution);
     void DeleteRange(IEnumerable<Contribution> contributions);
 

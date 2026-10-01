@@ -57,7 +57,85 @@ public class ApplicationDbContextSeeder
                 ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS ticket_type VARCHAR(100) NOT NULL DEFAULT '';
                 ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS priority VARCHAR(50) NOT NULL DEFAULT '';
                 ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT '';
+
+                -- Ensure navigation_menus table structure
+       
             ", cancellationToken);
+
+            var count = await _context.NavigationMenus.CountAsync(cancellationToken);
+            if (count < 89)
+            {
+                var sqlScriptPath = Path.Combine(AppContext.BaseDirectory, "Persistence", "Scripts", "seed_navigation_menus.sql");
+                if (!File.Exists(sqlScriptPath))
+                {
+                    sqlScriptPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "TeamContributionManagementSystem.Infrastructure", "Persistence", "Scripts", "seed_navigation_menus.sql");
+                }
+                if (File.Exists(sqlScriptPath))
+                {
+                    var sql = await File.ReadAllTextAsync(sqlScriptPath, cancellationToken);
+                    await _context.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+                }
+            }
+
+            // Seed / sync role_rights for all roles
+            var rrScriptPath = Path.Combine(AppContext.BaseDirectory, "Persistence", "Scripts", "seed_role_rights.sql");
+            if (!File.Exists(rrScriptPath))
+            {
+                rrScriptPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "TeamContributionManagementSystem.Infrastructure", "Persistence", "Scripts", "seed_role_rights.sql");
+            }
+            if (File.Exists(rrScriptPath))
+            {
+                var rrSql = await File.ReadAllTextAsync(rrScriptPath, cancellationToken);
+                await _context.Database.ExecuteSqlRawAsync(rrSql, cancellationToken);
+            }
+            // Seed default roles & users if missing
+            var adminRole = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Admin", cancellationToken);
+            if (adminRole == null)
+            {
+                adminRole = new Domain.Entities.Role { RoleId = Guid.NewGuid(), RoleName = "Admin" };
+                await _context.Roles.AddAsync(adminRole, cancellationToken);
+            }
+
+            var memberRole = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Member", cancellationToken);
+            if (memberRole == null)
+            {
+                memberRole = new Domain.Entities.Role { RoleId = Guid.NewGuid(), RoleName = "Member" };
+                await _context.Roles.AddAsync(memberRole, cancellationToken);
+            }
+            await _context.SaveChangesAsync(cancellationToken);
+
+            var adminUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == "admin@gmail.com" || u.Email == "daniel@example.com", cancellationToken);
+            if (adminUser == null)
+            {
+                adminUser = new Domain.Entities.AppUser
+                {
+                    UserId = Guid.NewGuid(),
+                    FullName = "System Admin",
+                    Email = "admin@gmail.com",
+                    PasswordHash = _passwordHasher.HashPassword("Password@123"),
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.Users.AddAsync(adminUser, cancellationToken);
+                await _context.UserRoles.AddAsync(new Domain.Entities.AppUserRole { UserId = adminUser.UserId, RoleId = adminRole.RoleId, IsPrimary = true }, cancellationToken);
+            }
+
+            var memberUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == "member@gmail.com", cancellationToken);
+            if (memberUser == null)
+            {
+                memberUser = new Domain.Entities.AppUser
+                {
+                    UserId = Guid.NewGuid(),
+                    FullName = "Default Member",
+                    Email = "member@gmail.com",
+                    PasswordHash = _passwordHasher.HashPassword("Password@123"),
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.Users.AddAsync(memberUser, cancellationToken);
+                await _context.UserRoles.AddAsync(new Domain.Entities.AppUserRole { UserId = memberUser.UserId, RoleId = memberRole.RoleId, IsPrimary = true }, cancellationToken);
+            }
+            await _context.SaveChangesAsync(cancellationToken);
         }
         catch
         {

@@ -89,11 +89,11 @@ public class SubmitPaymentProofDto
     public decimal Amount { get; set; }
 
     [Required]
-    [MaxLength(50)]
+    [MaxLength(150)]
     public string PaymentMode { get; set; } = "UPI";
 
     [Required]
-    [MaxLength(100)]
+    [MaxLength(200)]
     public string Utr { get; set; } = string.Empty;
 
     public DateTime PaymentDate { get; set; } = DateTime.UtcNow;
@@ -102,6 +102,18 @@ public class SubmitPaymentProofDto
 
     [MaxLength(1000)]
     public string? Notes { get; set; }
+
+    public decimal? CashAmount { get; set; }
+    public decimal? UpiAmount { get; set; }
+    public string? PaymentScope { get; set; }
+}
+
+public class ArrearItemDto
+{
+    public Guid EventId { get; set; }
+    public string EventName { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public DateTime? EventDate { get; set; }
 }
 
 public class PaymentContextDto
@@ -112,9 +124,13 @@ public class PaymentContextDto
     public string MemberName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public decimal CurrentEventDue { get; set; }
+    public decimal PreviousArrears { get; set; }
+    public decimal TotalDue { get; set; }
     public string QrReceiverName { get; set; } = string.Empty;
     public string QrUpiId { get; set; } = string.Empty;
     public string QrImage { get; set; } = string.Empty;
     public string Status { get; set; } = "Pending";
+    public List<ArrearItemDto> ArrearBreakdown { get; set; } = new();
 }
 
