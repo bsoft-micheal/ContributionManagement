@@ -24,4 +24,18 @@ public interface IDashboardService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A summary DTO containing dashboard metrics and progress stats.</returns>
     Task<DashboardSummaryDto> GetSummaryDashboardAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetSummaryAsync(month, year, cancellationToken);
+
+    /// <summary>
+    /// Computes dynamic summary metrics for the current calendar month (Total Count, Collected, Expensed, Remaining).
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Current month summary DTO.</returns>
+    Task<CurrentMonthSummaryDto> GetCurrentMonthSummaryAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Standardized alias method for computing current month summary metrics.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Current month summary DTO.</returns>
+    Task<CurrentMonthSummaryDto> GetCurrentMonthSummaryDashboardAsync(CancellationToken cancellationToken = default) => GetCurrentMonthSummaryAsync(cancellationToken);
 }

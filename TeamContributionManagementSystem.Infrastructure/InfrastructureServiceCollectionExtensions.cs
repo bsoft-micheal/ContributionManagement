@@ -47,6 +47,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IWorkTypeRepository, WorkTypeRepository>();
         services.AddScoped<IPriorityRepository, PriorityRepository>();
         services.AddScoped<IPaymentModeRepository, PaymentModeRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
 
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IRoleService, RoleService>();

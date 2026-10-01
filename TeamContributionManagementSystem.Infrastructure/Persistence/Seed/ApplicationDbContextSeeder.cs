@@ -110,6 +110,7 @@ public class ApplicationDbContextSeeder
                 adminUser = new Domain.Entities.AppUser
                 {
                     UserId = Guid.NewGuid(),
+                    Username = "admin",
                     FullName = "System Admin",
                     Email = "admin@gmail.com",
                     PasswordHash = _passwordHasher.HashPassword("Password@123"),
@@ -126,6 +127,7 @@ public class ApplicationDbContextSeeder
                 memberUser = new Domain.Entities.AppUser
                 {
                     UserId = Guid.NewGuid(),
+                    Username = "member",
                     FullName = "Default Member",
                     Email = "member@gmail.com",
                     PasswordHash = _passwordHasher.HashPassword("Password@123"),

@@ -128,6 +128,7 @@ public static class CommonRoutes
         public const string Base = $"{ApiBase}/dashboard";
         public const string GetSummary = "getSummaryDashboardAsync";
         public const string GetEvents = "getEventsDashboardAsync";
+        public const string GetCurrentMonthSummary = "current-month-summary";
     }
 
     public static class DeviceInfo

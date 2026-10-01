@@ -180,6 +180,7 @@ public static class CommonMessages
     public static class Dashboard
     {
         public const string GetSummarySuccess = "Dashboard analytics summary retrieved successfully.";
+        public const string GetCurrentMonthSummarySuccess = "Current month dashboard summary retrieved successfully.";
     }
 
     public static class DeviceInfo

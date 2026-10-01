@@ -211,62 +211,6 @@ public class EventService : IEventService
             await _contributionRepository.AddRangeAsync(contributions, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Auto-create expenses from active BudgetCalculation items for the event types
-            try
-            {
-                var targetTypeIds = (request.EventTypeIds != null && request.EventTypeIds.Count > 0)
-                    ? request.EventTypeIds.Distinct().ToList()
-                    : new List<Guid> { eventType.EventTypeId };
-
-                var allBudgetItems = new List<(BudgetCalculation Item, string CategoryName)>();
-                foreach (var tid in targetTypeIds)
-                {
-                    var items = await _budgetCalculationRepository.GetByEventTypeIdAsync(tid, cancellationToken);
-                    var typeObj = tid == eventType.EventTypeId ? eventType : await _eventTypeRepository.GetByIdAsync(tid, cancellationToken);
-                    var catName = typeObj?.EventTypeName ?? eventType.EventTypeName;
-                    foreach (var item in items)
-                    {
-                        allBudgetItems.Add((item, catName));
-                    }
-                }
-
-                if (allBudgetItems.Count > 0)
-                {
-                    var creatorName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName;
-
-                    var autoExpenses = allBudgetItems.Select(b => new Expense
-                    {
-                        ExpenseId = Guid.NewGuid(),
-                        EventName = eventItem.EventName,
-                        Category = b.CategoryName,
-                        Amount = b.Item.Rate,
-                        ExpenseDate = eventItem.EventDate,
-                        Status = "Pending",
-                        SubmittedBy = creatorName,
-                        Description = b.Item.ExpenseItem,
-                        IsActive = true,
-                        IsDeleted = false,
-                        CreatedBy = user.UserId,
-                        CreatedAt = DateTime.UtcNow
-                    }).ToList();
-
-                    foreach (var expense in autoExpenses)
-                        await _expenseRepository.AddAsync(expense, cancellationToken);
-
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                    _logger.LogInformation(
-                        "Auto-created {Count} expense(s) for event '{EventName}'",
-                        autoExpenses.Count, eventItem.EventName);
-                }
-            }
-            catch (Exception ex)
-            {
-                // Non-fatal: log and continue — event is already saved
-                _logger.LogWarning(ex,
-                    "Failed to auto-create expenses for event '{EventName}'", eventItem.EventName);
-            }
-
             // Fetch the created event to ensure it is fully committed
             var createdEvent = await GetByIdAsync(eventItem.EventId, cancellationToken);
 

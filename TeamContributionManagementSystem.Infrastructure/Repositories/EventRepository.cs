@@ -69,9 +69,13 @@ public class EventRepository : IEventRepository
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
+                    TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted) 
+                        ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount) 
+                        : x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
-                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid")),
+                    PendingContributionsCount = x.Contributions.Any(c => !c.IsDeleted)
+                        ? x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid"))
+                        : x.Participants.Count(p => !p.Member!.IsDeleted),
                     CreatedByName = x.CreatedByUser != null 
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
                         : null,
@@ -218,9 +222,13 @@ public class EventRepository : IEventRepository
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
+                    TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
+                        ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount)
+                        : x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
-                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid")),
+                    PendingContributionsCount = x.Contributions.Any(c => !c.IsDeleted)
+                        ? x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid"))
+                        : x.Participants.Count(p => !p.Member!.IsDeleted),
                     CreatedByName = x.CreatedByUser != null 
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
                         : null,
@@ -310,7 +318,9 @@ public class EventRepository : IEventRepository
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
+                    TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
+                        ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount)
+                        : x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
                     CreatedByName = x.CreatedByUser != null 
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 

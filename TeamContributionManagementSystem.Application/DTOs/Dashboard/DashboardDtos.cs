@@ -6,7 +6,16 @@ public class DashboardSummaryDto
     public decimal TotalContributions { get; set; }
     public int PendingPayments { get; set; }
     public decimal TotalPendingAmount { get; set; }
+    public CurrentMonthSummaryDto CurrentMonthSummary { get; set; } = new();
     public IReadOnlyCollection<UpcomingEventDto> UpcomingEvents { get; set; } = Array.Empty<UpcomingEventDto>();
+}
+
+public class CurrentMonthSummaryDto
+{
+    public int TotalCount { get; set; }
+    public decimal TotalAmountCollected { get; set; }
+    public decimal TotalAmountExpensed { get; set; }
+    public decimal RemainingAmount { get; set; }
 }
 
 public class UpcomingEventDto

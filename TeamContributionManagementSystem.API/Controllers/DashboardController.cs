@@ -72,4 +72,16 @@ public class DashboardController : ControllerBase
         var allEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<EventSummaryDto>>.SuccessResult(allEvents, CommonMessages.Events.GetAllSuccess, CommonStatusCodes.Status200OK));
     }
+
+    /// <summary>
+    /// Retrieves dynamic financial and event summary metrics for the current calendar month.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet(CommonRoutes.Dashboard.GetCurrentMonthSummary)]
+    [ActionName(nameof(GetCurrentMonthSummaryAsync))]
+    public async Task<ActionResult<ApiResponse<CurrentMonthSummaryDto>>> GetCurrentMonthSummaryAsync(CancellationToken cancellationToken)
+    {
+        var result = await _dashboardService.GetCurrentMonthSummaryAsync(cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<CurrentMonthSummaryDto>.SuccessResult(result, CommonMessages.Dashboard.GetCurrentMonthSummarySuccess, CommonStatusCodes.Status200OK));
+    }
 }
