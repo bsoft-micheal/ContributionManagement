@@ -144,13 +144,21 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
 
         modelBuilder.Entity<NavigationMenu>(entity =>
         {
+            entity.ToTable("navigation_menus");
             entity.HasKey(x => x.FeatureID);
-            entity.Property(x => x.Module).HasMaxLength(100);
-
-            entity.Property(x => x.SubModule).HasMaxLength(100);
-            entity.Property(x => x.Activity).HasMaxLength(100);
-            entity.Property(x => x.RoutingUrl).HasMaxLength(200).IsRequired();
-            entity.Property(x => x.ItemDescription).HasMaxLength(250);
+            entity.Property(x => x.FeatureID).HasColumnName("feature_id");
+            entity.Property(x => x.MainModuleID).HasColumnName("main_module_id");
+            entity.Property(x => x.Module).HasColumnName("module").HasMaxLength(100);
+            entity.Property(x => x.ParentID).HasColumnName("parent_id");
+            entity.Property(x => x.SubModule).HasColumnName("sub_module").HasMaxLength(100);
+            entity.Property(x => x.Activity).HasColumnName("activity").HasMaxLength(100);
+            entity.Property(x => x.RoutingUrl).HasColumnName("routing_url").HasMaxLength(200).IsRequired();
+            entity.Property(x => x.ModuleNO).HasColumnName("module_no");
+            entity.Property(x => x.DisplayOrder).HasColumnName("display_order");
+            entity.Property(x => x.HasSubModule).HasColumnName("has_sub_module");
+            entity.Property(x => x.ShowingUserRight).HasColumnName("showing_user_right");
+            entity.Property(x => x.ItemDescription).HasColumnName("item_description").HasMaxLength(250);
+            entity.Property(x => x.MenuType).HasColumnName("menu_type");
         });
 
         modelBuilder.Entity<Event>(entity =>
