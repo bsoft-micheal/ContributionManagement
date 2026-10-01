@@ -851,79 +851,19 @@ public class UserManagementService : IUserManagementService
                 user.IsFirstLogin = false;
             }
 
-            // Handle profile image upload
-            if (request.ProfileImage == null)
+            // Handle profile image upload (Direct Base64 Data URL stored in users.profile_image)
+            if (string.IsNullOrWhiteSpace(request.ProfileImage))
             {
-                if (!string.IsNullOrEmpty(user.ProfileImage))
-                {
-                    var relativePath = user.ProfileImage.Split('?')[0].TrimStart('/');
-                    var deleteDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot),
-                        Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot)
-                    };
-                    foreach (var root in deleteDirs)
-                    {
-                        var oldFilePath = Path.Combine(root, relativePath);
-                        if (File.Exists(oldFilePath))
-                        {
-                            try { File.Delete(oldFilePath); } catch {}
-                        }
-                    }
-                }
                 user.ProfileImage = null;
             }
-            else if (request.ProfileImage.StartsWith(CommonConstants.Defaults.DataImagePrefix))
+            else if (request.ProfileImage.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
             {
-                if (!string.IsNullOrEmpty(user.ProfileImage))
-                {
-                    var relativePath = user.ProfileImage.Split('?')[0].TrimStart('/');
-                    var deleteDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot),
-                        Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot)
-                    };
-                    foreach (var root in deleteDirs)
-                    {
-                        var oldFilePath = Path.Combine(root, relativePath);
-                        if (File.Exists(oldFilePath))
-                        {
-                            try { File.Delete(oldFilePath); } catch {}
-                        }
-                    }
-                }
-
-                var base64Data = request.ProfileImage.Substring(request.ProfileImage.IndexOf(CommonConstants.Defaults.Comma) + 1);
-                var imageBytes = Convert.FromBase64String(base64Data);
-
-                var extension = CommonConstants.Defaults.ExtPng;
-                if (request.ProfileImage.Contains(CommonConstants.Defaults.ImageJpeg) || request.ProfileImage.Contains(CommonConstants.Defaults.ImageJpg))
-                {
-                    extension = CommonConstants.Defaults.ExtJpg;
-                }
-
-                var dateStr = DateTime.UtcNow.ToString(CommonConstants.Defaults.DateFormatYmd);
-                var cleanUsername = user.Username.Replace(CommonConstants.Defaults.Space, CommonConstants.Defaults.Underscore).ToLowerInvariant();
-                var fileName = $"{dateStr}{cleanUsername}.{extension}";
-
-                var targetDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    Path.Combine(Directory.GetCurrentDirectory(), CommonConstants.Defaults.WwwRoot, CommonConstants.Defaults.UserImagesFolder),
-                    Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot, CommonConstants.Defaults.UserImagesFolder)
-                };
-
-                foreach (var folderPath in targetDirs)
-                {
-                    if (!Directory.Exists(folderPath))
-                    {
-                        Directory.CreateDirectory(folderPath);
-                    }
-                    var filePath = Path.Combine(folderPath, fileName);
-                    await File.WriteAllBytesAsync(filePath, imageBytes, cancellationToken);
-                }
-                
-                var cacheBuster = DateTime.UtcNow.Ticks;
-                user.ProfileImage = $"{CommonConstants.Defaults.UserImagesPathPrefix}{fileName}{CommonConstants.Defaults.VersionParamPrefix}{cacheBuster}";
+                ValidateBase64Image(request.ProfileImage);
+                user.ProfileImage = request.ProfileImage;
+            }
+            else
+            {
+                user.ProfileImage = request.ProfileImage;
             }
 
             _userRepository.Update(user);
@@ -944,6 +884,42 @@ public class UserManagementService : IUserManagementService
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateProfileAsync));
             throw;
+        }
+    }
+
+    private static void ValidateBase64Image(string dataUrl)
+    {
+        if (string.IsNullOrWhiteSpace(dataUrl)) return;
+
+        var lower = dataUrl.ToLowerInvariant();
+        bool isValidFormat = lower.StartsWith("data:image/jpeg;base64,") ||
+                            lower.StartsWith("data:image/jpg;base64,") ||
+                            lower.StartsWith("data:image/png;base64,") ||
+                            lower.StartsWith("data:image/webp;base64,");
+
+        if (!isValidFormat)
+        {
+            throw new InvalidOperationException("Invalid image format. Only JPG, JPEG, PNG, and WEBP image data URLs are allowed.");
+        }
+
+        var commaIndex = dataUrl.IndexOf(',');
+        if (commaIndex < 0 || commaIndex >= dataUrl.Length - 1)
+        {
+            throw new InvalidOperationException("Invalid Base64 image data URL format.");
+        }
+
+        var base64Part = dataUrl.Substring(commaIndex + 1).Trim();
+        try
+        {
+            var bytes = Convert.FromBase64String(base64Part);
+            if (bytes.Length > 5 * 1024 * 1024)
+            {
+                throw new InvalidOperationException("Profile image size exceeds the maximum allowed limit of 5MB.");
+            }
+        }
+        catch (FormatException)
+        {
+            throw new InvalidOperationException("Invalid Base64 encoded image content.");
         }
     }
 }
