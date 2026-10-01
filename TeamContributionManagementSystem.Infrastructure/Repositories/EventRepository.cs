@@ -72,11 +72,11 @@ public class EventRepository : IEventRepository
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid")),
-                    CreatedByName = x.CreatedByUser != null 
-                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                    CreatedByName = x.CreatedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
-                    CreatedBy = x.CreatedByUser != null 
-                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                    CreatedBy = x.CreatedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
@@ -98,9 +98,9 @@ public class EventRepository : IEventRepository
             foreach (var r in results)
             {
                 var cleanName = r.EventName.Trim().ToLower();
-                r.IsReferred = r.TotalPaidAmount > 0 
-                    || paymentTxnEventNames.Contains(cleanName) 
-                    || expenseEventNames.Contains(cleanName) 
+                r.IsReferred = r.TotalPaidAmount > 0
+                    || paymentTxnEventNames.Contains(cleanName)
+                    || expenseEventNames.Contains(cleanName)
                     || photoEventNames.Contains(cleanName);
             }
 
@@ -150,11 +150,11 @@ public class EventRepository : IEventRepository
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId).Sum(c => (decimal?)c.Amount) ?? 0m,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid")),
-                    CreatedByName = x.CreatedByUser != null 
-                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                    CreatedByName = x.CreatedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
-                    CreatedBy = x.CreatedByUser != null 
-                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                    CreatedBy = x.CreatedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
@@ -221,11 +221,11 @@ public class EventRepository : IEventRepository
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid")),
-                    CreatedByName = x.CreatedByUser != null 
-                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                    CreatedByName = x.CreatedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
-                    CreatedBy = x.CreatedByUser != null 
-                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                    CreatedBy = x.CreatedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
@@ -247,9 +247,9 @@ public class EventRepository : IEventRepository
             foreach (var r in results)
             {
                 var cleanName = r.EventName.Trim().ToLower();
-                r.IsReferred = r.TotalPaidAmount > 0 
-                    || paymentTxnEventNames.Contains(cleanName) 
-                    || expenseEventNames.Contains(cleanName) 
+                r.IsReferred = r.TotalPaidAmount > 0
+                    || paymentTxnEventNames.Contains(cleanName)
+                    || expenseEventNames.Contains(cleanName)
                     || photoEventNames.Contains(cleanName);
             }
 
@@ -312,11 +312,11 @@ public class EventRepository : IEventRepository
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
-                    CreatedByName = x.CreatedByUser != null 
-                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                    CreatedByName = x.CreatedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
-                    CreatedBy = x.CreatedByUser != null 
-                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username) 
+                    CreatedBy = x.CreatedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
@@ -343,7 +343,7 @@ public class EventRepository : IEventRepository
                         Amount = c.Amount,
                         PaymentStatus = (c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
                         PaymentDate = c.PaymentDate,
-                        PaymentMode = c.PaymentModeItem != null 
+                        PaymentMode = c.PaymentModeItem != null
                             ? (c.PaymentModeItem.IsCash ? PaymentMode.Cash : (c.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
                             : PaymentMode.None,
                         CashAmount = c.CashAmount,
@@ -387,7 +387,7 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            return await _context.Contributions.AnyAsync(x => x.EventId == eventId && !x.IsDeleted && 
+            return await _context.Contributions.AnyAsync(x => x.EventId == eventId && !x.IsDeleted &&
                 ((x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") || (x.Amount > 0 && (x.CashAmount > 0 || x.UpiAmount > 0))), cancellationToken);
         }
         catch (Exception ex)
