@@ -33,7 +33,8 @@ public class SystemSettingService : ISystemSettingService
             if (map.TryGetValue(CommonConstants.SettingKeys.BirthdayMembersExempt, out var birthdayMembersExempt)) dto.BirthdayMembersExempt = bool.TryParse(birthdayMembersExempt, out var bme) ? bme : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.AllowedMultipleEvent, out var allowedMultipleEvent) ||
                 map.TryGetValue("allowedMultipleEvent", out allowedMultipleEvent) ||
-                map.TryGetValue("allowMultipleEvents", out allowedMultipleEvent))
+                map.TryGetValue("allowMultipleEvents", out allowedMultipleEvent) ||
+                map.TryGetValue("allowed_multiple_event", out allowedMultipleEvent))
             {
                 dto.AllowedMultipleEvent = bool.TryParse(allowedMultipleEvent, out var ame) ? ame : false;
             }
@@ -107,11 +108,15 @@ public class SystemSettingService : ISystemSettingService
                 _ => System.Text.Json.JsonSerializer.Serialize(settings.CategoryTemplates)
             };
 
+            var multipleEventsVal = settings.AllowedMultipleEvent.ToString().ToLowerInvariant();
             var dict = new Dictionary<string, (string Value, string Category)>
             {
-                [CommonConstants.SettingKeys.OrgName] = (settings.OrgName, CommonConstants.SettingCategories.General),
+                [CommonConstants.SettingKeys.OrgName] = (settings.OrgName ?? "Unit 1A Residents Association", CommonConstants.SettingCategories.General),
                 [CommonConstants.SettingKeys.BirthdayMembersExempt] = (settings.BirthdayMembersExempt.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.General),
-                [CommonConstants.SettingKeys.AllowedMultipleEvent] = (settings.AllowedMultipleEvent.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.General),
+                [CommonConstants.SettingKeys.AllowedMultipleEvent] = (multipleEventsVal, CommonConstants.SettingCategories.General),
+                ["allowedMultipleEvent"] = (multipleEventsVal, CommonConstants.SettingCategories.General),
+                ["allowMultipleEvents"] = (multipleEventsVal, CommonConstants.SettingCategories.General),
+                ["allowed_multiple_event"] = (multipleEventsVal, CommonConstants.SettingCategories.General),
                 [CommonConstants.SettingKeys.DefaultCurrency] = (settings.DefaultCurrency, CommonConstants.SettingCategories.General),
                 [CommonConstants.SettingKeys.TimeZone] = (settings.TimeZone, CommonConstants.SettingCategories.General),
                 [CommonConstants.SettingKeys.FromEmail] = (settings.FromEmail, CommonConstants.SettingCategories.Email),

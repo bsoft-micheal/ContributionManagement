@@ -79,6 +79,7 @@ public class CreateEventRequestDto
 
     [Range(1, 1000000, ErrorMessage = CommonValidationMessages.BaseAmountGreaterThanZero)]
     public decimal BaseAmount { get; set; }
+    public List<Guid>? EventTypeIds { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
 }

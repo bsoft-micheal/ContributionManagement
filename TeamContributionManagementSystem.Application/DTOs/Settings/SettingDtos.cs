@@ -17,8 +17,17 @@ public class SystemSettingsDto
     // General
     public string OrgName { get; set; } = "Unit 1A Residents Association";
     public bool BirthdayMembersExempt { get; set; } = true;
-    public bool AllowedMultipleEvent { get; set; } = false;
-    public bool AllowMultipleEvents { get => AllowedMultipleEvent; set => AllowedMultipleEvent = value; }
+    private bool _allowedMultipleEvent = false;
+    public bool AllowedMultipleEvent
+    {
+        get => _allowedMultipleEvent;
+        set => _allowedMultipleEvent = value;
+    }
+    public bool AllowMultipleEvents
+    {
+        get => _allowedMultipleEvent;
+        set => _allowedMultipleEvent = value;
+    }
     public string DefaultCurrency { get; set; } = "INR";
     public string TimeZone { get; set; } = "Asia/Kolkata";
 
