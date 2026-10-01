@@ -51,11 +51,6 @@ public class SystemSettingsDto
     public bool NotifEventReminder { get; set; } = true;
     public bool NotifSupportTicket { get; set; } = false;
 
-    // Payment QR
-    public string QrReceiverName { get; set; } = "Daniel A";
-    public string QrUpiId { get; set; } = "danielrobertanto604@okicici";
-    public string QrImage { get; set; } = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=danielrobertanto604@okicici%26pn=Daniel%20A";
-
     // Audit
     public bool EnableAuditLogs { get; set; } = true;
     public bool LogUserLogin { get; set; } = true;
