@@ -38,7 +38,7 @@ public class ReportService : IReportService
 
             var events = await _eventRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
             var pendingDues = await _contributionRepository.GetPendingAsync(targetMonth, targetYear, cancellationToken);
-            var contributions = await _contributionRepository.GetAllAsync(cancellationToken);
+            var contributions = await _contributionRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
 
             // Date filtering for expenses & payments
             DateTime? startDate = null;
@@ -80,27 +80,51 @@ public class ReportService : IReportService
                 };
             }).OrderByDescending(x => x.EventDate).ToList();
 
+            var eventLookup = events.ToDictionary(e => e.EventId, e => e.EventDate);
+
             // 2. Member Contributions History Report
             var memberHistory = contributions
-                .GroupBy(x => new { x.MemberId, MemberName = x.MemberName })
+                .GroupBy(x => x.MemberId)
                 .Select(group =>
                 {
                     var expected = group.Sum(x => x.Amount);
                     var paid = group.Where(x => x.PaymentStatus == PaymentStatus.Paid).Sum(x => x.Amount);
                     var completion = expected > 0 ? Math.Round((paid / expected) * 100, 1) : 0;
                     var firstItem = group.FirstOrDefault();
+                    var memberName = group.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.MemberName))?.MemberName ?? "Unknown";
+
+                    var memberEvents = group.Select(c =>
+                    {
+                        var isPaid = c.PaymentStatus == PaymentStatus.Paid;
+                        var evDate = eventLookup.TryGetValue(c.EventId, out var ed) ? ed : (c.CreatedAt ?? DateTime.MinValue);
+                        return new MemberEventDetailDto
+                        {
+                            ContributionId = c.ContributionId,
+                            EventId = c.EventId,
+                            EventName = c.EventName,
+                            CategoryName = c.CategoryName,
+                            EventDate = evDate,
+                            ExpectedAmount = c.Amount,
+                            PaidAmount = isPaid ? c.Amount : 0m,
+                            PendingAmount = isPaid ? 0m : c.Amount,
+                            PaymentStatus = isPaid ? "Paid" : "Pending",
+                            PaymentDate = c.PaymentDate,
+                            PaymentMode = c.PaymentMode.ToString()
+                        };
+                    }).OrderByDescending(e => e.EventDate).ToList();
 
                     return new MemberContributionHistoryDto
                     {
-                        MemberId = group.Key.MemberId,
-                        MemberName = group.Key.MemberName,
+                        MemberId = group.Key,
+                        MemberName = memberName,
                         TotalExpectedAmount = expected,
                         TotalPaidAmount = paid,
                         PaidEventsCount = group.Count(x => x.PaymentStatus == PaymentStatus.Paid),
                         PendingEventsCount = group.Count(x => x.PaymentStatus != PaymentStatus.Paid),
                         CompletionRate = completion,
                         CreatedBy = firstItem?.CreatedBy,
-                        CreatedAt = firstItem?.CreatedAt
+                        CreatedAt = firstItem?.CreatedAt,
+                        Events = memberEvents
                     };
                 })
                 .OrderBy(x => x.MemberName)
@@ -116,6 +140,8 @@ public class ReportService : IReportService
                     ? CommonConstants.AgingCategories.Critical 
                     : (days >= 15 ? CommonConstants.AgingCategories.Moderate : CommonConstants.AgingCategories.Recent);
 
+                var eventDate = eventLookup.TryGetValue(x.EventId, out var evDate) ? evDate : (x.CreatedAt ?? DateTime.MinValue);
+
                 return new PendingDueDto
                 {
                     ContributionId = x.ContributionId,
@@ -123,7 +149,7 @@ public class ReportService : IReportService
                     MemberName = x.MemberName,
                     Phone = string.Empty,
                     EventName = x.EventName,
-                    EventDate = DateTime.MinValue,
+                    EventDate = eventDate,
                     Amount = x.Amount,
                     DaysOverdue = days,
                     AgingCategory = aging,
