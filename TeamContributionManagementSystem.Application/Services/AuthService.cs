@@ -71,9 +71,27 @@ public class AuthService : IAuthService
                 throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
             }
 
-            if (request.IsFromMobile && user.Role == UserRole.Admin)
+            bool isMobileLogin = request.IsFromMobile || (request.DeviceInfo != null && request.DeviceInfo.DeviceType == 2);
+            if (isMobileLogin)
             {
-                throw new InvalidOperationException(CommonMessages.Auth.MobileAdminLoginNotAllowed);
+                var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+                var primaryUserRole = activeUserRoles.FirstOrDefault(ur => ur.IsPrimary && ur.Role != null);
+
+                string? primaryRoleName = primaryUserRole?.Role?.RoleName;
+                if (string.IsNullOrWhiteSpace(primaryRoleName))
+                {
+                    primaryRoleName = user.RoleNavigation?.RoleName;
+                }
+                if (string.IsNullOrWhiteSpace(primaryRoleName) && user.Role != 0)
+                {
+                    primaryRoleName = user.Role.ToString();
+                }
+
+                if (!string.Equals(primaryRoleName, "Member", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("Mobile login rejected for user {Email}. Primary role is '{Role}', expected 'Member'.", request.Email, primaryRoleName ?? "None");
+                    throw new InvalidOperationException(CommonMessages.Auth.MobileAdminLoginNotAllowed);
+                }
             }
 
             if (user.MfaDevices != null && user.MfaDevices.Any())
@@ -108,6 +126,29 @@ public class AuthService : IAuthService
             if (!user.IsActive)
             {
                 throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
+            }
+
+            bool isMobileMfa = request.DeviceInfo != null && request.DeviceInfo.DeviceType == 2;
+            if (isMobileMfa)
+            {
+                var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+                var primaryUserRole = activeUserRoles.FirstOrDefault(ur => ur.IsPrimary && ur.Role != null);
+
+                string? primaryRoleName = primaryUserRole?.Role?.RoleName;
+                if (string.IsNullOrWhiteSpace(primaryRoleName))
+                {
+                    primaryRoleName = user.RoleNavigation?.RoleName;
+                }
+                if (string.IsNullOrWhiteSpace(primaryRoleName) && user.Role != 0)
+                {
+                    primaryRoleName = user.Role.ToString();
+                }
+
+                if (!string.Equals(primaryRoleName, "Member", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("Mobile 2FA verification rejected for user {Email}. Primary role is '{Role}', expected 'Member'.", request.Email, primaryRoleName ?? "None");
+                    throw new InvalidOperationException(CommonMessages.Auth.MobileAdminLoginNotAllowed);
+                }
             }
 
             if (user.MfaDevices == null || !user.MfaDevices.Any())
