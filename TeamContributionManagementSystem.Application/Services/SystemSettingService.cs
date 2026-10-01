@@ -101,18 +101,30 @@ public class SystemSettingService : ISystemSettingService
             if (map.TryGetValue(CommonConstants.SettingKeys.NotifEventReminder, out var notifEventReminder)) dto.NotifEventReminder = bool.TryParse(notifEventReminder, out var ber) ? ber : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.NotifSupportTicket, out var notifSupportTicket)) dto.NotifSupportTicket = bool.TryParse(notifSupportTicket, out var bst) ? bst : false;
 
-            if (map.TryGetValue(CommonConstants.SettingKeys.QrReceiverName, out var qrReceiverName)) dto.QrReceiverName = qrReceiverName;
-            if (map.TryGetValue(CommonConstants.SettingKeys.QrUpiId, out var qrUpiId)) dto.QrUpiId = qrUpiId;
-            if (map.TryGetValue(CommonConstants.SettingKeys.QrImage, out var qrImage)) dto.QrImage = qrImage;
-
             if (map.TryGetValue(CommonConstants.SettingKeys.EnableAuditLogs, out var enableAuditLogs)) dto.EnableAuditLogs = bool.TryParse(enableAuditLogs, out var bal) ? bal : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.LogUserLogin, out var logUserLogin)) dto.LogUserLogin = bool.TryParse(logUserLogin, out var lul) ? lul : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.LogDataChanges, out var logDataChanges)) dto.LogDataChanges = bool.TryParse(logDataChanges, out var ldc) ? ldc : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.LogConfigChanges, out var logConfigChanges)) dto.LogConfigChanges = bool.TryParse(logConfigChanges, out var lcc) ? lcc : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.RetentionPeriod, out var retentionPeriod)) dto.RetentionPeriod = retentionPeriod;
 
-            if (map.TryGetValue(CommonConstants.SettingKeys.EmailSubject, out var emailSubject)) dto.EmailSubject = emailSubject;
-            if (map.TryGetValue(CommonConstants.SettingKeys.EmailDescription, out var emailDescription)) dto.EmailDescription = emailDescription;
+            if (map.TryGetValue(CommonConstants.SettingKeys.EmailSubject, out var emailSubject) && !string.IsNullOrWhiteSpace(emailSubject))
+            {
+                dto.EmailSubject = emailSubject;
+            }
+            else
+            {
+                dto.EmailSubject = "Contribution Notice - {categoryName}";
+            }
+
+            if (map.TryGetValue(CommonConstants.SettingKeys.EmailDescription, out var emailDescription) && !string.IsNullOrWhiteSpace(emailDescription))
+            {
+                dto.EmailDescription = CleanQrAndPaymentLinks(emailDescription);
+            }
+            else
+            {
+                dto.EmailDescription = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
+            }
+
             if (map.TryGetValue(CommonConstants.SettingKeys.SelectedTemplateCategoryId, out var selCatId)) dto.SelectedTemplateCategoryId = selCatId;
             if (map.TryGetValue(CommonConstants.SettingKeys.EnableMonthlyEmail, out var enableMonthlyEmail)) dto.EnableMonthlyEmail = bool.TryParse(enableMonthlyEmail, out var eme) ? eme : true;
             if (map.TryGetValue(CommonConstants.SettingKeys.EnableReminderEmail, out var enableReminderEmail)) dto.EnableReminderEmail = bool.TryParse(enableReminderEmail, out var ere) ? ere : true;
@@ -123,13 +135,14 @@ public class SystemSettingService : ISystemSettingService
             if (map.TryGetValue(CommonConstants.SettingKeys.MaxReminders, out var maxRem)) dto.MaxReminders = maxRem;
             if (map.TryGetValue(CommonConstants.SettingKeys.CategoryTemplates, out var catTemplates) && !string.IsNullOrWhiteSpace(catTemplates))
             {
+                var sanitizedCatTemplates = CleanQrAndPaymentLinks(catTemplates);
                 try
                 {
-                    dto.CategoryTemplates = System.Text.Json.JsonSerializer.Deserialize<object>(catTemplates);
+                    dto.CategoryTemplates = System.Text.Json.JsonSerializer.Deserialize<object>(sanitizedCatTemplates);
                 }
                 catch
                 {
-                    dto.CategoryTemplates = catTemplates;
+                    dto.CategoryTemplates = sanitizedCatTemplates;
                 }
             }
 
@@ -179,9 +192,6 @@ public class SystemSettingService : ISystemSettingService
                 [CommonConstants.SettingKeys.NotifPaymentConfirm] = (settings.NotifPaymentConfirm.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Notifications),
                 [CommonConstants.SettingKeys.NotifEventReminder] = (settings.NotifEventReminder.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Notifications),
                 [CommonConstants.SettingKeys.NotifSupportTicket] = (settings.NotifSupportTicket.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Notifications),
-                [CommonConstants.SettingKeys.QrReceiverName] = (settings.QrReceiverName, CommonConstants.SettingCategories.PaymentQr),
-                [CommonConstants.SettingKeys.QrUpiId] = (settings.QrUpiId, CommonConstants.SettingCategories.PaymentQr),
-                [CommonConstants.SettingKeys.QrImage] = (settings.QrImage, CommonConstants.SettingCategories.PaymentQr),
                 [CommonConstants.SettingKeys.EnableAuditLogs] = (settings.EnableAuditLogs.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Audit),
                 [CommonConstants.SettingKeys.LogUserLogin] = (settings.LogUserLogin.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Audit),
                 [CommonConstants.SettingKeys.LogDataChanges] = (settings.LogDataChanges.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.Audit),
@@ -297,5 +307,45 @@ public class SystemSettingService : ISystemSettingService
             }
         }
         catch { }
+    }
+
+    private static string CleanQrAndPaymentLinks(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text;
+
+        const string replacementText = "Please log in to the portal to view details and complete your contribution payment.";
+
+        var phrasesToClean = new[]
+        {
+            "Please scan the attached dynamic UPI QR code or click the payment link to pay:",
+            "Please scan the dynamic UPI QR code below or tap the payment link to contribute:",
+            "Please use the payment link or scan the dynamic UPI QR code:",
+            "Pay via UPI link or scan the QR code:",
+            "Please scan the QR code below or use the payment link:",
+            "Please scan the dynamic UPI QR code or use the payment link:",
+            "Please complete your payment at your earliest convenience using UPI:",
+            "Please settle this via UPI so we can finalize bookings:",
+            "Please scan the attached dynamic UPI QR code.",
+            "Please scan the dynamic UPI QR code.",
+            "Please scan the attached dynamic UPI QR code",
+            "Please scan the dynamic UPI QR code"
+        };
+
+        var cleaned = text;
+
+        foreach (var phrase in phrasesToClean)
+        {
+            cleaned = cleaned.Replace(phrase, replacementText, StringComparison.OrdinalIgnoreCase);
+        }
+
+        cleaned = cleaned
+            .Replace("{paymentLink}", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("{qrCode}", string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        // Normalize 3+ escaped or raw newlines to double newlines
+        cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"(\\n){3,}", @"\n\n");
+        cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"(\r?\n){3,}", "\n\n");
+
+        return cleaned.Trim();
     }
 }
