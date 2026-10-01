@@ -20,6 +20,8 @@ public class ContributionDto
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
+    public DateTime? LastReminderSentAt { get; set; }
+    public int ReminderCount { get; set; }
 }
 
 public class MemberContributionSummaryDto

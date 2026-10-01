@@ -1,17 +1,21 @@
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Hangfire;
+using Hangfire.PostgreSql;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Versioning;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using Serilog;
+using TeamContributionManagementSystem.API.Filters;
 using TeamContributionManagementSystem.API.Middleware;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Infrastructure;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 using TeamContributionManagementSystem.Infrastructure.Persistence.Seed;
@@ -84,7 +88,32 @@ builder.Services.AddSwaggerGen(options =>
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     options.IncludeXmlComments(xmlPath);
 });
+
 builder.Services.AddApplicationAndInfrastructure(builder.Configuration);
+
+// Configure Hangfire with PostgreSQL persistent storage
+var connString = builder.Configuration.GetConnectionString("ConnString")
+    ?? throw new InvalidOperationException("PostgreSQL connection string 'ConnString' not found in configuration.");
+
+builder.Services.AddHangfire(config =>
+{
+    config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+          .UseSimpleAssemblyNameTypeSerializer()
+          .UseRecommendedSerializerSettings()
+          .UsePostgreSqlStorage(c => c.UseNpgsqlConnection(connString), new PostgreSqlStorageOptions
+          {
+              SchemaName = "hangfire",
+              PrepareSchemaIfNecessary = true,
+              QueuePollInterval = TimeSpan.FromSeconds(15)
+          });
+});
+
+var workerCount = builder.Configuration.GetValue<int?>("HangfireSettings:WorkerCount") ?? 5;
+builder.Services.AddHangfireServer(options =>
+{
+    options.WorkerCount = workerCount;
+});
+
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>();
 
@@ -134,8 +163,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-// Disabled automatic background birthday event generation so deleted events are not continuously recreated
-// builder.Services.AddHostedService<BirthdayEventHostedService>();
 
 var app = builder.Build();
 
@@ -151,6 +178,49 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors(CommonConstants.CorsPolicies.FrontendPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Configure secured Hangfire Dashboard
+var hangfireSettings = app.Configuration.GetSection("HangfireSettings");
+var dashboardPath = hangfireSettings["DashboardPath"] ?? "/hangfire";
+var cronSchedule = hangfireSettings["CronSchedule"] ?? "0 9 * * *";
+var timeZoneId = hangfireSettings["TimeZone"] ?? "India Standard Time";
+
+app.UseHangfireDashboard(dashboardPath, new DashboardOptions
+{
+    Authorization = new[] { new HangfireDashboardAuthorizationFilter() },
+    DashboardTitle = "Team Contribution Reminder Jobs"
+});
+
+// Configure TimeZone for Recurring Job
+TimeZoneInfo timeZoneInfo;
+try
+{
+    timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+}
+catch
+{
+    try
+    {
+        timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+    }
+    catch
+    {
+        timeZoneInfo = TimeZoneInfo.Utc;
+    }
+}
+
+// Register Daily Recurring Reminder Job
+using (var scope = app.Services.CreateScope())
+{
+    var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+    recurringJobManager.AddOrUpdate<IContributionReminderJobService>(
+        "daily-contribution-reminders",
+        service => service.ProcessDailyRemindersAsync(null, CancellationToken.None),
+        cronSchedule,
+        new RecurringJobOptions { TimeZone = timeZoneInfo }
+    );
+}
+
 app.MapControllers();
 app.MapHealthChecks(CommonRoutes.Health);
 
@@ -161,3 +231,4 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+

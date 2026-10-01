@@ -32,11 +32,11 @@ public class SystemSettingsDto
     public string TimeZone { get; set; } = "Asia/Kolkata";
 
     // Email
-    public string FromEmail { get; set; } = "noreply@unit1a.com";
-    public string FromName { get; set; } = "Unit 1A Management";
-    public string SmtpHost { get; set; } = "smtp.gmail.com";
-    public string SmtpPort { get; set; } = "587";
-    public string Encryption { get; set; } = "TLS";
+    public string FromEmail { get; set; } = string.Empty;
+    public string FromName { get; set; } = string.Empty;
+    public string SmtpHost { get; set; } = string.Empty;
+    public string SmtpPort { get; set; } = string.Empty;
+    public string Encryption { get; set; } = string.Empty;
 
     // Security / OTP
     public string OtpExpiry { get; set; } = "10";
@@ -71,5 +71,7 @@ public class SystemSettingsDto
     public bool EnableMonthlyEmail { get; set; } = true;
     public bool EnableReminderEmail { get; set; } = true;
     public string ReminderIntervalDays { get; set; } = "10";
+    public string ReminderIntervalValue { get; set; } = "10";
+    public string ReminderIntervalUnit { get; set; } = "Days";
     public string MaxReminders { get; set; } = "3";
 }

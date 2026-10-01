@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeamContributionManagementSystem.API.Attributes;
@@ -100,5 +101,29 @@ public class EventsController : ControllerBase
     {
         await _eventService.DeleteEventAsyncById(id, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Events.DeleteSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Manually triggers contribution reminder emails for all pending members of an event (Admin or Organizer).
+    /// </summary>
+    /// <param name="eventId">The unique identifier of the event.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [HttpPost(CommonRoutes.Events.SendReminders)]
+    [HttpPost(CommonRoutes.Events.SendRemindersAsync)]
+    [ActionName(nameof(SendRemindersAsync))]
+    public ActionResult<ApiResponse<object>> SendRemindersAsync([FromRoute] Guid eventId, CancellationToken cancellationToken)
+    {
+        var userName = User.FindFirstValue(ClaimTypes.Name) 
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier) 
+            ?? "Admin";
+
+        var jobId = BackgroundJob.Enqueue<IContributionReminderJobService>(
+            service => service.SendRemindersForEventAsync(eventId, userName, CancellationToken.None));
+
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(
+            new { JobId = jobId, EventId = eventId, Status = "Enqueued" },
+            "Event contribution reminder job successfully enqueued.",
+            CommonStatusCodes.Status200OK));
     }
 }

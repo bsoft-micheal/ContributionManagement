@@ -142,7 +142,11 @@ public class EventService : IEventService
             var user = await _userRepository.GetByIdAsync(createdByUserId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
-            var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
+            var targetTypeId = request.EventTypeId != Guid.Empty
+                ? request.EventTypeId
+                : (request.EventTypeIds != null && request.EventTypeIds.Count > 0 ? request.EventTypeIds[0] : Guid.Empty);
+
+            var eventType = await _eventTypeRepository.GetByIdAsync(targetTypeId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
 
             if (!eventType.IsActive)
@@ -158,7 +162,7 @@ public class EventService : IEventService
 
             var members = await _memberRepository.GetByIdsAsync(participantIds, cancellationToken);
 
-            if (members.Count != participantIds.Count)
+            if (members.Count == 0)
             {
                 throw new InvalidOperationException(CommonMessages.Events.ParticipantsNotFound);
             }
@@ -285,160 +289,204 @@ public class EventService : IEventService
             var createdEvent = await GetByIdAsync(eventItem.EventId, cancellationToken);
 
             // Send notification emails asynchronously in the background to active contributors
-            var particularContributors = members
-                .Where(m => !string.IsNullOrWhiteSpace(m.Email))
-                .Select(m => new
-                {
-                    m.MemberId,
-                    m.Name,
-                    m.Email,
-                    ContributionAmount = contributions.FirstOrDefault(c => c.MemberId == m.MemberId)?.Amount ?? 0m
-                })
-                .ToList();
+            var participantData = members.Select(m => (
+                MemberId: m.MemberId,
+                Name: m.Name,
+                Email: m.Email,
+                ContributionAmount: contributions.FirstOrDefault(c => c.MemberId == m.MemberId)?.Amount ?? 0m
+            ));
 
-            if (particularContributors.Count > 0)
+            var exemptCelebrantIds = (request.ContributionOverrides ?? new List<ContributionOverrideDto>())
+                .Where(x => x.Amount == 0)
+                .Select(x => x.MemberId)
+                .ToHashSet();
+
+            DispatchEventNotificationEmails(
+                eventItem.EventId,
+                eventItem.EventName,
+                eventItem.EventDate,
+                eventItem.EventDates,
+                eventItem.Description,
+                eventItem.BaseAmount,
+                eventType.EventTypeId,
+                eventType.EventTypeName,
+                exemptCelebrantIds,
+                participantData);
+
+            return createdEvent;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
+            throw;
+        }
+    }
+
+    private void DispatchEventNotificationEmails(
+        Guid eventId,
+        string eventName,
+        DateTime eventDate,
+        string? eventDates,
+        string eventDescription,
+        decimal baseAmount,
+        Guid eventTypeId,
+        string eventTypeName,
+        HashSet<Guid> exemptCelebrantIds,
+        IEnumerable<(Guid MemberId, string? Name, string? Email, decimal ContributionAmount)> participants)
+    {
+        var particularContributors = participants
+            .Where(m => !string.IsNullOrWhiteSpace(m.Email))
+            .Select(m => new
             {
-                var eventId = eventItem.EventId;
-                var eventName = eventItem.EventName;
-                var eventDate = eventItem.EventDate;
-                var eventDates = eventItem.EventDates;
-                var eventDescription = eventItem.Description;
-                var baseAmount = eventItem.BaseAmount;
-                var eventTypeId = eventType.EventTypeId;
-                var eventTypeName = eventType.EventTypeName;
-                bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventType.EventTypeName) &&
-                    eventType.EventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase);
+                m.MemberId,
+                Name = !string.IsNullOrWhiteSpace(m.Name) ? m.Name.Trim() : "Member",
+                Email = m.Email!.Trim(),
+                m.ContributionAmount
+            })
+            .ToList();
 
-                var exemptCelebrantIds = (request.ContributionOverrides ?? new List<ContributionOverrideDto>())
-                    .Where(x => x.Amount == 0)
-                    .Select(x => x.MemberId)
-                    .ToHashSet();
+        if (particularContributors.Count == 0)
+        {
+            _logger.LogInformation("No contributors with valid email addresses found for event '{EventName}' ({EventId}). Skipping email dispatch.", eventName, eventId);
+            return;
+        }
 
-                _ = Task.Run(async () =>
+        bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventTypeName) &&
+            eventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _serviceScopeFactory.CreateScope();
+                var scopedEmailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<EventService>>();
+                var scopedMemberRepo = scope.ServiceProvider.GetRequiredService<IMemberRepository>();
+                var scopedSettingService = scope.ServiceProvider.GetService<ISystemSettingService>();
+
+                string upiReceiverName = CommonConstants.Defaults.DefaultPayeeName;
+                string upiId = CommonConstants.Defaults.DefaultUpiId;
+                string qrImageUrl = string.Empty;
+                SystemSettingsDto? systemSettings = null;
+
+                if (scopedSettingService != null)
                 {
                     try
                     {
-                        using var scope = _serviceScopeFactory.CreateScope();
-                        var scopedEmailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                        var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<EventService>>();
-                        var scopedMemberRepo = scope.ServiceProvider.GetRequiredService<IMemberRepository>();
-                        var scopedSettingService = scope.ServiceProvider.GetService<ISystemSettingService>();
-
-                        string upiReceiverName = CommonConstants.Defaults.DefaultPayeeName;
-                        string upiId = CommonConstants.Defaults.DefaultUpiId;
-                        string qrImageUrl = string.Empty;
-                        SystemSettingsDto? systemSettings = null;
-
-                        if (scopedSettingService != null)
+                        systemSettings = await scopedSettingService.GetSettingsAsync(CancellationToken.None);
+                        if (!string.IsNullOrWhiteSpace(systemSettings.QrReceiverName)) upiReceiverName = systemSettings.QrReceiverName;
+                        if (!string.IsNullOrWhiteSpace(systemSettings.QrUpiId)) upiId = systemSettings.QrUpiId;
+                        if (!string.IsNullOrWhiteSpace(systemSettings.QrImage) && systemSettings.QrImage.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                         {
-                            try
-                            {
-                                systemSettings = await scopedSettingService.GetSettingsAsync(CancellationToken.None);
-                                if (!string.IsNullOrWhiteSpace(systemSettings.QrReceiverName)) upiReceiverName = systemSettings.QrReceiverName;
-                                if (!string.IsNullOrWhiteSpace(systemSettings.QrUpiId)) upiId = systemSettings.QrUpiId;
-                                if (!string.IsNullOrWhiteSpace(systemSettings.QrImage) && systemSettings.QrImage.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    qrImageUrl = systemSettings.QrImage;
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                scopedLogger.LogWarning(ex, CommonLogMessages.Events.SettingsLoadWarning);
-                            }
+                            qrImageUrl = systemSettings.QrImage;
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        scopedLogger.LogWarning(ex, CommonLogMessages.Events.SettingsLoadWarning);
+                    }
+                }
 
-                        var orgName = !string.IsNullOrWhiteSpace(systemSettings?.OrgName)
-                            ? systemSettings.OrgName
-                            : "Unit 1A Residents Association";
+                var orgName = !string.IsNullOrWhiteSpace(systemSettings?.OrgName)
+                    ? systemSettings.OrgName.Trim()
+                    : "Unit 1A Residents Association";
 
-                        var (configuredSubject, configuredDescription) = ResolveConfiguredTemplate(systemSettings, eventTypeId, eventTypeName);
+                var (configuredSubject, configuredDescription) = ResolveConfiguredTemplate(systemSettings, eventTypeId, eventTypeName, "initial");
 
-                        var gpayImagePath = ResolveGpayImagePath();
-                        if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+                var gpayImagePath = ResolveGpayImagePath();
+                if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+                {
+                    try
+                    {
+                        var targetDir = Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot);
+                        var targetFile = Path.Combine(targetDir, CommonConstants.Defaults.GpayFileName);
+                        Directory.CreateDirectory(targetDir);
+                        File.Copy(gpayImagePath, targetFile, true);
+                    }
+                    catch { }
+                }
+
+                List<MemberDto> targetCelebrants = new();
+
+                if (isBirthdayEvent)
+                {
+                    try
+                    {
+                        var allMonthCelebrants = await scopedMemberRepo.GetActiveBirthdaysInMonthAsync(eventDate.Month, CancellationToken.None);
+
+                        if (exemptCelebrantIds.Count > 0)
                         {
-                            try
-                            {
-                                var targetDir = Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot);
-                                var targetFile = Path.Combine(targetDir, CommonConstants.Defaults.GpayFileName);
-                                Directory.CreateDirectory(targetDir);
-                                File.Copy(gpayImagePath, targetFile, true);
-                            }
-                            catch { }
-                        }
-
-                        List<MemberDto> targetCelebrants = new();
-
-
-                        if (isBirthdayEvent)
-                        {
-                            var allMonthCelebrants = await scopedMemberRepo.GetActiveBirthdaysInMonthAsync(eventDate.Month, CancellationToken.None);
-
-                            // 1. If exempt celebrant IDs were explicitly passed in request
-                            if (exemptCelebrantIds.Count > 0)
-                            {
-                                targetCelebrants = allMonthCelebrants.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
-                                if (targetCelebrants.Count == 0)
-                                {
-                                    var allMembers = await scopedMemberRepo.GetAllActiveAsync(CancellationToken.None);
-                                    targetCelebrants = allMembers.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
-                                }
-                            }
-
-                            // 2. Fallback: check if member names appear in eventName or description
+                            targetCelebrants = allMonthCelebrants.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
                             if (targetCelebrants.Count == 0)
                             {
-                                var textToSearch = $"{eventName} {eventDescription}".ToLowerInvariant();
-                                targetCelebrants = allMonthCelebrants
-                                    .Where(m => !string.IsNullOrWhiteSpace(m.Name) &&
-                                                (textToSearch.Contains(m.Name.ToLowerInvariant()) ||
-                                                 textToSearch.Contains(m.MemberId.ToString().ToLowerInvariant())))
-                                    .ToList();
-                            }
-
-                            // 3. Fallback: all active celebrants with birthdays in this month
-                            if (targetCelebrants.Count == 0)
-                            {
-                                targetCelebrants = allMonthCelebrants;
+                                var allMembers = await scopedMemberRepo.GetAllActiveAsync(CancellationToken.None);
+                                targetCelebrants = allMembers.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
                             }
                         }
 
-                        // Order celebrants by birthday day
-                        targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
-
-                        var celebrantNames = targetCelebrants.Select(m => m.Name).Distinct().ToList();
-
-                        if (celebrantNames.Count == 0 && isBirthdayEvent)
+                        if (targetCelebrants.Count == 0)
                         {
-                            var nameParts = eventName.Split(new[] { '-', ':' }, 2);
-                            if (nameParts.Length > 1 && !string.IsNullOrWhiteSpace(nameParts[1]))
-                            {
-                                var parsed = nameParts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                                    .Select(p => p.Trim())
-                                    .Where(p => !string.IsNullOrWhiteSpace(p))
-                                    .ToList();
-                                if (parsed.Count > 0)
-                                {
-                                    celebrantNames = parsed;
-                                }
-                            }
+                            var textToSearch = $"{eventName} {eventDescription}".ToLowerInvariant();
+                            targetCelebrants = allMonthCelebrants
+                                .Where(m => !string.IsNullOrWhiteSpace(m.Name) &&
+                                            (textToSearch.Contains(m.Name.ToLowerInvariant()) ||
+                                             textToSearch.Contains(m.MemberId.ToString().ToLowerInvariant())))
+                                .ToList();
                         }
 
-                        string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
-
-                        // Build particular birthday event dates display
-                        string birthdayDatesSummary = string.Empty;
-                        string celebrantsAndDatesHtml = string.Empty;
-
-                        if (isBirthdayEvent)
+                        if (targetCelebrants.Count == 0)
                         {
-                            if (targetCelebrants.Count == 1)
-                            {
-                                var c = targetCelebrants[0];
-                                var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
-                                string bdayDateStr = bdayDate.ToString("MMMM dd, yyyy");
-                                birthdayDatesSummary = $"{c.Name} ({bdayDate:MMMM dd})";
+                            targetCelebrants = allMonthCelebrants;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        scopedLogger.LogWarning(ex, "Failed to resolve active birthday celebrants for event email dispatch");
+                    }
+                }
 
-                                celebrantsAndDatesHtml = $@"
+                targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
+                var celebrantNames = targetCelebrants.Select(m => m.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+
+                if (celebrantNames.Count == 0 && isBirthdayEvent)
+                {
+                    var nameParts = eventName.Split(new[] { '-', ':' }, 2);
+                    if (nameParts.Length > 1 && !string.IsNullOrWhiteSpace(nameParts[1]))
+                    {
+                        var parsed = nameParts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(p => p.Trim())
+                            .Where(p => !string.IsNullOrWhiteSpace(p))
+                            .ToList();
+                        if (parsed.Count > 0)
+                        {
+                            celebrantNames = parsed;
+                        }
+                    }
+                }
+
+                string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
+
+                Func<MemberDto, DateTime> getCelebrantBirthDate = (m) =>
+                {
+                    int birthMonth = m.DateOfBirth.Month >= 1 && m.DateOfBirth.Month <= 12 ? m.DateOfBirth.Month : (eventDate.Month >= 1 && eventDate.Month <= 12 ? eventDate.Month : DateTime.UtcNow.Month);
+                    int maxDays = DateTime.DaysInMonth(eventDate.Year, birthMonth);
+                    int birthDay = m.DateOfBirth.Day >= 1 && m.DateOfBirth.Day <= maxDays ? m.DateOfBirth.Day : Math.Min(Math.Max(1, m.DateOfBirth.Day), maxDays);
+                    return new DateTime(eventDate.Year, birthMonth, birthDay);
+                };
+
+                string birthdayDatesSummary = string.Empty;
+                string celebrantsAndDatesHtml = string.Empty;
+
+                if (isBirthdayEvent)
+                {
+                    if (targetCelebrants.Count == 1)
+                    {
+                        var c = targetCelebrants[0];
+                        var bdayDate = getCelebrantBirthDate(c);
+                        string bdayDateStr = bdayDate.ToString("MMMM dd, yyyy");
+                        birthdayDatesSummary = $"{c.Name} ({bdayDate:MMMM dd})";
+
+                        celebrantsAndDatesHtml = $@"
                 <div class=""detail-row"">
                     <span class=""detail-label"">Birthday Celebrant:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{c.Name}</span>
@@ -447,27 +495,27 @@ public class EventService : IEventService
                     <span class=""detail-label"">Particular Birthday Date:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #c026d3;"">{bdayDateStr}</span>
                 </div>";
-                            }
-                            else if (targetCelebrants.Count > 1)
-                            {
-                                var summaryItems = targetCelebrants.Select(c =>
-                                {
-                                    var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
-                                    return $"{c.Name} ({bdayDate:MMM dd})";
-                                });
-                                birthdayDatesSummary = string.Join(", ", summaryItems);
+                    }
+                    else if (targetCelebrants.Count > 1)
+                    {
+                        var summaryItems = targetCelebrants.Select(c =>
+                        {
+                            var bdayDate = getCelebrantBirthDate(c);
+                            return $"{c.Name} ({bdayDate:MMM dd})";
+                        });
+                        birthdayDatesSummary = string.Join(", ", summaryItems);
 
-                                var tableRows = string.Join("", targetCelebrants.Select(c =>
-                                {
-                                    var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
-                                    return $@"
-                                        <tr style=""border-bottom: 1px dashed rgba(74, 63, 107, 0.1);"">
-                                            <td style=""padding: 8px 12px; color: #4a3f6b; font-weight: 700; font-size: 13.5px;"">&#x1F382; {c.Name}</td>
-                                            <td align=""right"" style=""padding: 8px 12px; color: #c026d3; font-weight: 700; font-size: 13.5px;"">{bdayDate:MMMM dd, yyyy}</td>
-                                        </tr>";
-                                }));
+                        var tableRows = string.Join("", targetCelebrants.Select(c =>
+                        {
+                            var bdayDate = getCelebrantBirthDate(c);
+                            return $@"
+                                <tr style=""border-bottom: 1px dashed rgba(74, 63, 107, 0.1);"">
+                                    <td style=""padding: 8px 12px; color: #4a3f6b; font-weight: 700; font-size: 13.5px;"">&#x1F382; {c.Name}</td>
+                                    <td align=""right"" style=""padding: 8px 12px; color: #c026d3; font-weight: 700; font-size: 13.5px;"">{bdayDate:MMMM dd, yyyy}</td>
+                                </tr>";
+                        }));
 
-                                celebrantsAndDatesHtml = $@"
+                        celebrantsAndDatesHtml = $@"
                 <div class=""detail-row"">
                     <span class=""detail-label"" style=""vertical-align: top; padding-top: 4px;"">Birthday Celebrants &amp; Dates:</span>
                     <div class=""detail-value"" style=""display: block; margin-top: 6px;"">
@@ -476,10 +524,10 @@ public class EventService : IEventService
                         </table>
                     </div>
                 </div>";
-                            }
-                            else if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
-                            {
-                                celebrantsAndDatesHtml = $@"
+                    }
+                    else if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
+                    {
+                        celebrantsAndDatesHtml = $@"
                 <div class=""detail-row"">
                     <span class=""detail-label"">Birthday Celebrants:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{celebrantsFormatted}</span>
@@ -488,87 +536,90 @@ public class EventService : IEventService
                     <span class=""detail-label"">Particular Birthday Date:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #c026d3;"">{eventDate:MMMM dd, yyyy}</span>
                 </div>";
-                            }
+                    }
+                }
+
+                foreach (var contributor in particularContributors)
+                {
+                    try
+                    {
+                        var memberContributionAmount = contributor.ContributionAmount;
+                        var formattedAmount = memberContributionAmount % 1 == 0
+                            ? $"₹{memberContributionAmount:N0}"
+                            : $"₹{memberContributionAmount:F2}";
+                        var formattedDueDate = eventDate.ToString("dd/MM/yyyy");
+
+                        var memberName = !string.IsNullOrWhiteSpace(contributor.Name) ? contributor.Name.Trim() : "Member";
+                        var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
+                        var safeEventName = !string.IsNullOrWhiteSpace(eventName) ? eventName.Trim() : "Event";
+                        var safeOrgName = !string.IsNullOrWhiteSpace(orgName) ? orgName.Trim() : "Unit 1A Residents Association";
+
+                        string emailSubject = (configuredSubject ?? string.Empty)
+                            .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{eventName}", safeEventName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase);
+
+                        if (string.IsNullOrWhiteSpace(emailSubject))
+                        {
+                            emailSubject = isBirthdayEvent
+                                ? $"Birthday Celebration Contribution - {safeCategoryName}"
+                                : $"Contribution Notice - {safeCategoryName}";
                         }
 
-                        string singleCelebrantDateStr = string.Empty;
-                        if (targetCelebrants.Count == 1)
-                        {
-                            var c = targetCelebrants[0];
-                            var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
-                            singleCelebrantDateStr = bdayDate.ToString("MMM dd");
-                        }
+                        string emailHeader = isBirthdayEvent ? "Birthday Celebration" : $"{safeCategoryName} Contribution";
 
-                        foreach (var contributor in particularContributors)
-                        {
-                            try
-                            {
-                                var memberContributionAmount = contributor.ContributionAmount;
-                                var formattedAmount = memberContributionAmount % 1 == 0
-                                    ? $"₹{memberContributionAmount:N0}"
-                                    : $"₹{memberContributionAmount:F2}";
-                                var formattedDueDate = eventDate.ToString("dd/MM/yyyy");
+                        string eventDateLabel = "Event Date:";
+                        string celebrantDatesCsv = !string.IsNullOrWhiteSpace(eventDates)
+                            ? eventDates
+                            : (isBirthdayEvent && targetCelebrants.Count > 0
+                                ? string.Join(", ", targetCelebrants.OrderBy(c => c.DateOfBirth.Day).Select(c => $"{c.DateOfBirth.Day} {getCelebrantBirthDate(c):MMM}"))
+                                : string.Empty);
+                        string eventDateValueDisplay = !string.IsNullOrWhiteSpace(celebrantDatesCsv)
+                            ? celebrantDatesCsv
+                            : $"{eventDate:MMMM dd, yyyy}";
 
-                                string emailSubject = configuredSubject
-                                    .Replace("{memberName}", contributor.Name)
-                                    .Replace("{categoryName}", eventTypeName)
-                                    .Replace("{eventName}", eventName)
-                                    .Replace("{amount}", formattedAmount)
-                                    .Replace("{dueDate}", formattedDueDate)
-                                    .Replace("{orgName}", orgName);
+                        string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
+                            ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
+                            : $"Rs.{baseAmount:F2}";
 
-                                string emailHeader = isBirthdayEvent ? "Birthday Celebration" : $"{eventTypeName} Contribution";
+                        var upiPaymentUri = $"upi://pay?pa={upiId}&pn={Uri.EscapeDataString(upiReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString("Contribution for " + safeEventName)}";
+                        var memberQrCodeUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data={Uri.EscapeDataString(upiPaymentUri)}";
+                        var frontendBaseUrl = "http://localhost:5173";
+                        var confirmPaymentUrl = $"{frontendBaseUrl}/confirm-payment?eventId={eventId}&memberId={contributor.MemberId}&amount={memberContributionAmount:F2}";
 
-                                string eventDateLabel = "Event Date:";
-                                string celebrantDatesCsv = !string.IsNullOrWhiteSpace(eventDates)
-                                    ? eventDates
-                                    : (isBirthdayEvent && targetCelebrants.Count > 0
-                                        ? string.Join(", ", targetCelebrants.OrderBy(c => c.DateOfBirth.Day).Select(c => $"{c.DateOfBirth.Day} {new DateTime(eventDate.Year, c.DateOfBirth.Month, 1):MMM}"))
-                                        : string.Empty);
-                                string eventDateValueDisplay = !string.IsNullOrWhiteSpace(celebrantDatesCsv)
-                                    ? celebrantDatesCsv
-                                    : $"{eventDate:MMMM dd, yyyy}";
+                        var paymentLinkInline = upiPaymentUri;
+                        var qrImageInlineTag = $@"
+                            <div style=""text-align: center; margin: 18px 0;"">
+                                <div style=""display: inline-block; padding: 12px; background: #ffffff; border: 2px solid #7c3aed; border-radius: 12px; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.12);"">
+                                    <a href=""{upiPaymentUri}"" style=""text-decoration: none; display: block;"">
+                                        <img src=""{memberQrCodeUrl}"" alt=""UPI Payment QR Code - {upiReceiverName}"" width=""220"" height=""220"" style=""display: block; margin: 0 auto; border-radius: 6px;"" />
+                                    </a>
+                                </div>
+                                <div style=""font-size: 12px; color: #64748b; margin-top: 6px;"">UPI ID: <strong style=""color: #312e81;"">{upiId}</strong> ({upiReceiverName})</div>
+                            </div>";
 
-                                string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
-                                    ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
-                                    : $"Rs.{baseAmount:F2}";
+                        bool hasCustomQrCode = (configuredDescription ?? string.Empty).Contains("{qrCode}", StringComparison.OrdinalIgnoreCase);
 
-                                var upiPaymentUri = $"upi://pay?pa={upiId}&pn={Uri.EscapeDataString(upiReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString("Contribution for " + eventName)}";
-                                var memberQrCodeUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data={Uri.EscapeDataString(upiPaymentUri)}";
-                                var frontendBaseUrl = "http://localhost:5173";
-                                var confirmPaymentUrl = $"{frontendBaseUrl}/confirm-payment?eventId={eventId}&memberId={contributor.MemberId}&amount={memberContributionAmount:F2}";
-                                var hasInlineScanner = false;
+                        var interpolated = (configuredDescription ?? string.Empty)
+                            .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{eventName}", safeEventName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{paymentLink}", paymentLinkInline, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{qrCode}", qrImageInlineTag, StringComparison.OrdinalIgnoreCase);
 
-                                var paymentLinkInline = upiPaymentUri;
-                                var qrImageInlineTag = $@"
-                                    <div style=""text-align: center; margin: 18px 0;"">
-                                        <div style=""display: inline-block; padding: 12px; background: #ffffff; border: 2px solid #7c3aed; border-radius: 12px; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.12);"">
-                                            <a href=""{upiPaymentUri}"" style=""text-decoration: none; display: block;"">
-                                                <img src=""{memberQrCodeUrl}"" alt=""UPI Payment QR Code - {upiReceiverName}"" width=""220"" height=""220"" style=""display: block; margin: 0 auto; border-radius: 6px;"" />
-                                            </a>
-                                        </div>
-                                        <div style=""font-size: 12px; color: #64748b; margin-top: 6px;"">UPI ID: <strong style=""color: #312e81;"">{upiId}</strong> ({upiReceiverName})</div>
-                                    </div>";
+                        var formattedText = interpolated
+                            .Replace("\r\n", "<br />")
+                            .Replace("\n", "<br />");
 
-                                bool hasCustomQrCode = configuredDescription.Contains("{qrCode}");
+                        string customMessageHtml = $@"<div style=""font-size: 15px; line-height: 1.7; color: #334155; margin-bottom: 24px;"">{formattedText}</div>";
 
-                                var interpolated = configuredDescription
-                                    .Replace("{memberName}", contributor.Name)
-                                    .Replace("{categoryName}", eventTypeName)
-                                    .Replace("{eventName}", eventName)
-                                    .Replace("{amount}", formattedAmount)
-                                    .Replace("{dueDate}", formattedDueDate)
-                                    .Replace("{orgName}", orgName)
-                                    .Replace("{paymentLink}", paymentLinkInline)
-                                    .Replace("{qrCode}", qrImageInlineTag);
-
-                                var formattedText = interpolated
-                                    .Replace("\r\n", "<br />")
-                                    .Replace("\n", "<br />");
-
-                                string customMessageHtml = $@"<div style=""font-size: 15px; line-height: 1.7; color: #334155; margin-bottom: 24px;"">{formattedText}</div>";
-
-                                var emailBody = $@"
+                        var emailBody = $@"
 <!DOCTYPE html>
 <html>
 <head>
@@ -606,18 +657,6 @@ public class EventService : IEventService
         }}
         .content {{
             padding: 30px 25px;
-        }}
-        .greeting {{
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 15px;
-            color: #1e1a2e;
-        }}
-        .intro {{
-            font-size: 15px;
-            line-height: 1.6;
-            margin-bottom: 25px;
-            color: #5b5280;
         }}
         .details-card {{
             background-color: #faf9fd;
@@ -663,14 +702,6 @@ public class EventService : IEventService
             margin-bottom: 25px;
             box-shadow: 0 4px 10px rgba(74, 63, 107, 0.04);
         }}
-        .gpay-image {{
-            display: block;
-            width: 100%;
-            max-width: 520px;
-            height: auto;
-            margin: 0 auto 14px;
-            border-radius: 12px;
-        }}
         .footer {{
             background-color: #ffffff;
             padding: 20px;
@@ -692,7 +723,7 @@ public class EventService : IEventService
             <div class=""details-card"">
                 <div class=""detail-row"">
                     <span class=""detail-label"">Event Name:</span>
-                    <span class=""detail-value"" style=""font-weight: 700;"">{eventName}</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{safeEventName}</span>
                 </div>
                 {celebrantsAndDatesHtml}
                 <div class=""detail-row"">
@@ -771,40 +802,27 @@ public class EventService : IEventService
             </div>")}
         </div>
         <div class=""footer"">
-            This is an automated notification from {orgName}.
+            This is an automated notification from {safeOrgName}.
         </div>
     </div>
 </body>
 </html>";
 
-                                var inlineImages = hasInlineScanner
-                                    ? new[] { new InlineEmailImage(CommonConstants.Defaults.GpayBannerContentId, gpayImagePath!, CommonConstants.Defaults.ImagePng) }
-                                    : null;
-
-                                await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, inlineImages, CancellationToken.None);
-                                scopedLogger.LogInformation(CommonLogMessages.Events.EmailSentSuccess, contributor.Email, eventName);
-                                await Task.Delay(200);
-                            }
-                            catch (Exception ex)
-                            {
-                                scopedLogger.LogError(ex, CommonLogMessages.Events.EmailSendFailed, contributor.Email);
-                            }
-                        }
+                        await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, null, CancellationToken.None);
+                        scopedLogger.LogInformation(CommonLogMessages.Events.EmailSentSuccess, contributor.Email, safeEventName);
+                        await Task.Delay(100);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, CommonLogMessages.Events.EmailTasksFailed, eventId);
+                        scopedLogger.LogError(ex, CommonLogMessages.Events.EmailSendFailed, contributor.Email);
                     }
-                });
+                }
             }
-
-            return createdEvent;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
-            throw;
-        }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, CommonLogMessages.Events.EmailTasksFailed, eventId);
+            }
+        });
     }
 
     public async Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default)
@@ -944,6 +962,34 @@ public class EventService : IEventService
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // If new participants were added, dispatch notification emails to them
+            if (participantIdsToAdd.Count > 0)
+            {
+                var newMembers = members.Where(m => participantIdsToAdd.Contains(m.MemberId)).ToList();
+                var newParticipantData = newMembers.Select(m => (
+                    MemberId: m.MemberId,
+                    Name: (string?)m.Name,
+                    Email: (string?)m.Email,
+                    ContributionAmount: memberAmounts.TryGetValue(m.MemberId, out var amt) ? amt : 0m
+                ));
+                var exemptCelebrantIds = (request.ContributionOverrides ?? new List<ContributionOverrideDto>())
+                    .Where(x => x.Amount == 0)
+                    .Select(x => x.MemberId)
+                    .ToHashSet();
+
+                DispatchEventNotificationEmails(
+                    eventItem.EventId,
+                    eventItem.EventName,
+                    eventItem.EventDate,
+                    eventItem.EventDates,
+                    eventItem.Description,
+                    eventItem.BaseAmount,
+                    eventType.EventTypeId,
+                    eventType.EventTypeName,
+                    exemptCelebrantIds,
+                    newParticipantData);
+            }
 
             return await GetByIdAsync(eventItem.EventId, cancellationToken);
         }

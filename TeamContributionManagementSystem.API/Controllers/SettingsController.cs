@@ -59,4 +59,26 @@ public class SettingsController : ControllerBase
         var result = await _settingService.ResetSettingAsync(currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(result, CommonMessages.Settings.ResetSuccess, CommonStatusCodes.Status200OK));
     }
+
+    /// <summary>
+    /// Triggers the automated contribution reminder Hangfire job immediately (Admin or Organizer).
+    /// </summary>
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [HttpPost("triggerRemindersAsync")]
+    [HttpPost("trigger-reminders")]
+    [ActionName(nameof(TriggerRemindersAsync))]
+    public ActionResult<ApiResponse<object>> TriggerRemindersAsync()
+    {
+        var userName = User.FindFirstValue(ClaimTypes.Name) 
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier) 
+            ?? "Admin";
+
+        var jobId = Hangfire.BackgroundJob.Enqueue<IContributionReminderJobService>(
+            service => service.ProcessDailyRemindersAsync(userName, CancellationToken.None));
+
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(
+            new { JobId = jobId, Status = "Enqueued" },
+            "Hangfire contribution reminder job triggered successfully.",
+            CommonStatusCodes.Status200OK));
+    }
 }

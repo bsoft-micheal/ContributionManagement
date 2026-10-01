@@ -27,6 +27,8 @@ public static class CommonRoutes
         public const string Create = "saveEventAsync";
         public const string Update = "updateEventAsyncById/{id:guid}";
         public const string Delete = "deleteEventAsyncById/{id:guid}";
+        public const string SendReminders = "{eventId:guid}/send-reminders";
+        public const string SendRemindersAsync = "sendRemindersAsync/{eventId:guid}";
     }
 
     public static class Members
@@ -85,6 +87,8 @@ public static class CommonRoutes
         public const string GetByEvent = "getContributionAsyncByEvent/{eventId:guid}";
         public const string GetMySummary = "getMySummaryAsync";
         public const string Pay = "savePayContributionAsync";
+        public const string SendReminder = "{contributionId:guid}/send-reminder";
+        public const string SendReminderAsync = "sendReminderAsync/{contributionId:guid}";
     }
 
     public static class Expenses
