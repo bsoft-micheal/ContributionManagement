@@ -74,7 +74,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(150).IsRequired();
             entity.Ignore(x => x.Role);
-            entity.Property(x => x.ProfileImage).HasMaxLength(500);
+            entity.Property(x => x.ProfileImage).HasColumnType("text");
             entity.Property(x => x.Phone).HasMaxLength(20);
             entity.Ignore(x => x.WorkType);
             entity.Property(x => x.WorkTypeId).HasColumnName("work_type_id");
