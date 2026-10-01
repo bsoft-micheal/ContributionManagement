@@ -25,10 +25,11 @@ public class AuthResponseDto
     public string Email { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
-    public List<string> Roles { get; set; } = new();
-    public List<Guid> RoleIds { get; set; } = new();
+    public Guid? RoleId { get; set; }
     public List<string> PrimaryRoles { get; set; } = new();
+    public List<Guid> PrimaryRoleIds { get; set; } = new();
     public List<string> SecondaryRoles { get; set; } = new();
+    public List<Guid> SecondaryRoleIds { get; set; } = new();
     public bool EnableMultipleRoles { get; set; } = false;
     public bool IsPrimary { get; set; } = false;
     public bool IsSecondary { get; set; } = false;

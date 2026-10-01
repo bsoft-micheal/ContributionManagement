@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS roles (
 CREATE TABLE IF NOT EXISTS event_types (
     event_type_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     event_type_name VARCHAR(100) NOT NULL UNIQUE,
-    base_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
     has_tenure_rule BOOLEAN NOT NULL DEFAULT FALSE,
     tenure_threshold_years NUMERIC(4,2) NOT NULL DEFAULT 1.0,
     new_entrant_share_percentage NUMERIC(5,2) NOT NULL DEFAULT 50.0,

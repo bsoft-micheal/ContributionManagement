@@ -158,6 +158,23 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             expires: expiresAtUtc,
             signingCredentials: credentials);
 
+        var primaryRoleIdsList = activeUserRoles
+            .Where(ur => ur.IsPrimary && ur.RoleId != Guid.Empty)
+            .Select(ur => ur.RoleId)
+            .Distinct()
+            .ToList();
+
+        var secondaryRoleIdsList = activeUserRoles
+            .Where(ur => ur.IsSecondary && ur.RoleId != Guid.Empty)
+            .Select(ur => ur.RoleId)
+            .Distinct()
+            .ToList();
+
+        if (primaryRoleIdsList.Count == 0 && effectiveActiveRoleId.HasValue)
+        {
+            primaryRoleIdsList.Add(effectiveActiveRoleId.Value);
+        }
+
         return new AuthResponseDto
         {
             UserId = user.UserId,
@@ -166,10 +183,11 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             Email = user.Email,
             FullName = user.FullName,
             Role = effectiveActiveRole,
-            Roles = resolvedRoles,
-            RoleIds = resolvedRoleIds,
+            RoleId = effectiveActiveRoleId,
             PrimaryRoles = primaryRolesList,
+            PrimaryRoleIds = primaryRoleIdsList,
             SecondaryRoles = secondaryRolesList,
+            SecondaryRoleIds = secondaryRoleIdsList,
             EnableMultipleRoles = user.EnableMultipleRoles,
             IsPrimary = user.IsPrimary || activeUserRoles.Any(ur => ur.IsPrimary),
             IsSecondary = user.IsSecondary || activeUserRoles.Any(ur => ur.IsSecondary),

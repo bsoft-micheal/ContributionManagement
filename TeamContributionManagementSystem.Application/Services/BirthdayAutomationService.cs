@@ -76,7 +76,7 @@ public class BirthdayAutomationService : IBirthdayAutomationService
                     Description = $"Auto-generated birthday contribution event for {member.Name}. {CommonConstants.Defaults.BirthdayMemberPrefix}{member.MemberId}",
                     Status = EventStatus.Planned,
                     ParticipantIds = participants,
-                    BaseAmount = birthdayMembers.Count * birthdayEventType.BaseAmount
+                    BaseAmount = 0m
                 }, cancellationToken);
 
                 createdCount++;

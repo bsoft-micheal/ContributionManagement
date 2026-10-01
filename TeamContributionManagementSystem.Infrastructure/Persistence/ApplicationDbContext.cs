@@ -58,7 +58,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.EventTypeId);
             entity.Property(x => x.EventTypeName).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
             entity.Property(x => x.HasTenureRule).HasDefaultValue(false);
             entity.Property(x => x.TenureThresholdYears).HasPrecision(4, 2).HasDefaultValue(1.0m);
             entity.Property(x => x.NewEntrantSharePercentage).HasPrecision(5, 2).HasDefaultValue(50.0m);

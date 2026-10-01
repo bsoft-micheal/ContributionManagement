@@ -30,7 +30,23 @@ public class StatusRepository : IStatusRepository
                     @"ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS module VARCHAR(100) NULL;
                       ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS statuses_status_name_key;
                       ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS statuses_status_name_unique;
-                      ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS uq_statuses_status_name;",
+                      ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS uq_statuses_status_name;
+                      
+                      INSERT INTO statuses (status_id, status_name, module, is_active, is_deleted, created_at, created_on)
+                      SELECT gen_random_uuid(), 'Paid', 'Contributions', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                      WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(status_name) = 'paid' AND is_deleted = false);
+
+                      INSERT INTO statuses (status_id, status_name, module, is_active, is_deleted, created_at, created_on)
+                      SELECT gen_random_uuid(), 'Pending', 'Contributions', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                      WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(status_name) = 'pending' AND is_deleted = false);
+
+                      INSERT INTO statuses (status_id, status_name, module, is_active, is_deleted, created_at, created_on)
+                      SELECT gen_random_uuid(), 'Verified', 'Payments', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                      WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(status_name) = 'verified' AND is_deleted = false);
+
+                      INSERT INTO statuses (status_id, status_name, module, is_active, is_deleted, created_at, created_on)
+                      SELECT gen_random_uuid(), 'Closed', 'General', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                      WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(status_name) = 'closed' AND is_deleted = false);",
                     cancellationToken);
             }
             catch
@@ -201,8 +217,33 @@ public class StatusRepository : IStatusRepository
     public async Task<Status?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
     {
         await EnsureModuleColumnAsync(cancellationToken);
-        return await _context.Statuses
-            .FirstOrDefaultAsync(x => x.StatusName.ToLower() == name.ToLower() && !x.IsDeleted, cancellationToken);
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
+        var existing = await _context.Statuses
+            .FirstOrDefaultAsync(x => x.StatusName.ToLower() == name.Trim().ToLower() && !x.IsDeleted, cancellationToken);
+        if (existing != null) return existing;
+
+        try
+        {
+            var newStatus = new Status
+            {
+                StatusId = Guid.NewGuid(),
+                StatusName = name.Trim(),
+                Module = "Contributions",
+                IsActive = true,
+                IsDeleted = false,
+                CreatedAt = DateTime.UtcNow,
+                CreatedOn = DateTime.UtcNow
+            };
+            await _context.Statuses.AddAsync(newStatus, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+            return newStatus;
+        }
+        catch
+        {
+            return await _context.Statuses
+                .FirstOrDefaultAsync(x => x.StatusName.ToLower() == name.Trim().ToLower() && !x.IsDeleted, cancellationToken);
+        }
     }
 
     public async Task<Status?> GetByNameAndModuleAsync(string name, string? module, CancellationToken cancellationToken = default)
