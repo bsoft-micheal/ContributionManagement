@@ -557,13 +557,34 @@ public class PaymentTransactionService : IPaymentTransactionService
                 }
             }
 
-            var isVerified = entity.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase);
-            var targetStatusName = isVerified ? "Paid" : "Pending";
+            var isVerified = entity.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase) ||
+                             entity.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                             entity.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
+                             entity.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase);
+
+            var isPaymentMade = isVerified || entity.Amount > 0;
+            string targetStatusName = "Paid";
+            if (entity.Status.Equals("Verified", StringComparison.OrdinalIgnoreCase))
+            {
+                targetStatusName = "Verified";
+            }
+            else if (entity.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase))
+            {
+                targetStatusName = "Closed";
+            }
+            else if (!isPaymentMade)
+            {
+                targetStatusName = "Pending";
+            }
 
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
                 var st = await _statusRepository.GetByNameAsync(targetStatusName, cancellationToken);
+                if (st == null && targetStatusName == "Verified")
+                {
+                    st = await _statusRepository.GetByNameAsync("Paid", cancellationToken);
+                }
                 statusIdToAssign = st?.StatusId;
             }
 
@@ -623,7 +644,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                     }
                 }
 
-                match.PaymentStatus = isVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
+                match.PaymentStatus = isPaymentMade ? PaymentStatus.Paid : PaymentStatus.Pending;
                 match.ModifiedBy = entity.ModifiedBy ?? entity.CreatedBy;
                 match.ModifiedOn = DateTime.UtcNow;
                 _contributionRepository.Update(match);
@@ -681,7 +702,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                     PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow,
                     CashAmount = cashAmount,
                     UpiAmount = upiAmount,
-                    PaymentStatus = isVerified ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    PaymentStatus = isPaymentMade ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentMode = modeEnum,
                     CreatedBy = entity.CreatedBy,
                     CreatedAt = DateTime.UtcNow
@@ -709,7 +730,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                         if (entity.PaymentModeId.HasValue) otherEntity.PaymentModeId = entity.PaymentModeId.Value;
                         otherEntity.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
                         otherEntity.PaymentMode = match != null ? match.PaymentMode : (entity.PaymentMode.Contains("Cash", StringComparison.OrdinalIgnoreCase) ? PaymentMode.Cash : PaymentMode.Upi);
-                        otherEntity.PaymentStatus = isVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
+                        otherEntity.PaymentStatus = isPaymentMade ? PaymentStatus.Paid : PaymentStatus.Pending;
                         otherEntity.ModifiedBy = entity.ModifiedBy ?? entity.CreatedBy;
                         otherEntity.ModifiedOn = DateTime.UtcNow;
                         _contributionRepository.Update(otherEntity);
