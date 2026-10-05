@@ -7,6 +7,8 @@ public class DashboardSummaryDto
     public int PendingPayments { get; set; }
     public decimal TotalPendingAmount { get; set; }
     public decimal TotalExpenses { get; set; }
+    public decimal TotalExpectedAmount => TotalContributions + TotalPendingAmount;
+    public decimal TotalRemainingAmount => TotalExpectedAmount - TotalExpenses;
     public IReadOnlyCollection<UpcomingEventDto> UpcomingEvents { get; set; } = Array.Empty<UpcomingEventDto>();
 }
 
@@ -20,6 +22,7 @@ public class UpcomingEventDto
     public decimal CollectedAmount { get; set; }
     public decimal PendingAmount { get; set; }
     public decimal ExpenseAmount { get; set; }
+    public decimal RemainingAmount => ExpectedAmount - ExpenseAmount;
     public int PendingContributionsCount { get; set; }
     public int TotalContributionsCount { get; set; }
     public string? CreatedBy { get; set; }

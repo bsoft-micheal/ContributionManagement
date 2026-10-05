@@ -150,6 +150,9 @@ public static class CommonMessages
         public const string UpdateSuccess = "Expense updated successfully.";
         public const string DeleteSuccess = "Expense deleted successfully.";
         public const string NotFound = "Expense not found.";
+        public const string ExceedsExpectedBudgetFormat = "Expense amount cannot exceed the event's expected budget (Expected: ₹{0:N0}, Already spent: ₹{1:N0}, Remaining: ₹{2:N0}).";
+        public const string EventNotFound = "Selected event was not found.";
+        public const string EventHasNoBudget = "The selected event has no expected budget allocated.";
     }
 
     public static class Payments

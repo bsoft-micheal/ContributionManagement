@@ -54,7 +54,7 @@ public class DashboardService : IDashboardService
             }
 
             var allExpenses = _expenseRepository != null
-                ? await _expenseRepository.GetAllAsync(startDate: startDate, endDate: endDate, cancellationToken: cancellationToken)
+                ? await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken)
                 : new List<TeamContributionManagementSystem.Application.DTOs.Expenses.ExpenseDto>();
 
             // If caller is in the Member role, restrict results to their own member record only
@@ -128,13 +128,21 @@ public class DashboardService : IDashboardService
             var eventPendingSum = monthlyEvents.Sum(x => x.TotalExpectedAmount - x.TotalPaidAmount);
             var eventPendingCount = monthlyEvents.Sum(x => x.PendingContributionsCount);
 
+            var eventExpensesSum = monthlyEvents.Sum(x =>
+                allExpenses.Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase)).Sum(e => e.Amount)
+            );
+            var periodExpenses = (startDate.HasValue || endDate.HasValue)
+                ? allExpenses.Where(e => (!startDate.HasValue || e.ExpenseDate >= startDate.Value) && (!endDate.HasValue || e.ExpenseDate <= endDate.Value)).Sum(e => e.Amount)
+                : allExpenses.Sum(e => e.Amount);
+            var totalExpenses = monthlyEvents.Count > 0 ? eventExpensesSum : periodExpenses;
+
             return new DashboardSummaryDto
             {
                 MonthlyEventsCount = monthlyEvents.Count,
                 TotalContributions = monthlyEvents.Sum(x => x.TotalPaidAmount),
                 PendingPayments = monthlyEvents.Count > 0 ? eventPendingCount : pendingContributions.Count,
                 TotalPendingAmount = monthlyEvents.Count > 0 ? eventPendingSum : pendingContributions.Sum(x => x.Amount),
-                TotalExpenses = allExpenses.Sum(x => x.Amount),
+                TotalExpenses = totalExpenses,
                 UpcomingEvents = monthlyEvents.Select(x => {
                     var eventExp = allExpenses
                         .Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
