@@ -1,7 +1,10 @@
+using System.Net;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -21,6 +24,10 @@ public class SupportTicketService : ISupportTicketService
     private readonly ICurrentUserService? _currentUserService;
     private readonly IMemberRepository? _memberRepository;
     private readonly IEventRepository? _eventRepository;
+    private readonly IEmailService? _emailService;
+    private readonly IUserRepository? _userRepository;
+    private readonly IRoleRepository? _roleRepository;
+    private readonly IConfiguration? _configuration;
 
     public SupportTicketService(
         ILogger<SupportTicketService> logger,
@@ -32,7 +39,11 @@ public class SupportTicketService : ISupportTicketService
         IPriorityRepository? priorityRepository = null,
         ICurrentUserService? currentUserService = null,
         IMemberRepository? memberRepository = null,
-        IEventRepository? eventRepository = null)
+        IEventRepository? eventRepository = null,
+        IEmailService? emailService = null,
+        IUserRepository? userRepository = null,
+        IRoleRepository? roleRepository = null,
+        IConfiguration? configuration = null)
     {
         _logger = logger;
         _ticketRepository = ticketRepository;
@@ -44,6 +55,10 @@ public class SupportTicketService : ISupportTicketService
         _currentUserService = currentUserService;
         _memberRepository = memberRepository;
         _eventRepository = eventRepository;
+        _emailService = emailService;
+        _userRepository = userRepository;
+        _roleRepository = roleRepository;
+        _configuration = configuration;
     }
 
     public async Task<IReadOnlyCollection<SupportTicketDto>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default)
@@ -272,6 +287,9 @@ public class SupportTicketService : ISupportTicketService
 
             _logger.LogInformation(CommonLogMessages.SupportTickets.TicketCreated, ticketNo, request.MemberName);
 
+            // Safe non-blocking email notification dispatch to active organizers
+            await SendSupportTicketEmailNotificationAsync(ticket, cancellationToken);
+
             return _mapper.Map<SupportTicketDto>(ticket);
         }
         catch (Exception ex)
@@ -460,6 +478,237 @@ public class SupportTicketService : ISupportTicketService
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
+    }
+
+    private async Task SendSupportTicketEmailNotificationAsync(SupportTicket ticket, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (_emailService == null)
+            {
+                _logger.LogWarning("IEmailService is not available. Skipping email notification for support ticket {TicketNo}.", ticket.TicketNo);
+                return;
+            }
+
+            var organizerEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Resolve Event-Specific Organizer if ticket is associated with an event
+            if (ticket.EventId.HasValue && _eventRepository != null)
+            {
+                try
+                {
+                    var eventObj = await _eventRepository.GetByIdAsync(ticket.EventId.Value, cancellationToken);
+                    if (eventObj != null && eventObj.CreatedBy != Guid.Empty && _userRepository != null)
+                    {
+                        var creatorUser = await _userRepository.GetByIdAsync(eventObj.CreatedBy, cancellationToken);
+                        if (creatorUser != null && creatorUser.IsActive && !creatorUser.IsDeleted && !string.IsNullOrWhiteSpace(creatorUser.Email))
+                        {
+                            organizerEmails.Add(creatorUser.Email.Trim());
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not resolve event organizer for EventId {EventId}.", ticket.EventId);
+                }
+            }
+
+            // 2. Resolve Global Active Organizers (PrimaryRole or SecondaryRole == Organizer)
+            if (_userRepository != null)
+            {
+                try
+                {
+                    Guid? organizerRoleId = null;
+                    if (_roleRepository != null)
+                    {
+                        var organizerRole = await _roleRepository.GetByNameAsync(CommonConstants.UserRoles.Organizer, cancellationToken);
+                        organizerRoleId = organizerRole?.RoleId;
+                    }
+
+                    var allUsers = await _userRepository.GetAllAsync(cancellationToken);
+                    foreach (var u in allUsers)
+                    {
+                        if (u.IsActive && !u.IsDeleted && !string.IsNullOrWhiteSpace(u.Email))
+                        {
+                            bool isOrganizer = (organizerRoleId.HasValue && (u.RoleIds.Contains(organizerRoleId.Value) || u.PrimaryRoleIds.Contains(organizerRoleId.Value) || u.SecondaryRoleIds.Contains(organizerRoleId.Value)))
+                                || (u.RoleId.HasValue && organizerRoleId.HasValue && u.RoleId.Value == organizerRoleId.Value);
+
+                            if (isOrganizer)
+                            {
+                                organizerEmails.Add(u.Email.Trim());
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not query global active organizers for support ticket email notification.");
+                }
+            }
+
+            if (organizerEmails.Count == 0)
+            {
+                _logger.LogWarning("No active Organizer found for support ticket {TicketNo} (RefNo: {RefNo}, EventId: {EventId}).", ticket.TicketNo, ticket.RefNo, ticket.EventId);
+                return;
+            }
+
+            // 3. Resolve Member Contact Info
+            string? memberEmail = null;
+            string? memberPhone = null;
+            if (ticket.UserId.HasValue && _userRepository != null)
+            {
+                try
+                {
+                    var userObj = await _userRepository.GetByIdAsync(ticket.UserId.Value, cancellationToken);
+                    if (userObj != null)
+                    {
+                        memberEmail = userObj.Email;
+                        memberPhone = userObj.Phone;
+                    }
+                }
+                catch { }
+            }
+
+            if (string.IsNullOrWhiteSpace(memberEmail) && _currentUserService != null)
+            {
+                memberEmail = _currentUserService.Email;
+            }
+
+            // 4. Build Email Subject and Body
+            var subjectTitle = !string.IsNullOrWhiteSpace(ticket.Subject) ? ticket.Subject : (!string.IsNullOrWhiteSpace(ticket.TicketType) ? ticket.TicketType : "Support Request");
+            var subject = $"[Support Ticket #{ticket.TicketNo}] New Support Request: {subjectTitle}";
+            var htmlBody = BuildSupportTicketEmailHtml(ticket, memberEmail, memberPhone);
+
+            // 5. Send Email to Recipients safely
+            foreach (var recipientEmail in organizerEmails)
+            {
+                try
+                {
+                    await _emailService.SendEmailAsync(recipientEmail, subject, htmlBody, cancellationToken: cancellationToken);
+                    _logger.LogInformation("Support ticket email notification sent successfully. TicketNo: {TicketNo}, Recipient: {RecipientEmail}", ticket.TicketNo, recipientEmail);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send support ticket email notification. TicketNo: {TicketNo}, Recipient: {RecipientEmail}", ticket.TicketNo, recipientEmail);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process support ticket email notification. TicketNo: {TicketNo}", ticket.TicketNo);
+        }
+    }
+
+    private string BuildSupportTicketEmailHtml(SupportTicket ticket, string? memberEmail, string? memberPhone)
+    {
+        var frontendBaseUrl = _configuration?["Cors:AllowedOrigins:0"]
+            ?? _configuration?["FrontendUrl"]
+            ?? CommonConstants.Defaults.DefaultFrontendUrl;
+
+        var viewTicketUrl = $"{frontendBaseUrl.TrimEnd('/')}/support-tickets";
+
+        var priorityLower = (ticket.Priority ?? "medium").ToLowerInvariant();
+        var badgeClass = priorityLower.Contains("urgent") ? "urgent" : (priorityLower.Contains("high") ? "high" : (priorityLower.Contains("low") ? "low" : "medium"));
+
+        var relatedEventRow = !string.IsNullOrWhiteSpace(ticket.RelatedEvent)
+            ? $"<tr><td class=\"label\">Related Event:</td><td class=\"value\">{WebUtility.HtmlEncode(ticket.RelatedEvent)}</td></tr>"
+            : string.Empty;
+
+        var memberEmailRow = !string.IsNullOrWhiteSpace(memberEmail)
+            ? $"<tr><td class=\"label\">Email:</td><td class=\"value\">{WebUtility.HtmlEncode(memberEmail)}</td></tr>"
+            : string.Empty;
+
+        var memberPhoneRow = !string.IsNullOrWhiteSpace(memberPhone)
+            ? $"<tr><td class=\"label\">Phone:</td><td class=\"value\">{WebUtility.HtmlEncode(memberPhone)}</td></tr>"
+            : string.Empty;
+
+        var createdAtText = (ticket.CreatedAt ?? DateTime.UtcNow).ToString("dd MMMM yyyy, hh:mm tt");
+
+        return $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <style>
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333333; margin: 0; padding: 20px; }}
+        .container {{ max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }}
+        .header {{ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: #ffffff; padding: 25px 30px; text-align: center; }}
+        .header h1 {{ margin: 0; font-size: 22px; font-weight: 600; }}
+        .header p {{ margin: 5px 0 0 0; font-size: 14px; opacity: 0.9; }}
+        .content {{ padding: 30px; }}
+        .section-title {{ font-size: 16px; font-weight: 700; color: #1e3c72; border-bottom: 2px solid #eef2f5; padding-bottom: 8px; margin-top: 20px; margin-bottom: 15px; }}
+        .info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; }}
+        .info-table td {{ padding: 8px 12px; font-size: 14px; vertical-align: top; }}
+        .info-table td.label {{ font-weight: 600; color: #666666; width: 35%; background-color: #fafbfc; border-radius: 4px; }}
+        .info-table td.value {{ color: #222222; }}
+        .badge {{ display: inline-block; padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 12px; }}
+        .badge-urgent {{ background-color: #ffebee; color: #c62828; }}
+        .badge-high {{ background-color: #fff3e0; color: #e65100; }}
+        .badge-medium {{ background-color: #e3f2fd; color: #1565c0; }}
+        .badge-low {{ background-color: #f1f8e9; color: #33691e; }}
+        .description-box {{ background-color: #f8f9fa; border-left: 4px solid #2a5298; padding: 12px 15px; margin-top: 5px; border-radius: 0 4px 4px 0; font-size: 14px; line-height: 1.5; }}
+        .btn-container {{ text-align: center; margin-top: 30px; margin-bottom: 10px; }}
+        .btn {{ display: inline-block; background-color: #2a5298; color: #ffffff !important; text-decoration: none; padding: 12px 28px; font-size: 15px; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }}
+        .footer {{ background-color: #f8f9fa; text-align: center; padding: 15px; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }}
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""header"">
+            <h1>New Support Ticket Submitted</h1>
+            <p>Team Contribution Management System</p>
+        </div>
+        <div class=""content"">
+            <p style=""font-size: 15px; margin-top: 0;"">Hello Organizer,</p>
+            <p style=""font-size: 14px; color: #555555;"">A new support ticket has been submitted by a member and requires your attention.</p>
+            
+            <div class=""section-title"">Ticket Details</div>
+            <table class=""info-table"">
+                <tr>
+                    <td class=""label"">Ticket No:</td>
+                    <td class=""value""><strong>{WebUtility.HtmlEncode(ticket.TicketNo)}</strong></td>
+                </tr>
+                <tr>
+                    <td class=""label"">Reference No:</td>
+                    <td class=""value"">{WebUtility.HtmlEncode(ticket.RefNo ?? string.Empty)}</td>
+                </tr>
+                <tr>
+                    <td class=""label"">Ticket Type:</td>
+                    <td class=""value"">{WebUtility.HtmlEncode(ticket.TicketType)}</td>
+                </tr>
+                <tr>
+                    <td class=""label"">Priority:</td>
+                    <td class=""value""><span class=""badge badge-{badgeClass}"">{WebUtility.HtmlEncode(ticket.Priority)}</span></td>
+                </tr>
+                {relatedEventRow}
+                <tr>
+                    <td class=""label"">Created At:</td>
+                    <td class=""value"">{createdAtText}</td>
+                </tr>
+            </table>
+
+            <div class=""section-title"">Description</div>
+            <div class=""description-box"">{WebUtility.HtmlEncode(ticket.Description)}</div>
+
+            <div class=""section-title"">Member Details</div>
+            <table class=""info-table"">
+                <tr>
+                    <td class=""label"">Name:</td>
+                    <td class=""value""><strong>{WebUtility.HtmlEncode(ticket.MemberName)}</strong></td>
+                </tr>
+                {memberEmailRow}
+                {memberPhoneRow}
+            </table>
+
+            <div class=""btn-container"">
+                <a href=""{viewTicketUrl}"" class=""btn"" target=""_blank"">View Support Ticket</a>
+            </div>
+        </div>
+        <div class=""footer"">
+            This is an automated notification from Team Contribution Management System.
+        </div>
+    </div>
+</body>
+</html>";
     }
 }
 

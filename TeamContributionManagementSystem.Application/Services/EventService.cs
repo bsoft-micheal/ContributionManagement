@@ -22,6 +22,7 @@ public class EventService : IEventService
     private readonly IContributionRepository _contributionRepository;
     private readonly IBudgetCalculationRepository _budgetCalculationRepository;
     private readonly IExpenseRepository _expenseRepository;
+    private readonly IGalleryRepository _galleryRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IEmailService _emailService;
@@ -36,6 +37,7 @@ public class EventService : IEventService
         IContributionRepository contributionRepository,
         IBudgetCalculationRepository budgetCalculationRepository,
         IExpenseRepository expenseRepository,
+        IGalleryRepository galleryRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IEmailService emailService,
@@ -49,6 +51,7 @@ public class EventService : IEventService
         _contributionRepository = contributionRepository;
         _budgetCalculationRepository = budgetCalculationRepository;
         _expenseRepository = expenseRepository;
+        _galleryRepository = galleryRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _emailService = emailService;
@@ -564,9 +567,9 @@ public class EventService : IEventService
 
                         string eventDateLabel = "Event Date:";
                         string celebrantDatesCsv = !string.IsNullOrWhiteSpace(eventDates)
-                            ? eventDates
+                            ? string.Join(", ", eventDates.Split(',').Select(d => d.Trim()).Where(d => !string.IsNullOrEmpty(d)).Distinct())
                             : (isBirthdayEvent && targetCelebrants.Count > 0
-                                ? string.Join(", ", targetCelebrants.OrderBy(c => c.DateOfBirth.Day).Select(c => $"{c.DateOfBirth.Day} {getCelebrantBirthDate(c):MMM}"))
+                                ? string.Join(", ", targetCelebrants.OrderBy(c => c.DateOfBirth.Day).Select(c => $"{c.DateOfBirth.Day} {getCelebrantBirthDate(c):MMM}").Distinct())
                                 : string.Empty);
                         string eventDateValueDisplay = !string.IsNullOrWhiteSpace(celebrantDatesCsv)
                             ? celebrantDatesCsv
@@ -945,6 +948,22 @@ public class EventService : IEventService
                 {
                     contribution.IsDeleted = true;
                     contribution.ModifiedOn = DateTime.UtcNow;
+                }
+            }
+
+            // Also delete any gallery photos uploaded for this event
+            var galleryPhotos = await _galleryRepository.GetAllAsync(eventItem.EventName, null, cancellationToken);
+            if (galleryPhotos != null && galleryPhotos.Count > 0)
+            {
+                var photoIds = galleryPhotos.Select(p => p.PhotoId).ToList();
+                foreach (var pid in photoIds)
+                {
+                    var photoEntity = await _galleryRepository.GetByIdAsync(pid, cancellationToken);
+                    if (photoEntity != null)
+                    {
+                        photoEntity.IsDeleted = true;
+                        photoEntity.ModifiedOn = DateTime.UtcNow;
+                    }
                 }
             }
 
