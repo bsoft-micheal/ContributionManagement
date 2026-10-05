@@ -33,79 +33,19 @@ public class ApplicationDbContextSeeder
 
     private static class ConfigKeys
     {
-        public const string AdminEmail = "SeedData:Admin:Email";
-        public const string AdminFallbackEmail = "SeedData:Admin:FallbackEmail";
-        public const string AdminFullName = "SeedData:Admin:FullName";
-        public const string AdminPassword = "SeedData:Admin:Password";
-
-        public const string MemberEmail = "SeedData:Member:Email";
-        public const string MemberFullName = "SeedData:Member:FullName";
-        public const string MemberPassword = "SeedData:Member:Password";
-
-        public const string MinMenuCount = "SeedData:NavigationMenu:MinimumCount";
-    }
-
-    private const string SchemaSynchronizationSql = @"
-        -- contributions reminder tracking
-        ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS last_reminder_sent_at TIMESTAMPTZ NULL;
-        ALTER TABLE IF EXISTS contributions ADD COLUMN IF NOT EXISTS reminder_count INT NOT NULL DEFAULT 0;
-
-        -- system_settings
-        ALTER TABLE IF EXISTS system_settings ADD COLUMN IF NOT EXISTS allowed_multiple_event BOOLEAN NOT NULL DEFAULT FALSE;
-
-        -- budget_calculations
-        ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS category VARCHAR(100) NULL;
-        ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS event_type_id UUID NULL;
-
-        -- roles
-        ALTER TABLE IF EXISTS roles ADD COLUMN IF NOT EXISTS default_contribution_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
-
-        -- users
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT FALSE;
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_secondary BOOLEAN DEFAULT FALSE;
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS enable_multiple_roles BOOLEAN DEFAULT FALSE;
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) DEFAULT '';
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS gender VARCHAR(20) DEFAULT 'Male';
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS work_type VARCHAR(20) DEFAULT 'Office';
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS work_type_id UUID NULL;
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS date_of_birth TIMESTAMPTZ DEFAULT CURRENT_DATE;
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS joining_date TIMESTAMPTZ DEFAULT CURRENT_DATE;
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_exited BOOLEAN DEFAULT FALSE;
-        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_first_login BOOLEAN DEFAULT TRUE;
-        ALTER TABLE IF EXISTS users ALTER COLUMN profile_image TYPE TEXT;
-    ";
-
-    public ApplicationDbContextSeeder(
-        ApplicationDbContext context,
-        IPasswordHasher passwordHasher,
-        IConfiguration? configuration = null,
-        ILogger<ApplicationDbContextSeeder>? logger = null)
-    {
-        _context = context;
-        _passwordHasher = passwordHasher;
-        _configuration = configuration;
-        _logger = logger;
-    }
-
-    public async Task SeedAsync(CancellationToken cancellationToken = default)
-    {
         try
         {
-            // 1. Ensure required schema columns and migrations exist
-            await _context.Database.ExecuteSqlRawAsync(SchemaSynchronizationSql, cancellationToken);
-
-            // 2. Ensure navigation menus are seeded
-            var minMenuCount = _configuration?.GetValue(ConfigKeys.MinMenuCount, SeedDefaults.MinimumNavigationMenuCount)
-                ?? SeedDefaults.MinimumNavigationMenuCount;
-
-            var menuCount = await _context.NavigationMenus.CountAsync(cancellationToken);
-            if (menuCount < minMenuCount)
+            var initScriptPath = Path.Combine(AppContext.BaseDirectory, "Persistence", "Scripts", "init.sql");
+            if (!File.Exists(initScriptPath))
             {
-                await ExecuteScriptIfExistsAsync(SeedDefaults.NavigationMenusScript, cancellationToken);
+                initScriptPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "TeamContributionManagementSystem.Infrastructure", "Persistence", "Scripts", "init.sql");
+            }
+            if (File.Exists(initScriptPath))
+            {
+                var initSql = await File.ReadAllTextAsync(initScriptPath, cancellationToken);
+                await _context.Database.ExecuteSqlRawAsync(initSql, cancellationToken);
             }
 
-            // 3. Ensure role rights are seeded / synced for all roles
-            await ExecuteScriptIfExistsAsync(SeedDefaults.RoleRightsScript, cancellationToken);
 
             // 4. Ensure default roles exist
             var adminRole = await EnsureRoleAsync(CommonRoles.Admin, cancellationToken);
