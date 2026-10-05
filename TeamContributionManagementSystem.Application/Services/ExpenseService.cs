@@ -141,18 +141,27 @@ public class ExpenseService : IExpenseService
             expense.ExpenseDate = request.ExpenseDate;
             expense.Status = string.IsNullOrWhiteSpace(request.Status) ? expense.Status : request.Status.Trim();
             expense.SubmittedBy = request.SubmittedBy.Trim();
-            expense.ApprovedBy = string.IsNullOrWhiteSpace(request.ApprovedBy) || request.ApprovedBy == "-" 
-                ? (string.IsNullOrWhiteSpace(user) ? expense.ApprovedBy : user.Trim()) 
-                : request.ApprovedBy.Trim();
-            expense.Description = request.Description.Trim();
+
+            if (expense.Status.Equals(CommonConstants.ExpenseStatuses.Pending, StringComparison.OrdinalIgnoreCase))
+            {
+                expense.ApprovedBy = null;
+            }
+            else
+            {
+                expense.ApprovedBy = string.IsNullOrWhiteSpace(request.ApprovedBy) || request.ApprovedBy == "-" 
+                    ? (string.IsNullOrWhiteSpace(user) ? expense.ApprovedBy : user.Trim()) 
+                    : request.ApprovedBy.Trim();
+
+                if (string.IsNullOrWhiteSpace(expense.ApprovedBy) && !string.IsNullOrWhiteSpace(user))
+                {
+                    expense.ApprovedBy = user.Trim();
+                }
+            }
+
+            expense.Description = request.Description?.Trim() ?? string.Empty;
             expense.FileName = attachment;
             expense.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             expense.ModifiedOn = DateTime.UtcNow;
-
-            if (string.IsNullOrWhiteSpace(expense.ApprovedBy) && !string.IsNullOrWhiteSpace(user))
-            {
-                expense.ApprovedBy = user.Trim();
-            }
 
             _expenseRepository.Update(expense);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
