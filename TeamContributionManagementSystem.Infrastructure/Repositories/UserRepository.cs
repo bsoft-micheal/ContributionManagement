@@ -122,6 +122,7 @@ public class UserRepository : IUserRepository
 
             var userEntities = await _context.Users
                 .AsNoTracking()
+                .Where(x => !x.IsDeleted)
                 .Include(x => x.UserRoles)
                     .ThenInclude(ur => ur.Role)
                 .Include(x => x.WorkTypeNavigation)
@@ -218,7 +219,7 @@ public class UserRepository : IUserRepository
                 .Include(u => u.MfaDevices)
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(u => u.WorkTypeNavigation)
-                .FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Email.ToLower() == email.ToLower(), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -235,7 +236,7 @@ public class UserRepository : IUserRepository
                 .Include(u => u.MfaDevices)
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(u => u.WorkTypeNavigation)
-                .FirstOrDefaultAsync(x => x.Username.ToLower() == username.ToLower(), cancellationToken);
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Username.ToLower() == username.ToLower(), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -252,7 +253,7 @@ public class UserRepository : IUserRepository
                 .Include(u => u.MfaDevices)
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(u => u.WorkTypeNavigation)
-                .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.UserId == userId, cancellationToken);
         }
         catch (Exception ex)
         {

@@ -342,39 +342,26 @@ public class AuthService : IAuthService
         response.RequiresTwoFactor = false;
         response.IsFirstLogin = user.IsFirstLogin;
 
-        // Aggregate rights across all user's role_ids
-        var aggregatedRights = new Dictionary<int, RoleRightDto>();
-        foreach (var rId in roleGuids)
+        // Ensure user.RoleId in database reflects active Primary Role on login
+        if (response.RoleId.HasValue && response.RoleId.Value != Guid.Empty && user.RoleId != response.RoleId.Value)
         {
-            var rights = await _roleRightsService.GetRoleRightAsyncByRoleId(rId, cancellationToken);
-            foreach (var r in rights)
-            {
-                if (!aggregatedRights.TryGetValue(r.FeatureID, out var existing))
-                {
-                    aggregatedRights[r.FeatureID] = r;
-                }
-                else
-                {
-                    // Highest privilege wins: ReadWrite (2) > ReadOnly (1) > Deny (3)
-                    int currentWeight = existing.AccessType == 2 ? 3 : (existing.AccessType == 1 ? 2 : 1);
-                    int newWeight = r.AccessType == 2 ? 3 : (r.AccessType == 1 ? 2 : 1);
-                    if (newWeight > currentWeight)
-                    {
-                        aggregatedRights[r.FeatureID] = r;
-                    }
-                }
-            }
+            user.RoleId = response.RoleId.Value;
+            _userRepository.Update(user);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        if (aggregatedRights.Count == 0 && roleNames.Count > 0)
+        // Fetch rights ONLY for the active primary role (not aggregated across secondary roles)
+        IReadOnlyCollection<RoleRightDto> activeRoleRights;
+        if (response.RoleId.HasValue && response.RoleId.Value != Guid.Empty)
         {
-            var rights = await _roleRightsService.GetRoleRightAsyncByRole(response.Role, cancellationToken);
-            response.Rights = rights;
+            activeRoleRights = await _roleRightsService.GetRoleRightAsyncByRoleId(response.RoleId.Value, cancellationToken);
         }
         else
         {
-            response.Rights = aggregatedRights.Values.ToList();
+            activeRoleRights = await _roleRightsService.GetRoleRightAsyncByRole(response.Role, cancellationToken);
         }
+
+        response.Rights = activeRoleRights.ToList();
 
         if (member != null)
         {
