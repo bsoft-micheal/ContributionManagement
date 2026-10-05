@@ -44,7 +44,7 @@ public static class CommonMessages
         public const string ForgotPasswordOtpVerifiedSuccess = "OTP verified successfully. You may proceed to reset your password.";
         public const string PasswordResetSuccess = "Your password has been successfully reset. Please log in with your new credentials.";
         public const string InvalidOrExpiredOtp = "Invalid or expired password reset OTP.";
-        public const string InvalidCredentials = "Invalid email or password.";
+        public const string InvalidCredentials = "Invalid username/email or password.";
         public const string UserNotFound = "User not found.";
         public const string AccountDeactivated = "This user account is deactivated. Please contact an administrator.";
         public const string MobileAdminLoginNotAllowed = "Admin users are not permitted to log in via the Mobile Application.";

@@ -24,7 +24,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Authenticates a user with email and password.
+    /// Authenticates a user with username/email and password.
     /// </summary>
     /// <param name="request">The login credentials.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
