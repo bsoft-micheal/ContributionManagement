@@ -6,6 +6,7 @@ using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.DTOs.Settings;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -28,6 +29,7 @@ public class EventService : IEventService
     private readonly IEmailService _emailService;
     private readonly ILogger<EventService> _logger;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly ICurrentUserService? _currentUserService;
 
     public EventService(
         IEventRepository eventRepository,
@@ -42,7 +44,8 @@ public class EventService : IEventService
         IMapper mapper,
         IEmailService emailService,
         ILogger<EventService> logger,
-        IServiceScopeFactory serviceScopeFactory)
+        IServiceScopeFactory serviceScopeFactory,
+        ICurrentUserService? currentUserService = null)
     {
         _eventRepository = eventRepository;
         _eventTypeRepository = eventTypeRepository;
@@ -57,13 +60,81 @@ public class EventService : IEventService
         _emailService = emailService;
         _logger = logger;
         _serviceScopeFactory = serviceScopeFactory;
+        _currentUserService = currentUserService;
     }
 
     public async Task<IReadOnlyCollection<EventSummaryDto>> GetAllAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            var events = await _eventRepository.GetAllAsync(month, year, cancellationToken);
+            var allExpenses = _expenseRepository != null
+                ? await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken)
+                : new List<TeamContributionManagementSystem.Application.DTOs.Expenses.ExpenseDto>();
+
+            List<EventSummaryDto> events;
+
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
+            {
+                var myMemberId = _currentUserService.MemberId;
+                if (!myMemberId.HasValue && !string.IsNullOrWhiteSpace(_currentUserService.Email) && _memberRepository != null)
+                {
+                    var myMember = await _memberRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
+                    if (myMember != null)
+                    {
+                        myMemberId = myMember.MemberId;
+                    }
+                }
+
+                if (!myMemberId.HasValue)
+                {
+                    return Array.Empty<EventSummaryDto>();
+                }
+
+                var memberEvents = await _eventRepository.GetAllForMemberAsync(myMemberId.Value, month, year, cancellationToken);
+                var allMonthlyEvents = await _eventRepository.GetAllAsync(month, year, cancellationToken);
+
+                foreach (var ev in memberEvents)
+                {
+                    var overallEvent = allMonthlyEvents.FirstOrDefault(e => e.EventId == ev.EventId);
+                    var eventExp = allExpenses
+                        .Where(e => string.Equals(e.EventName?.Trim(), ev.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
+                        .Sum(e => e.Amount);
+                    var overallExpVal = overallEvent != null ? overallEvent.TotalExpectedAmount : ev.TotalExpectedAmount;
+                    var eventRemaining = overallExpVal - eventExp;
+
+                    ev.CollectedAmount = ev.TotalPaidAmount;
+                    ev.PendingAmount = ev.TotalExpectedAmount - ev.TotalPaidAmount;
+                    ev.ExpenseAmount = eventExp;
+                    ev.RemainingAmount = eventRemaining;
+                    ev.OverallExpectedAmount = overallExpVal;
+                    ev.OverallExpenseAmount = eventExp;
+                    ev.OverallRemainingAmount = eventRemaining;
+                }
+
+                events = memberEvents;
+            }
+            else
+            {
+                var monthlyEvents = await _eventRepository.GetAllAsync(month, year, cancellationToken);
+                foreach (var ev in monthlyEvents)
+                {
+                    var eventExp = allExpenses
+                        .Where(e => string.Equals(e.EventName?.Trim(), ev.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
+                        .Sum(e => e.Amount);
+                    var eventRemaining = ev.TotalExpectedAmount - eventExp;
+
+                    ev.CollectedAmount = ev.TotalPaidAmount;
+                    ev.PendingAmount = ev.TotalExpectedAmount - ev.TotalPaidAmount;
+                    ev.ExpenseAmount = eventExp;
+                    ev.RemainingAmount = eventRemaining;
+                    ev.OverallExpectedAmount = ev.TotalExpectedAmount;
+                    ev.OverallExpenseAmount = eventExp;
+                    ev.OverallRemainingAmount = eventRemaining;
+                }
+
+                events = monthlyEvents;
+            }
+
             try
             {
                 var users = await _userRepository.GetAllAsync(cancellationToken);
@@ -105,6 +176,29 @@ public class EventService : IEventService
         {
             var eventDetails = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
+
+            if (_expenseRepository != null)
+            {
+                try
+                {
+                    var allExpenses = await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken);
+                    var eventExp = allExpenses
+                        .Where(e => string.Equals(e.EventName?.Trim(), eventDetails.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
+                        .Sum(e => e.Amount);
+
+                    eventDetails.CollectedAmount = eventDetails.TotalPaidAmount;
+                    eventDetails.PendingAmount = eventDetails.TotalExpectedAmount - eventDetails.TotalPaidAmount;
+                    eventDetails.ExpenseAmount = eventExp;
+                    eventDetails.RemainingAmount = eventDetails.TotalExpectedAmount - eventExp;
+                    eventDetails.OverallExpectedAmount = eventDetails.TotalExpectedAmount;
+                    eventDetails.OverallExpenseAmount = eventExp;
+                    eventDetails.OverallRemainingAmount = eventDetails.TotalExpectedAmount - eventExp;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve expenses for event details");
+                }
+            }
 
             if (string.IsNullOrWhiteSpace(eventDetails.CreatedByName) && !string.IsNullOrWhiteSpace(eventDetails.CreatedBy))
             {

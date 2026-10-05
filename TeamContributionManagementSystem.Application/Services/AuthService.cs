@@ -63,7 +63,12 @@ public class AuthService : IAuthService
 
             var user = await _userRepository.GetByUsernameOrEmailAsync(identifier, cancellationToken);
 
-            if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+            bool isExactUsernameMatch = user != null && !string.IsNullOrEmpty(user.Username) &&
+                                        string.Equals(user.Username, identifier, StringComparison.Ordinal);
+            bool isEmailMatch = user != null && !string.IsNullOrEmpty(user.Email) &&
+                                string.Equals(user.Email, identifier, StringComparison.OrdinalIgnoreCase);
+
+            if (user is null || (!isExactUsernameMatch && !isEmailMatch) || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
             {
                 _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, CommonMessages.Auth.InvalidCredentials);
                 throw new InvalidOperationException(CommonMessages.Auth.InvalidCredentials);
@@ -126,7 +131,12 @@ public class AuthService : IAuthService
             var identifier = request.Email?.Trim() ?? string.Empty;
             var user = await _userRepository.GetByUsernameOrEmailAsync(identifier, cancellationToken);
 
-            if (user is null)
+            bool isExactUsernameMatch = user != null && !string.IsNullOrEmpty(user.Username) &&
+                                        string.Equals(user.Username, identifier, StringComparison.Ordinal);
+            bool isEmailMatch = user != null && !string.IsNullOrEmpty(user.Email) &&
+                                string.Equals(user.Email, identifier, StringComparison.OrdinalIgnoreCase);
+
+            if (user is null || (!isExactUsernameMatch && !isEmailMatch))
             {
                 throw new InvalidOperationException(CommonMessages.Auth.UserNotFound);
             }

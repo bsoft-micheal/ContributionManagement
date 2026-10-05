@@ -19,6 +19,13 @@ public class EventSummaryDto
     public decimal TotalExpectedAmount { get; set; }
     public decimal TotalPaidAmount { get; set; }
     public int PendingContributionsCount { get; set; }
+    public decimal CollectedAmount { get; set; }
+    public decimal PendingAmount { get; set; }
+    public decimal ExpenseAmount { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public decimal OverallExpectedAmount { get; set; }
+    public decimal OverallExpenseAmount { get; set; }
+    public decimal OverallRemainingAmount { get; set; }
     public string? CreatedByName { get; set; }
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
