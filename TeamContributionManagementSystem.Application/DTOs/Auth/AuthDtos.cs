@@ -6,11 +6,31 @@ namespace TeamContributionManagementSystem.Application.DTOs.Auth;
 
 public class LoginRequestDto
 {
-    [Required]
-    [EmailAddress]
-    public string Email { get; set; } = string.Empty;
+    private string _email = string.Empty;
 
-    [Required]
+    [Required(ErrorMessage = CommonValidationMessages.UsernameOrEmailRequired)]
+    public string Email
+    {
+        get => _email;
+        set => _email = value;
+    }
+
+    /// <summary>
+    /// Optional alias for Email when username is sent explicitly in payload
+    /// </summary>
+    public string? Username
+    {
+        get => _email;
+        set
+        {
+            if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_email))
+            {
+                _email = value;
+            }
+        }
+    }
+
+    [Required(ErrorMessage = CommonValidationMessages.PasswordRequired)]
     public string Password { get; set; } = string.Empty;
 
     public bool IsFromMobile { get; set; } = false;
@@ -50,12 +70,11 @@ public class AuthResponseDto
 
 public class VerifyTwoFactorRequestDto
 {
-    [Required]
-    [EmailAddress]
+    [Required(ErrorMessage = CommonValidationMessages.UsernameOrEmailRequired)]
     public string Email { get; set; } = string.Empty;
 
-    [Required]
-    [StringLength(6, MinimumLength = 6)]
+    [Required(ErrorMessage = CommonValidationMessages.OtpRequired)]
+    [StringLength(6, MinimumLength = 6, ErrorMessage = CommonValidationMessages.OtpExactLength)]
     public string Otp { get; set; } = string.Empty;
 
     public DeviceDetailPayloadDto? DeviceInfo { get; set; }

@@ -244,6 +244,24 @@ public class UserRepository : IUserRepository
         }
     }
 
+    public async Task<AppUser?> GetByUsernameOrEmailAsync(string identifier, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var normalized = identifier.Trim().ToLower();
+            return await _context.Users
+                .Include(u => u.MfaDevices)
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
+                .FirstOrDefaultAsync(x => x.Email.ToLower() == normalized || x.Username.ToLower() == normalized, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByUsernameOrEmailAsync));
+            throw;
+        }
+    }
+
     public async Task<AppUser?> GetByIdAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         try
