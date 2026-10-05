@@ -8,6 +8,7 @@ public static class CommonValidationMessages
     // Auth Validations
     public const string PasswordMinLength = "Password must be at least 6 characters long.";
     public const string EmailRequired = "Email is required.";
+    public const string UsernameOrEmailRequired = "Username or email is required.";
     public const string EmailValid = "A valid email address is required.";
     public const string EmailMaxLength = "Email must not exceed 150 characters.";
     public const string PasswordRequired = "Password is required.";

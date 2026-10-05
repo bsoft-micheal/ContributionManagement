@@ -58,11 +58,14 @@ public class AuthService : IAuthService
     {
         try
         {
-            _logger.LogInformation(CommonLogMessages.Auth.LoginAttempt, request.Email);
-            var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+            var identifier = request.Email?.Trim() ?? string.Empty;
+            _logger.LogInformation(CommonLogMessages.Auth.LoginAttempt, identifier);
+
+            var user = await _userRepository.GetByUsernameOrEmailAsync(identifier, cancellationToken);
+
             if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
             {
-                _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, request.Email, CommonMessages.Auth.InvalidCredentials);
+                _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, CommonMessages.Auth.InvalidCredentials);
                 throw new InvalidOperationException(CommonMessages.Auth.InvalidCredentials);
             }
 
@@ -120,7 +123,9 @@ public class AuthService : IAuthService
     {
         try
         {
-            var user = await _userRepository.GetByEmailAsync(request.Email.Trim(), cancellationToken);
+            var identifier = request.Email?.Trim() ?? string.Empty;
+            var user = await _userRepository.GetByUsernameOrEmailAsync(identifier, cancellationToken);
+
             if (user is null)
             {
                 throw new InvalidOperationException(CommonMessages.Auth.UserNotFound);
