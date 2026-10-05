@@ -249,12 +249,13 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            var normalized = identifier.Trim().ToLower();
+            var trimmed = identifier.Trim();
+            var normalizedEmail = trimmed.ToLower();
             return await _context.Users
                 .Include(u => u.MfaDevices)
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(u => u.WorkTypeNavigation)
-                .FirstOrDefaultAsync(x => x.Email.ToLower() == normalized || x.Username.ToLower() == normalized, cancellationToken);
+                .FirstOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail || x.Username == trimmed, cancellationToken);
         }
         catch (Exception ex)
         {
