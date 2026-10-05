@@ -771,7 +771,6 @@ public class UserManagementService : IUserManagementService
 
             appUser.IsDeleted = true;
             appUser.IsActive = false;
-            _userRepository.Update(appUser);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
