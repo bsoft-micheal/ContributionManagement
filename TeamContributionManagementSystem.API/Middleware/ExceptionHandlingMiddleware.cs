@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using TeamContributionManagementSystem.Application.Common;
 
 namespace TeamContributionManagementSystem.API.Middleware;
 
@@ -22,7 +23,7 @@ public class ExceptionHandlingMiddleware
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Unhandled exception for request {Path}", context.Request.Path);
+            _logger.LogError(exception, CommonLogMessages.General.UnhandledExceptionPath, context.Request.Path);
             await HandleExceptionAsync(context, exception);
         }
     }
@@ -35,11 +36,28 @@ public class ExceptionHandlingMiddleware
         if (exception is FluentValidation.ValidationException valEx)
         {
             statusCode = HttpStatusCode.BadRequest;
+            var validationMsg = valEx.Errors != null && valEx.Errors.Any()
+                ? string.Join(", ", valEx.Errors.Select(e => e.ErrorMessage))
+                : CommonMessages.Validation.ValidationFailed;
+
             payload = new
             {
-                message = "Validation failed.",
-                errors = valEx.Errors.Select(e => new { e.PropertyName, e.ErrorMessage }),
-                statusCode = (int)statusCode
+                success = false,
+                statusCode = (int)statusCode,
+                message = validationMsg,
+                data = valEx.Errors?.Select(e => new { e.PropertyName, e.ErrorMessage })
+            };
+        }
+        else if (exception is Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+        {
+            statusCode = HttpStatusCode.BadRequest;
+            var msg = dbEx.InnerException?.Message ?? dbEx.Message;
+            payload = new
+            {
+                success = false,
+                statusCode = (int)statusCode,
+                message = msg,
+                data = (object?)null
             };
         }
         else
@@ -48,18 +66,25 @@ public class ExceptionHandlingMiddleware
             {
                 KeyNotFoundException => HttpStatusCode.NotFound,
                 InvalidOperationException => HttpStatusCode.BadRequest,
+                ArgumentException => HttpStatusCode.BadRequest,
                 UnauthorizedAccessException => HttpStatusCode.Unauthorized,
                 _ => HttpStatusCode.InternalServerError
             };
 
+            var msg = !string.IsNullOrWhiteSpace(exception.Message)
+                ? exception.Message
+                : exception.InnerException?.Message ?? CommonMessages.General.Failure;
+
             payload = new
             {
-                message = exception.Message,
-                statusCode = (int)statusCode
+                success = false,
+                statusCode = (int)statusCode,
+                message = msg,
+                data = (object?)null
             };
         }
 
-        context.Response.ContentType = "application/json";
+        context.Response.ContentType = CommonConstants.ContentTypes.ApplicationJson;
         context.Response.StatusCode = (int)statusCode;
 
         return context.Response.WriteAsync(JsonSerializer.Serialize(payload));

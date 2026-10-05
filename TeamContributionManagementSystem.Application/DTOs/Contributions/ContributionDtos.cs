@@ -13,8 +13,16 @@ public class ContributionDto
     public string MemberName { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public PaymentStatus PaymentStatus { get; set; }
+    public string StatusName { get; set; } = "Pending";
     public DateTime? PaymentDate { get; set; }
     public PaymentMode PaymentMode { get; set; }
+    public decimal? CashAmount { get; set; }
+    public decimal? UpiAmount { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn { get; set; }
+    public DateTime? LastReminderSentAt { get; set; }
+    public int ReminderCount { get; set; }
 }
 
 public class MemberContributionSummaryDto
@@ -32,6 +40,9 @@ public class ContributionCategoryBreakdownDto
     public string CategoryName { get; set; } = string.Empty;
     public decimal TotalPaid { get; set; }
     public int EventCount { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn => CreatedAt;
 }
 
 public class ContributionEventBreakdownDto
@@ -41,6 +52,9 @@ public class ContributionEventBreakdownDto
     public decimal Amount { get; set; }
     public string PaymentStatus { get; set; } = string.Empty;
     public DateTime? PaymentDate { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn => CreatedAt;
 }
 
 public class PayContributionRequestDto
@@ -58,4 +72,7 @@ public class PayContributionRequestDto
     public PaymentMode PaymentMode { get; set; }
 
     public DateTime? PaymentDate { get; set; }
+    public decimal? CashAmount { get; set; }
+    public decimal? UpiAmount { get; set; }
+    public string? PaymentScope { get; set; }
 }

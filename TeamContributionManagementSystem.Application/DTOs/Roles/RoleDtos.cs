@@ -7,6 +7,12 @@ public class RoleDto
     public Guid RoleId { get; set; }
     public string RoleName { get; set; } = string.Empty;
     public decimal DefaultContributionAmount { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn { get; set; }
+    public string? ModifiedBy { get; set; }
+    public DateTime? ModifiedOn { get; set; }
+    public bool IsReferred { get; set; }
 }
 
 public class CreateRoleRequestDto

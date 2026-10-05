@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.EventTypes;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -9,12 +10,12 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class EventTypeService : IEventTypeService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<EventTypeService> _logger;
+    private readonly ILogger<EventTypeService> _logger;
     private readonly IEventTypeRepository _eventTypeRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public EventTypeService(Microsoft.Extensions.Logging.ILogger<EventTypeService> logger, IEventTypeRepository eventTypeRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public EventTypeService(ILogger<EventTypeService> logger, IEventTypeRepository eventTypeRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
         _logger = logger;
         _eventTypeRepository = eventTypeRepository;
@@ -27,70 +28,94 @@ public class EventTypeService : IEventTypeService
         try
         {
             var eventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<EventTypeDto>>(eventTypes);
+            var dtos = _mapper.Map<List<EventTypeDto>>(eventTypes);
+
+            foreach (var dto in dtos)
+            {
+                var hasEvents = await _eventTypeRepository.HasEventsAsync(dto.EventTypeId, cancellationToken);
+                var hasBc = await _eventTypeRepository.HasBudgetCalculationsAsync(dto.EventTypeName, cancellationToken);
+                var hasExpenses = await _eventTypeRepository.HasExpensesAsync(dto.EventTypeName, cancellationToken);
+                var hasPhotos = await _eventTypeRepository.HasGalleryPhotosAsync(dto.EventTypeName, cancellationToken);
+
+                dto.IsReferred = hasEvents || hasBc || hasExpenses || hasPhotos;
+            }
+
+            return dtos;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
 
-    public async Task<EventTypeDto> CreateAsync(CreateEventTypeRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<EventTypeDto> CreateAsync(CreateEventTypeRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var existing = await _eventTypeRepository.GetByNameAsync(request.EventTypeName.Trim(), cancellationToken);
-        if (existing is not null)
-        {
-            throw new InvalidOperationException("Event type already exists.");
-        }
+            if (existing is not null)
+            {
+                throw new InvalidOperationException(CommonMessages.EventTypes.AlreadyExists);
+            }
 
-        var eventType = new EventType
-        {
-            EventTypeId = Guid.NewGuid(),
-            EventTypeName = request.EventTypeName.Trim(),
-            IsActive = request.IsActive,
-            BaseAmount = request.BaseAmount
-        };
+            var eventType = new EventType
+            {
+                EventTypeId = Guid.NewGuid(),
+                EventTypeName = request.EventTypeName.Trim(),
+                IsActive = request.IsActive,
+                HasTenureRule = request.HasTenureRule,
+                TenureThresholdYears = request.TenureThresholdYears > 0 ? request.TenureThresholdYears : 1.0m,
+                NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m,
+                StandardSharePercentage = request.StandardSharePercentage > 0 ? request.StandardSharePercentage : 100.0m,
+                RuleDescription = request.RuleDescription?.Trim(),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
+                CreatedAt = DateTime.UtcNow
+            };
 
-        await _eventTypeRepository.AddAsync(eventType, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _eventTypeRepository.AddAsync(eventType, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return _mapper.Map<EventTypeDto>(eventType);
+            return _mapper.Map<EventTypeDto>(eventType);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
 
-    public async Task<EventTypeDto> UpdateAsync(Guid eventTypeId, UpdateEventTypeRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<EventTypeDto> UpdateAsync(Guid eventTypeId, UpdateEventTypeRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId, cancellationToken)
-            ?? throw new KeyNotFoundException("Event type not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
 
-        var duplicate = await _eventTypeRepository.GetByNameAsync(request.EventTypeName.Trim(), cancellationToken);
-        if (duplicate is not null && duplicate.EventTypeId != eventTypeId)
-        {
-            throw new InvalidOperationException("Event type already exists.");
-        }
+            var duplicate = await _eventTypeRepository.GetByNameAsync(request.EventTypeName.Trim(), cancellationToken);
+            if (duplicate is not null && duplicate.EventTypeId != eventTypeId)
+            {
+                throw new InvalidOperationException(CommonMessages.EventTypes.AlreadyExists);
+            }
 
-        eventType.EventTypeName = request.EventTypeName.Trim();
-        eventType.IsActive = request.IsActive;
-        eventType.BaseAmount = request.BaseAmount;
+            eventType.EventTypeName = request.EventTypeName.Trim();
+            eventType.IsActive = request.IsActive;
+            eventType.HasTenureRule = request.HasTenureRule;
+            eventType.TenureThresholdYears = request.TenureThresholdYears > 0 ? request.TenureThresholdYears : 1.0m;
+            eventType.NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m;
+            eventType.StandardSharePercentage = request.StandardSharePercentage > 0 ? request.StandardSharePercentage : 100.0m;
+            eventType.RuleDescription = request.RuleDescription?.Trim();
+            eventType.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+            eventType.ModifiedOn = DateTime.UtcNow;
 
-        _eventTypeRepository.Update(eventType);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _eventTypeRepository.Update(eventType);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return _mapper.Map<EventTypeDto>(eventType);
+            return _mapper.Map<EventTypeDto>(eventType);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in UpdateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
             throw;
         }
     }
@@ -100,19 +125,34 @@ public class EventTypeService : IEventTypeService
         try
         {
             var eventType = await _eventTypeRepository.GetByIdAsync(eventTypeId, cancellationToken)
-            ?? throw new KeyNotFoundException("Event type not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
 
-        if (await _eventTypeRepository.HasEventsAsync(eventTypeId, cancellationToken))
-        {
-            throw new InvalidOperationException("Cannot delete this event type because it is associated with existing events.");
-        }
+            if (await _eventTypeRepository.HasEventsAsync(eventTypeId, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because it is referenced by existing events.");
+            }
 
-        _eventTypeRepository.Delete(eventType);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            if (await _eventTypeRepository.HasBudgetCalculationsAsync(eventType.EventTypeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because budget calculation rules are configured for it.");
+            }
+
+            if (await _eventTypeRepository.HasExpensesAsync(eventType.EventTypeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because expenses are recorded under this category.");
+            }
+
+            if (await _eventTypeRepository.HasGalleryPhotosAsync(eventType.EventTypeName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because photos are associated with this category in the gallery.");
+            }
+
+            _eventTypeRepository.Delete(eventType);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }

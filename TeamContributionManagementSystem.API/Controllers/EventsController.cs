@@ -1,9 +1,12 @@
 using System.Security.Claims;
+using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TeamContributionManagementSystem.API.Attributes;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
+using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.API.Controllers;
 
@@ -12,8 +15,9 @@ namespace TeamContributionManagementSystem.API.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
+[RequireFeaturePermission(4, AccessType.ReadOnly)]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/events")]
+[Route(CommonRoutes.Events.Base)]
 public class EventsController : ControllerBase
 {
     private readonly IEventService _eventService;
@@ -29,8 +33,8 @@ public class EventsController : ControllerBase
     /// <param name="month">Optional month filter (1-12).</param>
     /// <param name="year">Optional year filter.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getAllEventAsync")]
-    [ActionName("GetAllEventAsync")]
+    [HttpGet(CommonRoutes.Events.GetAll)]
+    [ActionName(nameof(GetAllEventAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<EventSummaryDto>>>> GetAllEventAsync([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
     {
         var result = await _eventService.GetAllEventAsync(month, year, cancellationToken);
@@ -42,8 +46,8 @@ public class EventsController : ControllerBase
     /// </summary>
     /// <param name="id">The unique identifier of the event.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [HttpGet("getEventAsyncById/{id:guid}")]
-    [ActionName("GetEventAsyncById")]
+    [HttpGet(CommonRoutes.Events.GetById)]
+    [ActionName(nameof(GetEventAsyncById))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> GetEventAsyncById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _eventService.GetEventAsyncById(id, cancellationToken);
@@ -51,31 +55,33 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
-    /// Creates a new event and automatically adds the specified members as participants (Admin only).
+    /// Creates a new event and automatically adds the specified members as participants (Admin or Organizer).
     /// </summary>
     /// <param name="request">The event details and participant list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpPost("saveEventAsync")]
-    [ActionName("SaveEventAsync")]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [RequireFeaturePermission(31, AccessType.ReadWrite)]
+    [HttpPost(CommonRoutes.Events.Create)]
+    [ActionName(nameof(SaveEventAsync))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> SaveEventAsync([FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException("User identity is not available.");
+            ?? throw new UnauthorizedAccessException(CommonMessages.General.UserIdentityNotAvailable);
 
         var eventItem = await _eventService.SaveEventAsync(Guid.Parse(userIdClaim), request, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<EventDetailsDto>.SuccessResult(eventItem, CommonMessages.Events.SaveSuccess, CommonStatusCodes.Status201Created));
     }
 
     /// <summary>
-    /// Updates an existing event and its participants (Admin only).
+    /// Updates an existing event and its participants (Admin or Organizer).
     /// </summary>
     /// <param name="id">The unique identifier of the event to update.</param>
     /// <param name="request">The updated event details and participant list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpPut("updateEventAsyncById/{id:guid}")]
-    [ActionName("UpdateEventAsyncById")]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [RequireFeaturePermission(32, AccessType.ReadWrite)]
+    [HttpPut(CommonRoutes.Events.Update)]
+    [ActionName(nameof(UpdateEventAsyncById))]
     public async Task<ActionResult<ApiResponse<EventDetailsDto>>> UpdateEventAsyncById(Guid id, [FromBody] CreateEventRequestDto request, CancellationToken cancellationToken)
     {
         var eventItem = await _eventService.UpdateEventAsyncById(id, request, cancellationToken);
@@ -83,16 +89,41 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
-    /// Deletes an event and all associated contributions/participants (Admin only).
+    /// Deletes an event and all associated contributions/participants (Admin or Organizer).
     /// </summary>
     /// <param name="id">The unique identifier of the event to delete.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("deleteEventAsyncById/{id:guid}")]
-    [ActionName("DeleteEventAsyncById")]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [RequireFeaturePermission(33, AccessType.ReadWrite)]
+    [HttpDelete(CommonRoutes.Events.Delete)]
+    [ActionName(nameof(DeleteEventAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteEventAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _eventService.DeleteEventAsyncById(id, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Events.DeleteSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Manually triggers contribution reminder emails for all pending members of an event (Admin or Organizer).
+    /// </summary>
+    /// <param name="eventId">The unique identifier of the event.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [HttpPost(CommonRoutes.Events.SendReminders)]
+    [HttpPost(CommonRoutes.Events.SendRemindersAsync)]
+    [ActionName(nameof(SendRemindersAsync))]
+    public ActionResult<ApiResponse<object>> SendRemindersAsync([FromRoute] Guid eventId, CancellationToken cancellationToken)
+    {
+        var userName = User.FindFirstValue(ClaimTypes.Name) 
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier) 
+            ?? "Admin";
+
+        var jobId = BackgroundJob.Enqueue<IContributionReminderJobService>(
+            service => service.SendRemindersForEventAsync(eventId, userName, CancellationToken.None));
+
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(
+            new { JobId = jobId, EventId = eventId, Status = "Enqueued" },
+            "Event contribution reminder job successfully enqueued.",
+            CommonStatusCodes.Status200OK));
     }
 }

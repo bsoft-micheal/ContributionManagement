@@ -9,14 +9,16 @@ public class ExpenseDto
     public string Category { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateTime ExpenseDate { get; set; }
-    public string Status { get; set; } = "Pending";
+    public string Status { get; set; } = string.Empty;
     public string SubmittedBy { get; set; } = string.Empty;
     public string? ApprovedBy { get; set; }
     public string Description { get; set; } = string.Empty;
     public string? FileName { get; set; }
+    public string? FileUrl { get; set; }
     public bool IsActive { get; set; }
-    public string CreatedBy { get; set; } = string.Empty;
-    public DateTime CreatedOn { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn { get; set; }
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }
@@ -39,7 +41,7 @@ public class CreateExpenseRequestDto
     public DateTime ExpenseDate { get; set; } = DateTime.UtcNow;
 
     [MaxLength(50)]
-    public string Status { get; set; } = "Pending";
+    public string? Status { get; set; }
 
     [Required]
     [MaxLength(150)]
@@ -52,8 +54,9 @@ public class CreateExpenseRequestDto
     [MaxLength(1000)]
     public string Description { get; set; } = string.Empty;
 
-    [MaxLength(500)]
     public string? FileName { get; set; }
+
+    public string? FileData { get; set; }
 }
 
 public class UpdateExpenseRequestDto : CreateExpenseRequestDto

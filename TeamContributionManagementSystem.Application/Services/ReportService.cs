@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -8,14 +9,14 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class ReportService : IReportService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<ReportService> _logger;
+    private readonly ILogger<ReportService> _logger;
     private readonly IEventRepository _eventRepository;
     private readonly IContributionRepository _contributionRepository;
     private readonly IExpenseRepository _expenseRepository;
     private readonly IPaymentTransactionRepository _paymentTransactionRepository;
 
     public ReportService(
-        Microsoft.Extensions.Logging.ILogger<ReportService> logger, 
+        ILogger<ReportService> logger, 
         IEventRepository eventRepository, 
         IContributionRepository contributionRepository,
         IExpenseRepository expenseRepository,
@@ -37,7 +38,7 @@ public class ReportService : IReportService
 
             var events = await _eventRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
             var pendingDues = await _contributionRepository.GetPendingAsync(targetMonth, targetYear, cancellationToken);
-            var contributions = events.SelectMany(x => x.Contributions.Where(c => !c.IsDeleted)).ToList();
+            var contributions = await _contributionRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
 
             // Date filtering for expenses & payments
             DateTime? startDate = null;
@@ -59,42 +60,71 @@ public class ReportService : IReportService
             // 1. Event Collections Report
             var eventCollections = events.Select(x =>
             {
-                var expected = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount);
-                var paid = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount);
-                var pending = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid).Sum(c => c.Amount);
+                var expected = x.TotalExpectedAmount;
+                var paid = x.TotalPaidAmount;
+                var pending = expected - paid;
                 var rate = expected > 0 ? Math.Round((paid / expected) * 100, 1) : 0;
 
                 return new EventCollectionReportDto
                 {
                     EventId = x.EventId,
                     EventName = x.EventName,
-                    EventTypeName = x.EventType?.EventTypeName ?? string.Empty,
+                    EventTypeName = x.EventTypeName,
                     EventDate = x.EventDate,
                     ExpectedAmount = expected,
                     PaidAmount = paid,
                     PendingAmount = pending,
-                    CollectionRate = rate
+                    CollectionRate = rate,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt
                 };
             }).OrderByDescending(x => x.EventDate).ToList();
 
+            var eventLookup = events.ToDictionary(e => e.EventId, e => e.EventDate);
+
             // 2. Member Contributions History Report
             var memberHistory = contributions
-                .GroupBy(x => new { x.MemberId, MemberName = x.Member?.Name ?? string.Empty })
+                .GroupBy(x => x.MemberId)
                 .Select(group =>
                 {
                     var expected = group.Sum(x => x.Amount);
                     var paid = group.Where(x => x.PaymentStatus == PaymentStatus.Paid).Sum(x => x.Amount);
                     var completion = expected > 0 ? Math.Round((paid / expected) * 100, 1) : 0;
+                    var firstItem = group.FirstOrDefault();
+                    var memberName = group.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.MemberName))?.MemberName ?? "Unknown";
+
+                    var memberEvents = group.Select(c =>
+                    {
+                        var isPaid = c.PaymentStatus == PaymentStatus.Paid;
+                        var evDate = eventLookup.TryGetValue(c.EventId, out var ed) ? ed : (c.CreatedAt ?? DateTime.MinValue);
+                        return new MemberEventDetailDto
+                        {
+                            ContributionId = c.ContributionId,
+                            EventId = c.EventId,
+                            EventName = c.EventName,
+                            CategoryName = c.CategoryName,
+                            EventDate = evDate,
+                            ExpectedAmount = c.Amount,
+                            PaidAmount = isPaid ? c.Amount : 0m,
+                            PendingAmount = isPaid ? 0m : c.Amount,
+                            PaymentStatus = isPaid ? "Paid" : "Pending",
+                            PaymentDate = c.PaymentDate,
+                            PaymentMode = c.PaymentMode.ToString()
+                        };
+                    }).OrderByDescending(e => e.EventDate).ToList();
 
                     return new MemberContributionHistoryDto
                     {
-                        MemberId = group.Key.MemberId,
-                        MemberName = group.Key.MemberName,
+                        MemberId = group.Key,
+                        MemberName = memberName,
                         TotalExpectedAmount = expected,
                         TotalPaidAmount = paid,
                         PaidEventsCount = group.Count(x => x.PaymentStatus == PaymentStatus.Paid),
                         PendingEventsCount = group.Count(x => x.PaymentStatus != PaymentStatus.Paid),
-                        CompletionRate = completion
+                        CompletionRate = completion,
+                        CreatedBy = firstItem?.CreatedBy,
+                        CreatedAt = firstItem?.CreatedAt,
+                        Events = memberEvents
                     };
                 })
                 .OrderBy(x => x.MemberName)
@@ -103,31 +133,37 @@ public class ReportService : IReportService
             // 3. Pending Dues & Defaulters Report
             var pendingDuesReport = pendingDues.Select(x =>
             {
-                var days = x.Event?.EventDate != null 
-                    ? Math.Max(0, (DateTime.UtcNow - x.Event.EventDate).Days)
+                var days = (x.CreatedOn.HasValue || x.CreatedAt.HasValue) 
+                    ? Math.Max(0, (DateTime.UtcNow - (x.CreatedOn ?? x.CreatedAt!.Value)).Days)
                     : 0;
-                var aging = days > 30 ? "Critical (> 30d)" : (days >= 15 ? "Moderate (15-30d)" : "Recent (< 15d)");
+                var aging = days > 30 
+                    ? CommonConstants.AgingCategories.Critical 
+                    : (days >= 15 ? CommonConstants.AgingCategories.Moderate : CommonConstants.AgingCategories.Recent);
+
+                var eventDate = eventLookup.TryGetValue(x.EventId, out var evDate) ? evDate : (x.CreatedAt ?? DateTime.MinValue);
 
                 return new PendingDueDto
                 {
                     ContributionId = x.ContributionId,
                     MemberId = x.MemberId,
-                    MemberName = x.Member?.Name ?? string.Empty,
-                    Phone = x.Member?.Phone ?? string.Empty,
-                    EventName = x.Event?.EventName ?? string.Empty,
-                    EventDate = x.Event?.EventDate ?? DateTime.MinValue,
+                    MemberName = x.MemberName,
+                    Phone = string.Empty,
+                    EventName = x.EventName,
+                    EventDate = eventDate,
                     Amount = x.Amount,
                     DaysOverdue = days,
-                    AgingCategory = aging
+                    AgingCategory = aging,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt ?? x.CreatedOn
                 };
             }).OrderByDescending(x => x.DaysOverdue).ToList();
 
             // 4. Event Financials (Budget vs Actual Expenses)
             var eventFinancials = events.Select(x =>
             {
-                var collections = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount);
+                var collections = x.TotalPaidAmount;
                 var expenses = allExpenses
-                    .Where(e => !e.IsDeleted && !string.IsNullOrWhiteSpace(e.EventName) && e.EventName.Trim().Equals(x.EventName.Trim(), StringComparison.OrdinalIgnoreCase))
+                    .Where(e => !string.IsNullOrWhiteSpace(e.EventName) && e.EventName.Trim().Equals(x.EventName.Trim(), StringComparison.OrdinalIgnoreCase))
                     .Sum(e => e.Amount);
                 var net = collections - expenses;
                 var savingsRate = collections > 0 ? Math.Round((net / collections) * 100, 1) : 0;
@@ -136,13 +172,15 @@ public class ReportService : IReportService
                 {
                     EventId = x.EventId,
                     EventName = x.EventName,
-                    EventTypeName = x.EventType?.EventTypeName ?? string.Empty,
+                    EventTypeName = x.EventTypeName,
                     EventDate = x.EventDate,
                     TotalCollections = collections,
                     TotalExpenses = expenses,
                     NetBalance = net,
-                    Status = net >= 0 ? "Surplus" : "Deficit",
-                    SavingsRatePercent = savingsRate
+                    Status = net >= 0 ? CommonConstants.FinancialStatus.Surplus : CommonConstants.FinancialStatus.Deficit,
+                    SavingsRatePercent = savingsRate,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt
                 };
             }).OrderByDescending(x => x.EventDate).ToList();
 
@@ -150,15 +188,45 @@ public class ReportService : IReportService
             var paidContributions = contributions.Where(c => c.PaymentStatus == PaymentStatus.Paid).ToList();
             var totalPaidFromContributions = paidContributions.Sum(c => c.Amount);
 
-            var paymentModeGroups = paidContributions
-                .GroupBy(c => c.PaymentMode == PaymentMode.None ? "UPI" : c.PaymentMode.ToString())
-                .Select(g => new PaymentModeReportDto
+            var modeTotals = new Dictionary<string, (decimal TotalAmount, int Count)>();
+
+            foreach (var c in paidContributions)
+            {
+                if (c.PaymentMode == PaymentMode.Split && (c.CashAmount.HasValue || c.UpiAmount.HasValue))
                 {
-                    PaymentMode = g.Key,
-                    TransactionCount = g.Count(),
-                    TotalAmount = g.Sum(c => c.Amount),
-                    Percentage = totalPaidFromContributions > 0 ? Math.Round((g.Sum(c => c.Amount) / totalPaidFromContributions) * 100, 1) : 0,
-                    VerifiedCount = g.Count()
+                    var cash = c.CashAmount ?? 0;
+                    var upi = c.UpiAmount ?? 0;
+
+                    if (cash > 0)
+                    {
+                        if (!modeTotals.ContainsKey(CommonConstants.PaymentModes.Cash)) modeTotals[CommonConstants.PaymentModes.Cash] = (0, 0);
+                        var cur = modeTotals[CommonConstants.PaymentModes.Cash];
+                        modeTotals[CommonConstants.PaymentModes.Cash] = (cur.TotalAmount + cash, cur.Count + 1);
+                    }
+                    if (upi > 0)
+                    {
+                        if (!modeTotals.ContainsKey(CommonConstants.PaymentModes.Upi)) modeTotals[CommonConstants.PaymentModes.Upi] = (0, 0);
+                        var cur = modeTotals[CommonConstants.PaymentModes.Upi];
+                        modeTotals[CommonConstants.PaymentModes.Upi] = (cur.TotalAmount + upi, cur.Count + 1);
+                    }
+                }
+                else
+                {
+                    var modeName = c.PaymentMode == PaymentMode.None ? CommonConstants.PaymentModes.Upi : (c.PaymentMode == PaymentMode.Upi ? CommonConstants.PaymentModes.Upi : c.PaymentMode.ToString());
+                    if (!modeTotals.ContainsKey(modeName)) modeTotals[modeName] = (0, 0);
+                    var cur = modeTotals[modeName];
+                    modeTotals[modeName] = (cur.TotalAmount + c.Amount, cur.Count + 1);
+                }
+            }
+
+            var paymentModeGroups = modeTotals
+                .Select(kvp => new PaymentModeReportDto
+                {
+                    PaymentMode = kvp.Key,
+                    TransactionCount = kvp.Value.Count,
+                    TotalAmount = kvp.Value.TotalAmount,
+                    Percentage = totalPaidFromContributions > 0 ? Math.Round((kvp.Value.TotalAmount / totalPaidFromContributions) * 100, 1) : 0,
+                    VerifiedCount = kvp.Value.Count
                 })
                 .OrderByDescending(x => x.TotalAmount)
                 .ToList();
@@ -167,14 +235,14 @@ public class ReportService : IReportService
             {
                 var totalFromPayments = allPayments.Sum(p => p.Amount);
                 paymentModeGroups = allPayments
-                    .GroupBy(p => string.IsNullOrWhiteSpace(p.PaymentMode) ? "UPI" : p.PaymentMode)
+                    .GroupBy(p => string.IsNullOrWhiteSpace(p.PaymentMode) ? CommonConstants.PaymentModes.Upi : p.PaymentMode)
                     .Select(g => new PaymentModeReportDto
                     {
                         PaymentMode = g.Key,
                         TransactionCount = g.Count(),
                         TotalAmount = g.Sum(p => p.Amount),
                         Percentage = totalFromPayments > 0 ? Math.Round((g.Sum(p => p.Amount) / totalFromPayments) * 100, 1) : 0,
-                        VerifiedCount = g.Count(p => p.Status == "Verified" || p.Status == "Approved")
+                        VerifiedCount = g.Count(p => p.Status == CommonConstants.PaymentStatuses.Verified || p.Status == CommonConstants.PaymentStatuses.Approved)
                     })
                     .OrderByDescending(x => x.TotalAmount)
                     .ToList();
@@ -183,7 +251,7 @@ public class ReportService : IReportService
             // High-Level Financial Summary KPIs
             var totalExpected = contributions.Sum(c => c.Amount);
             var totalCollected = paidContributions.Sum(c => c.Amount);
-            var totalExp = allExpenses.Where(e => !e.IsDeleted).Sum(e => e.Amount);
+            var totalExp = allExpenses.Sum(e => e.Amount);
             var totalPending = pendingDues.Sum(p => p.Amount);
             var defaulters = pendingDues.Select(p => p.MemberId).Distinct().Count();
 
@@ -210,7 +278,7 @@ public class ReportService : IReportService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetSummaryAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetSummaryAsync));
             throw;
         }
     }

@@ -7,10 +7,13 @@ using TeamContributionManagementSystem.Application.Interfaces.Services;
 
 namespace TeamContributionManagementSystem.API.Controllers;
 
+/// <summary>
+/// Manages payment transactions, verification, and audit logs.
+/// </summary>
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/payments")]
+[Route(CommonRoutes.Payments.Base)]
 public class PaymentsController : ControllerBase
 {
     private readonly IPaymentTransactionService _transactionService;
@@ -20,8 +23,11 @@ public class PaymentsController : ControllerBase
         _transactionService = transactionService;
     }
 
-    [HttpGet("getAllPaymentAsync")]
-    [ActionName("GetAllPaymentAsync")]
+    /// <summary>
+    /// Retrieves a list of all payment transactions.
+    /// </summary>
+    [HttpGet(CommonRoutes.Payments.GetAll)]
+    [ActionName(nameof(GetAllPaymentAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<PaymentTransactionDto>>>> GetAllPaymentAsync(
         [FromQuery] string? eventName,
         [FromQuery] string? mode,
@@ -34,36 +40,81 @@ public class PaymentsController : ControllerBase
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<PaymentTransactionDto>>.SuccessResult(result, CommonMessages.Payments.GetAllSuccess, CommonStatusCodes.Status200OK));
     }
 
-    [HttpGet("getPaymentAsyncById/{id:guid}")]
-    [ActionName("GetPaymentAsyncById")]
+    /// <summary>
+    /// Retrieves a payment transaction by ID.
+    /// </summary>
+    [HttpGet(CommonRoutes.Payments.GetById)]
+    [ActionName(nameof(GetPaymentAsyncById))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> GetPaymentAsyncById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _transactionService.GetPaymentAsyncById(id, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.GetByIdSuccess, CommonStatusCodes.Status200OK));
     }
 
-    [HttpPost("savePaymentAsync")]
-    [ActionName("SavePaymentAsync")]
+    /// <summary>
+    /// Records a new payment transaction.
+    /// </summary>
+    [HttpPost(CommonRoutes.Payments.Create)]
+    [ActionName(nameof(SavePaymentAsync))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> SavePaymentAsync([FromBody] CreatePaymentTransactionRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "User";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _transactionService.SavePaymentAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.SaveSuccess, CommonStatusCodes.Status201Created));
     }
 
-    [Authorize(Roles = "Admin,Manager")]
-    [HttpPut("verifyPaymentAsync/{id:guid}")]
-    [ActionName("VerifyPaymentAsync")]
+    /// <summary>
+    /// Allows a member to submit payment proof (UTR / Ref no) with optional screenshot (e.g. from email payment link).
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost(CommonRoutes.Payments.SubmitProof)]
+    [ActionName(nameof(SubmitPaymentProofAsync))]
+    public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> SubmitPaymentProofAsync([FromBody] SubmitPaymentProofDto request, CancellationToken cancellationToken)
+    {
+        var result = await _transactionService.SubmitProofAsync(request, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.SubmitProofSuccess, CommonStatusCodes.Status201Created));
+    }
+
+    /// <summary>
+    /// Loads event &amp; member context for the payment confirmation page.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet(CommonRoutes.Payments.GetPaymentContext)]
+    [ActionName(nameof(GetPaymentContextDetailsAsync))]
+    public async Task<ActionResult<ApiResponse<PaymentContextDto>>> GetPaymentContextDetailsAsync(
+        [FromQuery] Guid? eventId,
+        [FromQuery] Guid? memberId,
+        [FromQuery] string? eventName,
+        [FromQuery] string? memberName,
+        CancellationToken cancellationToken)
+    {
+        var result = await _transactionService.GetPaymentContextAsync(eventId, memberId, eventName, memberName, cancellationToken);
+        if (result == null)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentContextDto>.FailureResult(CommonMessages.General.NotFound, CommonStatusCodes.Status404NotFound));
+        }
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentContextDto>.SuccessResult(result, CommonMessages.Payments.GetContextSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Verifies or approves a pending payment transaction (Admin or Organizer).
+    /// </summary>
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [HttpPut(CommonRoutes.Payments.Verify)]
+    [ActionName(nameof(VerifyPaymentAsync))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> VerifyPaymentAsync(Guid id, [FromBody] VerifyPaymentRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "Admin";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _transactionService.VerifyPaymentAsync(id, request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.VerifySuccess, CommonStatusCodes.Status200OK));
     }
 
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("deletePaymentAsyncById/{id:guid}")]
-    [ActionName("DeletePaymentAsyncById")]
+    /// <summary>
+    /// Deletes a payment transaction (Admin only).
+    /// </summary>
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpDelete(CommonRoutes.Payments.Delete)]
+    [ActionName(nameof(DeletePaymentAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeletePaymentAsyncById(Guid id, CancellationToken cancellationToken)
     {
         await _transactionService.DeletePaymentAsyncById(id, cancellationToken);

@@ -20,6 +20,9 @@ public class EventCollectionReportDto
     public decimal PaidAmount { get; set; }
     public decimal PendingAmount { get; set; }
     public decimal CollectionRate { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn => CreatedAt;
 }
 
 public class MemberContributionHistoryDto
@@ -31,6 +34,25 @@ public class MemberContributionHistoryDto
     public int PaidEventsCount { get; set; }
     public int PendingEventsCount { get; set; }
     public decimal CompletionRate { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn => CreatedAt;
+    public IReadOnlyCollection<MemberEventDetailDto> Events { get; set; } = Array.Empty<MemberEventDetailDto>();
+}
+
+public class MemberEventDetailDto
+{
+    public Guid ContributionId { get; set; }
+    public Guid EventId { get; set; }
+    public string EventName { get; set; } = string.Empty;
+    public string CategoryName { get; set; } = string.Empty;
+    public DateTime EventDate { get; set; }
+    public decimal ExpectedAmount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal PendingAmount { get; set; }
+    public string PaymentStatus { get; set; } = "Pending";
+    public DateTime? PaymentDate { get; set; }
+    public string? PaymentMode { get; set; }
 }
 
 public class PendingDueDto
@@ -44,6 +66,9 @@ public class PendingDueDto
     public decimal Amount { get; set; }
     public int DaysOverdue { get; set; }
     public string AgingCategory { get; set; } = "Recent";
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn => CreatedAt;
 }
 
 public class EventFinancialReportDto
@@ -57,6 +82,9 @@ public class EventFinancialReportDto
     public decimal NetBalance { get; set; }
     public string Status { get; set; } = "Surplus"; // "Surplus" or "Deficit"
     public decimal SavingsRatePercent { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? CreatedOn => CreatedAt;
 }
 
 public class PaymentModeReportDto

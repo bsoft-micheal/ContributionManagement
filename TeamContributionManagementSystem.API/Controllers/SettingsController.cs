@@ -7,10 +7,13 @@ using TeamContributionManagementSystem.Application.Interfaces.Services;
 
 namespace TeamContributionManagementSystem.API.Controllers;
 
+/// <summary>
+/// Manages application-wide settings and system configurations.
+/// </summary>
 [ApiController]
 [Authorize]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/settings")]
+[Route(CommonRoutes.Settings.Base)]
 public class SettingsController : ControllerBase
 {
     private readonly ISystemSettingService _settingService;
@@ -20,30 +23,62 @@ public class SettingsController : ControllerBase
         _settingService = settingService;
     }
 
-    [HttpGet("getSettingAsync")]
-    [ActionName("GetSettingAsync")]
+    /// <summary>
+    /// Retrieves current system settings.
+    /// </summary>
+    [HttpGet(CommonRoutes.Settings.Get)]
+    [ActionName(nameof(GetSettingAsync))]
     public async Task<ActionResult<ApiResponse<SystemSettingsDto>>> GetSettingAsync(CancellationToken cancellationToken)
     {
         var settings = await _settingService.GetSettingAsync(cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(settings, CommonMessages.Settings.GetSuccess, CommonStatusCodes.Status200OK));
     }
 
-    [Authorize(Roles = "Admin")]
-    [HttpPost("updateSettingAsync")]
-    [ActionName("UpdateSettingAsync")]
+    /// <summary>
+    /// Updates system settings (Admin only).
+    /// </summary>
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.Settings.Update)]
+    [ActionName(nameof(UpdateSettingAsync))]
     public async Task<ActionResult<ApiResponse<SystemSettingsDto>>> UpdateSettingAsync([FromBody] SystemSettingsDto settings, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "Admin";
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _settingService.UpdateSettingAsync(settings, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(result, CommonMessages.Settings.UpdateSuccess, CommonStatusCodes.Status200OK));
     }
 
-    [Authorize(Roles = "Admin")]
-    [HttpPost("resetSettingAsync")]
-    [ActionName("ResetSettingAsync")]
+    /// <summary>
+    /// Resets system settings back to default values (Admin only).
+    /// </summary>
+    [Authorize(Roles = CommonRoles.Admin)]
+    [HttpPost(CommonRoutes.Settings.Reset)]
+    [ActionName(nameof(ResetSettingAsync))]
     public async Task<ActionResult<ApiResponse<SystemSettingsDto>>> ResetSettingAsync(CancellationToken cancellationToken)
     {
-        var result = await _settingService.ResetSettingAsync(cancellationToken);
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var result = await _settingService.ResetSettingAsync(currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SystemSettingsDto>.SuccessResult(result, CommonMessages.Settings.ResetSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Triggers the automated contribution reminder Hangfire job immediately (Admin or Organizer).
+    /// </summary>
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [HttpPost("triggerRemindersAsync")]
+    [HttpPost("trigger-reminders")]
+    [ActionName(nameof(TriggerRemindersAsync))]
+    public ActionResult<ApiResponse<object>> TriggerRemindersAsync()
+    {
+        var userName = User.FindFirstValue(ClaimTypes.Name) 
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier) 
+            ?? "Admin";
+
+        var jobId = Hangfire.BackgroundJob.Enqueue<IContributionReminderJobService>(
+            service => service.ProcessDailyRemindersAsync(userName, CancellationToken.None));
+
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<object>.SuccessResult(
+            new { JobId = jobId, Status = "Enqueued" },
+            "Hangfire contribution reminder job triggered successfully.",
+            CommonStatusCodes.Status200OK));
     }
 }

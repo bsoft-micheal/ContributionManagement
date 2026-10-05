@@ -2,7 +2,9 @@ using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Application.Mappings;
@@ -18,6 +20,9 @@ public static class InfrastructureServiceCollectionExtensions
 {
     public static IServiceCollection AddApplicationAndInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("ConnString")));
 
@@ -36,6 +41,12 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IGalleryRepository, GalleryRepository>();
         services.AddScoped<IDeviceSessionRepository, DeviceSessionRepository>();
         services.AddScoped<IUserMfaDeviceRepository, UserMfaDeviceRepository>();
+        services.AddScoped<IBudgetCalculationRepository, BudgetCalculationRepository>();
+        services.AddScoped<ITicketTypeRepository, TicketTypeRepository>();
+        services.AddScoped<IStatusRepository, StatusRepository>();
+        services.AddScoped<IWorkTypeRepository, WorkTypeRepository>();
+        services.AddScoped<IPriorityRepository, PriorityRepository>();
+        services.AddScoped<IPaymentModeRepository, PaymentModeRepository>();
 
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IRoleService, RoleService>();
@@ -55,10 +66,18 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ISystemSettingService, SystemSettingService>();
         services.AddScoped<IPaymentTransactionService, PaymentTransactionService>();
         services.AddScoped<IGalleryService, GalleryService>();
+        services.AddScoped<IBudgetCalculationService, BudgetCalculationService>();
+        services.AddScoped<ITicketTypeService, TicketTypeService>();
+        services.AddScoped<IStatusService, StatusService>();
+        services.AddScoped<IWorkTypeService, WorkTypeService>();
+        services.AddScoped<IPriorityService, PriorityService>();
+        services.AddScoped<IPaymentModeService, PaymentModeService>();
 
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.Configure<SmtpSettings>(configuration.GetSection(CommonConstants.ConfigSections.Smtp));
         services.AddScoped<IEmailService, EmailService>();
+        services.AddScoped<IContributionReminderJobService, ContributionReminderJobService>();
         services.AddScoped<ApplicationDbContextSeeder>();
 
         services.AddAutoMapper(cfg => { }, typeof(MappingProfile));

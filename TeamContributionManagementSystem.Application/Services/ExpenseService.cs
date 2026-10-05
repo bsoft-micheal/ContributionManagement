@@ -1,5 +1,8 @@
+using System.IO;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Expenses;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -9,29 +12,35 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class ExpenseService : IExpenseService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<ExpenseService> _logger;
+    private readonly ILogger<ExpenseService> _logger;
     private readonly IExpenseRepository _expenseRepository;
+    private readonly IStatusRepository? _statusRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public ExpenseService(Microsoft.Extensions.Logging.ILogger<ExpenseService> logger, IExpenseRepository expenseRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public ExpenseService(
+        ILogger<ExpenseService> logger,
+        IExpenseRepository expenseRepository,
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        IStatusRepository? statusRepository = null)
     {
         _logger = logger;
         _expenseRepository = expenseRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _statusRepository = statusRepository;
     }
 
     public async Task<IReadOnlyCollection<ExpenseDto>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            var expenses = await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<ExpenseDto>>(expenses);
+            return await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -41,12 +50,12 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
-        return _mapper.Map<ExpenseDto>(expense);
+                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
+            return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -55,37 +64,55 @@ public class ExpenseService : IExpenseService
     {
         try
         {
+            var attachment = !string.IsNullOrWhiteSpace(request.FileData)
+                ? request.FileData.Trim()
+                : request.FileName?.Trim();
+
+            var status = request.Status?.Trim();
+            if (string.IsNullOrWhiteSpace(status) && _statusRepository != null)
+            {
+                var dbStatuses = await _statusRepository.GetAllAsync(true, cancellationToken);
+                status = dbStatuses.FirstOrDefault(s => s.StatusName.Equals("Pending", StringComparison.OrdinalIgnoreCase))?.StatusName
+                    ?? dbStatuses.FirstOrDefault()?.StatusName
+                    ?? "Pending";
+            }
+            else if (string.IsNullOrWhiteSpace(status))
+            {
+                status = "Pending";
+            }
+
             var expense = new Expense
-        {
-            ExpenseId = Guid.NewGuid(),
-            EventName = request.EventName.Trim(),
-            Category = request.Category.Trim(),
-            Amount = request.Amount,
-            ExpenseDate = request.ExpenseDate,
-            Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status.Trim(),
-            SubmittedBy = request.SubmittedBy.Trim(),
-            ApprovedBy = request.ApprovedBy?.Trim(),
-            Description = request.Description.Trim(),
-            FileName = request.FileName?.Trim(),
-            IsActive = true,
-            IsDeleted = false,
-            CreatedBy = string.IsNullOrWhiteSpace(user) ? "System" : user,
-            CreatedOn = DateTime.UtcNow
-        };
+            {
+                ExpenseId = Guid.NewGuid(),
+                EventName = request.EventName.Trim(),
+                Category = request.Category.Trim(),
+                Amount = request.Amount,
+                ExpenseDate = request.ExpenseDate,
+                Status = status ?? "Pending",
+                SubmittedBy = request.SubmittedBy.Trim(),
+                ApprovedBy = request.ApprovedBy?.Trim(),
+                Description = request.Description.Trim(),
+                FileName = attachment,
+                IsActive = true,
+                IsDeleted = false,
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
+                CreatedAt = DateTime.UtcNow
+            };
 
-        if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
-        {
-            expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
-        }
+            if (expense.Status == CommonConstants.ExpenseStatuses.Approved && string.IsNullOrWhiteSpace(expense.ApprovedBy))
+            {
+                expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? null : user.Trim();
+            }
 
-        await _expenseRepository.AddAsync(expense, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _expenseRepository.AddAsync(expense, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return _mapper.Map<ExpenseDto>(expense);
+            _logger.LogInformation(CommonLogMessages.Expenses.ExpenseCreated, expense.ExpenseId, expense.Amount);
+            return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
@@ -95,33 +122,40 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
 
-        expense.EventName = request.EventName.Trim();
-        expense.Category = request.Category.Trim();
-        expense.Amount = request.Amount;
-        expense.ExpenseDate = request.ExpenseDate;
-        expense.Status = string.IsNullOrWhiteSpace(request.Status) ? expense.Status : request.Status.Trim();
-        expense.SubmittedBy = request.SubmittedBy.Trim();
-        expense.ApprovedBy = request.ApprovedBy?.Trim();
-        expense.Description = request.Description.Trim();
-        expense.FileName = request.FileName?.Trim() ?? expense.FileName;
-        expense.ModifiedBy = string.IsNullOrWhiteSpace(user) ? "System" : user;
-        expense.ModifiedOn = DateTime.UtcNow;
+            var attachment = !string.IsNullOrWhiteSpace(request.FileData)
+                ? request.FileData.Trim()
+                : (!string.IsNullOrWhiteSpace(request.FileName) ? request.FileName.Trim() : expense.FileName);
 
-        if (expense.Status == "Approved" && string.IsNullOrWhiteSpace(expense.ApprovedBy))
-        {
-            expense.ApprovedBy = string.IsNullOrWhiteSpace(user) ? "Admin" : user;
-        }
+            expense.EventName = request.EventName.Trim();
+            expense.Category = request.Category.Trim();
+            expense.Amount = request.Amount;
+            expense.ExpenseDate = request.ExpenseDate;
+            expense.Status = string.IsNullOrWhiteSpace(request.Status) ? expense.Status : request.Status.Trim();
+            expense.SubmittedBy = request.SubmittedBy.Trim();
+            expense.ApprovedBy = string.IsNullOrWhiteSpace(request.ApprovedBy) || request.ApprovedBy == "-" 
+                ? (string.IsNullOrWhiteSpace(user) ? expense.ApprovedBy : user.Trim()) 
+                : request.ApprovedBy.Trim();
+            expense.Description = request.Description.Trim();
+            expense.FileName = attachment;
+            expense.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+            expense.ModifiedOn = DateTime.UtcNow;
 
-        _expenseRepository.Update(expense);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(expense.ApprovedBy) && !string.IsNullOrWhiteSpace(user))
+            {
+                expense.ApprovedBy = user.Trim();
+            }
 
-        return _mapper.Map<ExpenseDto>(expense);
+            _expenseRepository.Update(expense);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(CommonLogMessages.Expenses.ExpenseUpdated, expense.ExpenseId);
+            return _mapper.Map<ExpenseDto>(expense);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in UpdateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
             throw;
         }
     }
@@ -131,14 +165,16 @@ public class ExpenseService : IExpenseService
         try
         {
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Expense with ID {expenseId} not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
 
-        _expenseRepository.Delete(expense);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _expenseRepository.Delete(expense);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(CommonLogMessages.Expenses.ExpenseDeleted, expenseId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }

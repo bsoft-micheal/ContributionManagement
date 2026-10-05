@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Roles;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -9,12 +10,12 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class RoleService : IRoleService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<RoleService> _logger;
+    private readonly ILogger<RoleService> _logger;
     private readonly IRoleRepository _roleRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public RoleService(Microsoft.Extensions.Logging.ILogger<RoleService> logger, IRoleRepository roleRepository, IUnitOfWork unitOfWork, IMapper mapper)
+    public RoleService(ILogger<RoleService> logger, IRoleRepository roleRepository, IUnitOfWork unitOfWork, IMapper mapper)
     {
         _logger = logger;
         _roleRepository = roleRepository;
@@ -26,69 +27,72 @@ public class RoleService : IRoleService
     {
         try
         {
-            var roles = await _roleRepository.GetAllAsync(cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<RoleDto>>(roles);
+            return await _roleRepository.GetAllAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
 
-    public async Task<RoleDto> CreateAsync(CreateRoleRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<RoleDto> CreateAsync(CreateRoleRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var existing = await _roleRepository.GetByNameAsync(request.RoleName.Trim(), cancellationToken);
-        if (existing is not null)
-        {
-            throw new InvalidOperationException("Role already exists.");
-        }
+            if (existing is not null)
+            {
+                throw new InvalidOperationException(CommonMessages.Roles.AlreadyExists);
+            }
 
-        var role = new Role
-        {
-            RoleId = Guid.NewGuid(),
-            RoleName = request.RoleName.Trim(),
-            DefaultContributionAmount = request.DefaultContributionAmount
-        };
+            var role = new Role
+            {
+                RoleId = Guid.NewGuid(),
+                RoleName = request.RoleName.Trim(),
+                DefaultContributionAmount = request.DefaultContributionAmount,
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
+                CreatedAt = DateTime.UtcNow
+            };
 
-        await _roleRepository.AddAsync(role, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _roleRepository.AddAsync(role, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return _mapper.Map<RoleDto>(role);
+            return _mapper.Map<RoleDto>(role);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in CreateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
             throw;
         }
     }
 
-    public async Task<RoleDto> UpdateAsync(Guid roleId, UpdateRoleRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<RoleDto> UpdateAsync(Guid roleId, UpdateRoleRequestDto request, string? user = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
-            ?? throw new KeyNotFoundException("Role not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Roles.NotFound);
 
-        var duplicate = await _roleRepository.GetByNameAsync(request.RoleName.Trim(), cancellationToken);
-        if (duplicate is not null && duplicate.RoleId != roleId)
-        {
-            throw new InvalidOperationException("Role already exists.");
-        }
+            var duplicate = await _roleRepository.GetByNameAsync(request.RoleName.Trim(), cancellationToken);
+            if (duplicate is not null && duplicate.RoleId != roleId)
+            {
+                throw new InvalidOperationException(CommonMessages.Roles.AlreadyExists);
+            }
 
-        role.RoleName = request.RoleName.Trim();
-        role.DefaultContributionAmount = request.DefaultContributionAmount;
+            role.RoleName = request.RoleName.Trim();
+            role.DefaultContributionAmount = request.DefaultContributionAmount;
+            role.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+            role.ModifiedOn = DateTime.UtcNow;
 
-        _roleRepository.Update(role);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _roleRepository.Update(role);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return _mapper.Map<RoleDto>(role);
+            return _mapper.Map<RoleDto>(role);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in UpdateAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
             throw;
         }
     }
@@ -98,19 +102,29 @@ public class RoleService : IRoleService
         try
         {
             var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
-            ?? throw new KeyNotFoundException("Role not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Roles.NotFound);
 
-        if (await _roleRepository.HasMembersAsync(roleId, cancellationToken))
-        {
-            throw new InvalidOperationException("Cannot delete role because members are assigned to this role.");
-        }
+            if (await _roleRepository.HasMembersAsync(roleId, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete role '{role.RoleName}' because it is currently assigned to active members.");
+            }
 
-        _roleRepository.Delete(role);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            if (await _roleRepository.HasUsersAsync(roleId, role.RoleName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete role '{role.RoleName}' because it is assigned to user accounts.");
+            }
+
+            if (await _roleRepository.HasRoleRightsAsync(role.RoleName, cancellationToken))
+            {
+                throw new InvalidOperationException($"Cannot delete role '{role.RoleName}' because user rights and permissions are configured for this role.");
+            }
+
+            _roleRepository.Delete(role);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in DeleteAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
             throw;
         }
     }

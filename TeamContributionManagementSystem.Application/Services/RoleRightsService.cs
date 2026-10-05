@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AutoMapper;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -10,12 +11,12 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class RoleRightsService : IRoleRightsService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<RoleRightsService> _logger;
+    private readonly ILogger<RoleRightsService> _logger;
     private readonly IRoleRightRepository _roleRightRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
-    public RoleRightsService(Microsoft.Extensions.Logging.ILogger<RoleRightsService> logger, 
+    public RoleRightsService(ILogger<RoleRightsService> logger, 
         IRoleRightRepository roleRightRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper)
@@ -26,64 +27,90 @@ public class RoleRightsService : IRoleRightsService
         _mapper = mapper;
     }
 
-    public async Task<IReadOnlyCollection<RoleRightDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<RoleRightDto>> GetAllRoleRightAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var rights = await _roleRightRepository.GetAllAsync(cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
+            return await _roleRightRepository.GetAllAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllRoleRightAsync));
             throw;
         }
     }
 
-    public async Task<IReadOnlyCollection<RoleRightDto>> GetByRoleAsync(string roleName, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<RoleRightDto>> GetRoleRightAsyncByRole(string roleName, CancellationToken cancellationToken = default)
     {
         try
         {
-            if (!Enum.TryParse<UserRole>(roleName, ignoreCase: true, out var role))
-        {
-            throw new ArgumentException($"Invalid role: '{roleName}'");
-        }
+            if (Guid.TryParse(roleName, out var roleId))
+            {
+                return await _roleRightRepository.GetByRoleIdAsync(roleId, cancellationToken);
+            }
 
-        var rights = await _roleRightRepository.GetByRoleAsync(role, cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<RoleRightDto>>(rights);
+            return await _roleRightRepository.GetByRoleNameAsync(roleName, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByRoleAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetRoleRightAsyncByRole));
             throw;
         }
     }
 
-    public async Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<RoleRightDto>> GetRoleRightAsyncByRoleId(Guid roleId, CancellationToken cancellationToken = default)
     {
         try
         {
-            if (!Enum.TryParse<UserRole>(request.RoleName, ignoreCase: true, out var role))
-        {
-            throw new ArgumentException($"Invalid role: '{request.RoleName}'");
-        }
-
-        var entities = request.Rights.Select(r => new RoleRight
-        {
-            RoleRightId = Guid.NewGuid(),
-            Role = role,
-            Module = r.Module,
-            SubModule = r.SubModule,
-            Page = r.Page,
-            Access = r.Access
-        }).ToList();
-
-        await _roleRightRepository.SaveRoleRightsAsync(role, entities, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return await _roleRightRepository.GetByRoleIdAsync(roleId, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in SaveRoleRightsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetRoleRightAsyncByRoleId));
+            throw;
+        }
+    }
+
+    public async Task SaveRoleRightsAsync(UpdateRoleRightsRequestDto request, string? user = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            Guid targetRoleId = request.RoleId ?? Guid.Empty;
+            if (targetRoleId == Guid.Empty)
+            {
+                var roleRights = await _roleRightRepository.GetByRoleNameAsync(request.RoleName, cancellationToken);
+                var first = roleRights.FirstOrDefault();
+                if (first != null && first.RoleId != Guid.Empty)
+                {
+                    targetRoleId = first.RoleId;
+                }
+            }
+
+            if (targetRoleId == Guid.Empty)
+            {
+                throw new ArgumentException(string.Format(CommonMessages.Roles.InvalidRoleFormat, request.RoleName));
+            }
+
+            var entities = request.Rights.Select(r => new RoleRight
+            {
+                RoleRightId = Guid.NewGuid(),
+                RoleId = targetRoleId,
+                FeatureID = r.FeatureID,
+                Module = r.Module,
+                SubModule = r.SubModule,
+                Page = r.Page,
+                Access = r.Access,
+                AccessType = r.AccessType > 0 ? (AccessType)r.AccessType : (r.Access == "deny" ? AccessType.Deny : (r.Access == "readOnly" ? AccessType.ReadOnly : AccessType.ReadWrite)),
+                CreatedBy = CommonMethods.ParseNullableGuid(user),
+                CreatedAt = DateTime.UtcNow
+            }).ToList();
+
+            await _roleRightRepository.SaveRoleRightsAsync(targetRoleId, entities, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(SaveRoleRightsAsync));
             throw;
         }
     }

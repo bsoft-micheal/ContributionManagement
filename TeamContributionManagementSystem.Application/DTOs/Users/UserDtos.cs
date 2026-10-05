@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.DTOs.Auth;
 
 namespace TeamContributionManagementSystem.Application.DTOs.Users;
 
@@ -8,46 +9,92 @@ public class UserDto
     public string Username { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string RoleName { get; set; } = string.Empty;
+    public Guid? RoleId { get; set; }
+    public List<Guid> RoleIds { get; set; } = new();
+    public List<Guid> PrimaryRoleIds { get; set; } = new();
+    public List<Guid> SecondaryRoleIds { get; set; } = new();
+    public bool EnableMultipleRoles { get; set; } = false;
+    public bool IsPrimary { get; set; } = false;
+    public bool IsSecondary { get; set; } = false;
+    public Guid? ActiveRoleId { get; set; }
     public bool IsActive { get; set; }
+    public bool IsDeleted { get; set; } = false;
+    public bool IsFirstLogin { get; set; } = true;
+    public bool HasMemberProfile { get; set; }
+    public string? MemberUsername { get; set; }
     public string? ProfileImage { get; set; }
     public DateTime CreatedOn { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
 
     // Joined from Member profile
     public DateTime? DateOfBirth { get; set; }
     public DateTime? JoiningDate { get; set; }
     public string? Gender { get; set; }
     public string? Phone { get; set; }
-    public string? MemberType { get; set; }
+    public string? WorkType { get; set; }
+    public bool IsReferred { get; set; }
 }
 
 public class CreateUserRequestDto
 {
-    [Required]
+    public Guid? MemberId { get; set; }
+
+    [MaxLength(150)]
+    public string? FullName { get; set; }
+
     [MaxLength(100)]
-    public string Username { get; set; } = string.Empty;
+    public string? Username { get; set; }
 
     [Required]
     [EmailAddress]
     [MaxLength(150)]
     public string Email { get; set; } = string.Empty;
 
-    [Required]
-    [MinLength(6)]
-    public string Password { get; set; } = string.Empty;
+    public string? Password { get; set; }
 
-    [Required]
+    [MaxLength(50)]
+    public string? RoleName { get; set; }
+
+    public List<string>? Roles { get; set; }
+    public List<Guid>? RoleIds { get; set; }
+    public List<string>? PrimaryRoles { get; set; }
+    public List<string>? SecondaryRoles { get; set; }
+    public List<Guid>? PrimaryRoleIds { get; set; }
+    public List<Guid>? SecondaryRoleIds { get; set; }
+    public bool? EnableMultipleRoles { get; set; }
+    public bool? IsPrimary { get; set; }
+    public bool? IsSecondary { get; set; }
+    public Guid? ActiveRoleId { get; set; }
+
     [MaxLength(20)]
-    public string RoleName { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+
+    [MaxLength(20)]
+    public string? Gender { get; set; }
+
+    [MaxLength(50)]
+    public string? WorkType { get; set; }
+
+    public DateTime? DateOfBirth { get; set; }
+    public DateTime? JoiningDate { get; set; }
+
+    public bool? CreateMemberProfile { get; set; }
+    public bool? EnableUserAccess { get; set; }
+
+    [MaxLength(100)]
+    public string? MemberUsername { get; set; }
 
     public bool IsActive { get; set; } = true;
 }
 
 public class UpdateUserRequestDto
 {
-    [Required]
+    [MaxLength(150)]
+    public string? FullName { get; set; }
+
     [MaxLength(100)]
-    public string Username { get; set; } = string.Empty;
+    public string? Username { get; set; }
 
     [Required]
     [EmailAddress]
@@ -55,12 +102,39 @@ public class UpdateUserRequestDto
     public string Email { get; set; } = string.Empty;
 
     /// <summary>Optional – only set when the caller wants to change the password.</summary>
-    [MinLength(6)]
     public string? Password { get; set; }
 
-    [Required]
+    [MaxLength(50)]
+    public string? RoleName { get; set; }
+
+    public List<string>? Roles { get; set; }
+    public List<Guid>? RoleIds { get; set; }
+    public List<string>? PrimaryRoles { get; set; }
+    public List<string>? SecondaryRoles { get; set; }
+    public List<Guid>? PrimaryRoleIds { get; set; }
+    public List<Guid>? SecondaryRoleIds { get; set; }
+    public bool? EnableMultipleRoles { get; set; }
+    public bool? IsPrimary { get; set; }
+    public bool? IsSecondary { get; set; }
+    public Guid? ActiveRoleId { get; set; }
+
     [MaxLength(20)]
-    public string RoleName { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+
+    [MaxLength(20)]
+    public string? Gender { get; set; }
+
+    [MaxLength(50)]
+    public string? WorkType { get; set; }
+
+    public DateTime? DateOfBirth { get; set; }
+    public DateTime? JoiningDate { get; set; }
+
+    public bool? CreateMemberProfile { get; set; }
+    public bool? EnableUserAccess { get; set; }
+
+    [MaxLength(100)]
+    public string? MemberUsername { get; set; }
 
     public bool IsActive { get; set; } = true;
 }
@@ -78,7 +152,6 @@ public class UpdateProfileRequestDto
 
     public string? ProfileImage { get; set; }
 
-    [MinLength(6)]
     public string? Password { get; set; }
 
     public DateTime? DateOfBirth { get; set; }
@@ -94,5 +167,5 @@ public class UpdateProfileRequestDto
     public string RoleName { get; set; } = string.Empty;
 
     [MaxLength(50)]
-    public string MemberType { get; set; } = "Office";
+    public string WorkType { get; set; } = string.Empty;
 }

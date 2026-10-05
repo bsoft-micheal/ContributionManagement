@@ -22,13 +22,13 @@ public enum PaymentMode
     Cash = 1,
     Upi = 2,
     BankTransfer = 3,
-    Card = 4
+    Card = 4,
+    Split = 5
 }
 
 public enum UserRole
 {
     Admin = 1,
-    Manager = 2,
-    User = 3,
-    Member = 4
+    Organizer = 2,
+    Member = 3
 }

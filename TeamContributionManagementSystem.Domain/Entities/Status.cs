@@ -1,0 +1,17 @@
+namespace TeamContributionManagementSystem.Domain.Entities;
+
+public class Status
+{
+    public Guid StatusId { get; set; }
+    public string StatusName { get; set; } = string.Empty;
+    public string? Module { get; set; }
+    public bool IsActive { get; set; } = true;
+    public bool IsDeleted { get; set; } = false;
+
+    // Common Audit Properties
+    public Guid? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CreatedOn { get; set; } = DateTime.UtcNow;
+    public Guid? ModifiedBy { get; set; }
+    public DateTime? ModifiedOn { get; set; }
+}

@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Domain.Entities;
-using TeamContributionManagementSystem.Domain.Enums;
 using TeamContributionManagementSystem.Infrastructure.Persistence;
 
 namespace TeamContributionManagementSystem.Infrastructure.Repositories;
@@ -10,9 +10,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 public class EventTypeRepository : IEventTypeRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly Microsoft.Extensions.Logging.ILogger<EventTypeRepository> _logger;
+    private readonly ILogger<EventTypeRepository> _logger;
 
-    public EventTypeRepository(ApplicationDbContext context, Microsoft.Extensions.Logging.ILogger<EventTypeRepository> logger)
+    public EventTypeRepository(ApplicationDbContext context, ILogger<EventTypeRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -26,7 +26,7 @@ public class EventTypeRepository : IEventTypeRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -39,7 +39,7 @@ public class EventTypeRepository : IEventTypeRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -52,7 +52,7 @@ public class EventTypeRepository : IEventTypeRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByNameAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByNameAsync));
             throw;
         }
     }
@@ -61,11 +61,53 @@ public class EventTypeRepository : IEventTypeRepository
     {
         try
         {
-            return await _context.Events.AnyAsync(x => x.EventTypeId == eventTypeId, cancellationToken);
+            return await _context.Events.AnyAsync(x => x.EventTypeId == eventTypeId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in HasEventsAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasEventsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasBudgetCalculationsAsync(string eventTypeName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventTypeName.Trim().ToLower();
+            return await _context.BudgetCalculations.AnyAsync(x => !x.IsDeleted && x.EventType != null && x.EventType.EventTypeName.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasBudgetCalculationsAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasExpensesAsync(string eventTypeName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventTypeName.Trim().ToLower();
+            return await _context.Expenses.AnyAsync(x => !x.IsDeleted && x.Category.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasExpensesAsync));
+            throw;
+        }
+    }
+
+    public async Task<bool> HasGalleryPhotosAsync(string eventTypeName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanName = eventTypeName.Trim().ToLower();
+            return await _context.GalleryPhotos.AnyAsync(x => !x.IsDeleted && x.Event != null && x.Event.EventType != null && x.Event.EventType.EventTypeName.ToLower() == cleanName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasGalleryPhotosAsync));
             throw;
         }
     }
@@ -78,7 +120,7 @@ public class EventTypeRepository : IEventTypeRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in AddAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddAsync));
             throw;
         }
     }
@@ -91,7 +133,7 @@ public class EventTypeRepository : IEventTypeRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Update");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Update));
             throw;
         }
     }
@@ -104,7 +146,7 @@ public class EventTypeRepository : IEventTypeRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Delete");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Delete));
             throw;
         }
     }

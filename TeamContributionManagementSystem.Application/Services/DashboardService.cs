@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Dashboard;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -8,15 +10,24 @@ namespace TeamContributionManagementSystem.Application.Services;
 
 public class DashboardService : IDashboardService
 {
-    private readonly Microsoft.Extensions.Logging.ILogger<DashboardService> _logger;
+    private readonly ILogger<DashboardService> _logger;
     private readonly IEventRepository _eventRepository;
     private readonly IContributionRepository _contributionRepository;
+    private readonly ICurrentUserService? _currentUserService;
+    private readonly IMemberRepository? _memberRepository;
 
-    public DashboardService(Microsoft.Extensions.Logging.ILogger<DashboardService> logger, IEventRepository eventRepository, IContributionRepository contributionRepository)
+    public DashboardService(
+        ILogger<DashboardService> logger,
+        IEventRepository eventRepository,
+        IContributionRepository contributionRepository,
+        ICurrentUserService? currentUserService = null,
+        IMemberRepository? memberRepository = null)
     {
         _logger = logger;
         _eventRepository = eventRepository;
         _contributionRepository = contributionRepository;
+        _currentUserService = currentUserService;
+        _memberRepository = memberRepository;
     }
 
     public async Task<DashboardSummaryDto> GetSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
@@ -24,39 +35,96 @@ public class DashboardService : IDashboardService
         try
         {
             int? filterMonth = (month == 0 || month == null) ? null : month;
-        int? filterYear = (year == 0 || year == null) ? null : year;
+            int? filterYear = (year == 0 || year == null) ? null : year;
 
-        var monthlyEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
-        var pendingContributions = await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken);
-
-        return new DashboardSummaryDto
-        {
-            MonthlyEventsCount = monthlyEvents.Count,
-            TotalContributions = monthlyEvents
-                .SelectMany(x => x.Contributions)
-                .Where(x => !x.IsDeleted && x.PaymentStatus == PaymentStatus.Paid)
-                .Sum(x => x.Amount),
-            PendingPayments = pendingContributions.Count,
-            TotalPendingAmount = pendingContributions
-                .Where(x => !x.IsDeleted)
-                .Sum(x => x.Amount),
-            UpcomingEvents = monthlyEvents.Select(x => new UpcomingEventDto
+            // If caller is in the Member role, restrict results to their own member record only
+            if (_currentUserService != null && _currentUserService.IsMemberRole)
             {
-                EventId = x.EventId,
-                EventName = x.EventName,
-                EventTypeName = x.EventType?.EventTypeName ?? string.Empty,
-                EventDate = x.EventDate,
-                ExpectedAmount = x.Contributions.Where(c => !c.IsDeleted).Sum(c => c.Amount),
-                CollectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus == PaymentStatus.Paid).Sum(c => c.Amount),
-                PendingAmount = x.Contributions.Where(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid).Sum(c => c.Amount),
-                PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.PaymentStatus != PaymentStatus.Paid),
-                TotalContributionsCount = x.Contributions.Count(c => !c.IsDeleted)
-            }).ToList()
-        };
+                var myMemberId = _currentUserService.MemberId;
+                if (!myMemberId.HasValue && !string.IsNullOrWhiteSpace(_currentUserService.Email) && _memberRepository != null)
+                {
+                    var myMember = await _memberRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
+                    if (myMember != null)
+                    {
+                        myMemberId = myMember.MemberId;
+                    }
+                }
+
+                if (!myMemberId.HasValue)
+                {
+                    return new DashboardSummaryDto
+                    {
+                        MonthlyEventsCount = 0,
+                        TotalContributions = 0,
+                        PendingPayments = 0,
+                        TotalPendingAmount = 0,
+                        UpcomingEvents = Array.Empty<UpcomingEventDto>()
+                    };
+                }
+
+                var memberEvents = await _eventRepository.GetAllForMemberAsync(myMemberId.Value, filterMonth, filterYear, cancellationToken);
+                var memberPendingContributions = (await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken))
+                    .Where(x => x.MemberId == myMemberId.Value)
+                    .ToList();
+
+                var memberEventPendingSum = memberEvents.Sum(x => x.TotalExpectedAmount - x.TotalPaidAmount);
+                var memberEventPendingCount = memberEvents.Sum(x => x.PendingContributionsCount);
+
+                return new DashboardSummaryDto
+                {
+                    MonthlyEventsCount = memberEvents.Count,
+                    TotalContributions = memberEvents.Sum(x => x.TotalPaidAmount),
+                    PendingPayments = memberEvents.Count > 0 ? memberEventPendingCount : memberPendingContributions.Count,
+                    TotalPendingAmount = memberEvents.Count > 0 ? memberEventPendingSum : memberPendingContributions.Sum(x => x.Amount),
+                    UpcomingEvents = memberEvents.Select(x => new UpcomingEventDto
+                    {
+                        EventId = x.EventId,
+                        EventName = x.EventName,
+                        EventTypeName = x.EventTypeName,
+                        EventDate = x.EventDate,
+                        ExpectedAmount = x.TotalExpectedAmount,
+                        CollectedAmount = x.TotalPaidAmount,
+                        PendingAmount = x.TotalExpectedAmount - x.TotalPaidAmount,
+                        PendingContributionsCount = x.PendingContributionsCount,
+                        TotalContributionsCount = x.ParticipantCount,
+                        CreatedBy = x.CreatedBy,
+                        CreatedAt = x.CreatedAt
+                    }).ToList()
+                };
+            }
+
+            // Admin / Organizer: return all users' aggregated data as currently
+            var monthlyEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
+            var pendingContributions = await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken);
+
+            var eventPendingSum = monthlyEvents.Sum(x => x.TotalExpectedAmount - x.TotalPaidAmount);
+            var eventPendingCount = monthlyEvents.Sum(x => x.PendingContributionsCount);
+
+            return new DashboardSummaryDto
+            {
+                MonthlyEventsCount = monthlyEvents.Count,
+                TotalContributions = monthlyEvents.Sum(x => x.TotalPaidAmount),
+                PendingPayments = monthlyEvents.Count > 0 ? eventPendingCount : pendingContributions.Count,
+                TotalPendingAmount = monthlyEvents.Count > 0 ? eventPendingSum : pendingContributions.Sum(x => x.Amount),
+                UpcomingEvents = monthlyEvents.Select(x => new UpcomingEventDto
+                {
+                    EventId = x.EventId,
+                    EventName = x.EventName,
+                    EventTypeName = x.EventTypeName,
+                    EventDate = x.EventDate,
+                    ExpectedAmount = x.TotalExpectedAmount,
+                    CollectedAmount = x.TotalPaidAmount,
+                    PendingAmount = x.TotalExpectedAmount - x.TotalPaidAmount,
+                    PendingContributionsCount = x.PendingContributionsCount,
+                    TotalContributionsCount = x.ParticipantCount,
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt
+                }).ToList()
+            };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetSummaryAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetSummaryAsync));
             throw;
         }
     }

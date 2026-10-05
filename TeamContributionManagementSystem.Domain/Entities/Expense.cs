@@ -7,7 +7,7 @@ public class Expense
     public string Category { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateTime ExpenseDate { get; set; }
-    public string Status { get; set; } = "Pending";
+    public string Status { get; set; } = string.Empty;
     public string SubmittedBy { get; set; } = string.Empty;
     public string? ApprovedBy { get; set; }
     public string Description { get; set; } = string.Empty;
@@ -16,8 +16,8 @@ public class Expense
     // Default Audit Fields
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
-    public string CreatedBy { get; set; } = "System";
-    public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
-    public string? ModifiedBy { get; set; }
+    public Guid? CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
+    public Guid? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }

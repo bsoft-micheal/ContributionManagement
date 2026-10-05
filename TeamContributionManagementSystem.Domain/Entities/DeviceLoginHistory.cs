@@ -15,7 +15,7 @@ public class DeviceLoginHistory
     public AppUser? User { get; set; }
 
     [Column("device_detail_id")]
-    public Guid DeviceDetailId { get; set; }
+    public Guid? DeviceDetailId { get; set; }
     public DeviceDetail? DeviceDetail { get; set; }
 
     [Column("login_time")]
@@ -29,8 +29,8 @@ public class DeviceLoginHistory
     public bool IsDeleted { get; set; } = false;
 
     // Common Audit Properties
-    public string? CreatedBy { get; set; }
+    public Guid? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
-    public string? ModifiedBy { get; set; }
+    public Guid? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
 }

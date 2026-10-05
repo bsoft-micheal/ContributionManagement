@@ -1,10 +1,15 @@
+using System.Text.Json;
 using AutoMapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
+using TeamContributionManagementSystem.Application.DTOs.Members;
+using TeamContributionManagementSystem.Application.DTOs.Settings;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
+using TeamContributionManagementSystem.Domain.Enums;
 
 namespace TeamContributionManagementSystem.Application.Services;
 
@@ -15,6 +20,8 @@ public class EventService : IEventService
     private readonly IMemberRepository _memberRepository;
     private readonly IUserRepository _userRepository;
     private readonly IContributionRepository _contributionRepository;
+    private readonly IBudgetCalculationRepository _budgetCalculationRepository;
+    private readonly IExpenseRepository _expenseRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IEmailService _emailService;
@@ -27,6 +34,8 @@ public class EventService : IEventService
         IMemberRepository memberRepository,
         IUserRepository userRepository,
         IContributionRepository contributionRepository,
+        IBudgetCalculationRepository budgetCalculationRepository,
+        IExpenseRepository expenseRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IEmailService emailService,
@@ -38,6 +47,8 @@ public class EventService : IEventService
         _memberRepository = memberRepository;
         _userRepository = userRepository;
         _contributionRepository = contributionRepository;
+        _budgetCalculationRepository = budgetCalculationRepository;
+        _expenseRepository = expenseRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _emailService = emailService;
@@ -50,11 +61,37 @@ public class EventService : IEventService
         try
         {
             var events = await _eventRepository.GetAllAsync(month, year, cancellationToken);
-        return _mapper.Map<IReadOnlyCollection<EventSummaryDto>>(events);
+            try
+            {
+                var users = await _userRepository.GetAllAsync(cancellationToken);
+                var userDict = users.ToDictionary(
+                    u => u.UserId.ToString(),
+                    u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username,
+                    StringComparer.OrdinalIgnoreCase);
+
+                foreach (var ev in events)
+                {
+                    if (string.IsNullOrWhiteSpace(ev.CreatedByName) && !string.IsNullOrWhiteSpace(ev.CreatedBy) && userDict.TryGetValue(ev.CreatedBy, out var userName))
+                    {
+                        ev.CreatedByName = userName;
+                        ev.CreatedBy = userName;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(ev.CreatedByName))
+                    {
+                        ev.CreatedBy = ev.CreatedByName;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve user names for events");
+            }
+
+            return events;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetAllAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));
             throw;
         }
     }
@@ -63,14 +100,37 @@ public class EventService : IEventService
     {
         try
         {
-            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
-            ?? throw new KeyNotFoundException("Event not found.");
+            var eventDetails = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
+                ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
-        return _mapper.Map<EventDetailsDto>(eventItem);
+            if (string.IsNullOrWhiteSpace(eventDetails.CreatedByName) && !string.IsNullOrWhiteSpace(eventDetails.CreatedBy))
+            {
+                try
+                {
+                    var users = await _userRepository.GetAllAsync(cancellationToken);
+                    var user = users.FirstOrDefault(u => u.UserId.ToString().Equals(eventDetails.CreatedBy, StringComparison.OrdinalIgnoreCase));
+                    if (user != null)
+                    {
+                        var name = !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.Username;
+                        eventDetails.CreatedByName = name;
+                        eventDetails.CreatedBy = name;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve user name for event details");
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(eventDetails.CreatedByName))
+            {
+                eventDetails.CreatedBy = eventDetails.CreatedByName;
+            }
+
+            return eventDetails;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in GetByIdAsync");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdAsync));
             throw;
         }
     }
@@ -80,204 +140,271 @@ public class EventService : IEventService
         try
         {
             var user = await _userRepository.GetByIdAsync(createdByUserId, cancellationToken)
-            ?? throw new KeyNotFoundException("Creating user not found.");
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
-        var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
-            ?? throw new KeyNotFoundException("Event type not found.");
+            var targetTypeId = request.EventTypeId != Guid.Empty
+                ? request.EventTypeId
+                : (request.EventTypeIds != null && request.EventTypeIds.Count > 0 ? request.EventTypeIds[0] : Guid.Empty);
 
-        if (!eventType.IsActive)
-        {
-            throw new InvalidOperationException("Inactive event types cannot be used.");
-        }
+            var eventType = await _eventTypeRepository.GetByIdAsync(targetTypeId, cancellationToken)
+                ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
 
-        var participantIds = request.ParticipantIds.Distinct().ToList();
-        if (participantIds.Count == 0)
-        {
-            throw new InvalidOperationException("At least one participant is required.");
-        }
-
-        var members = await _memberRepository.GetByIdsAsync(participantIds, cancellationToken);
-        if (members.Count != participantIds.Count)
-        {
-            throw new InvalidOperationException("One or more participants could not be found.");
-        }
-
-        var overrideLookup = request.ContributionOverrides
-            .GroupBy(x => x.MemberId)
-            .ToDictionary(x => x.Key, x => x.Last().Amount);
-
-        var eventItem = new Event
-        {
-            EventId = Guid.NewGuid(),
-            EventName = request.EventName.Trim(),
-            EventTypeId = eventType.EventTypeId,
-            EventDate = request.EventDate.Date,
-            CreatedBy = user.UserId,
-            Description = request.Description.Trim(),
-            Status = request.Status,
-            BaseAmount = request.BaseAmount
-        };
-
-        foreach (var member in members)
-        {
-            eventItem.Participants.Add(new EventParticipant
+            if (!eventType.IsActive)
             {
-                Id = Guid.NewGuid(),
-                EventId = eventItem.EventId,
-                MemberId = member.MemberId
-            });
-        }
+                throw new InvalidOperationException(CommonMessages.Events.InactiveEventType);
+            }
 
-        bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventType.EventTypeName) &&
-            eventType.EventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase);
+            var participantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
+            if (participantIds.Count == 0)
+            {
+                throw new InvalidOperationException(CommonMessages.Events.AtLeastOneParticipantRequired);
+            }
 
-        decimal overrideSum = request.ContributionOverrides.Sum(x => x.Amount);
-        decimal splitPool = Math.Max(0m, request.BaseAmount - overrideSum);
+            var members = await _memberRepository.GetByIdsAsync(participantIds, cancellationToken);
 
-        int fullShareCount = 0;
-        int halfShareCount = 0;
-        int regularParticipantsCount = 0;
+            if (members.Count == 0)
+            {
+                throw new InvalidOperationException(CommonMessages.Events.ParticipantsNotFound);
+            }
 
-        if (isBirthdayEvent)
-        {
+            var eventItem = new Event
+            {
+                EventId = Guid.NewGuid(),
+                EventName = (request.EventName ?? string.Empty).Trim(),
+                EventTypeId = eventType.EventTypeId,
+                EventDate = request.EventDate.Date,
+                EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null,
+                CreatedBy = user.UserId,
+                CreatedAt = DateTime.UtcNow,
+                Description = (request.Description ?? string.Empty).Trim(),
+                Status = request.Status != 0 ? request.Status : EventStatus.Planned,
+                BaseAmount = request.BaseAmount
+            };
+
             foreach (var member in members)
             {
-                if (overrideLookup.ContainsKey(member.MemberId))
+                eventItem.Participants.Add(new EventParticipant
                 {
-                    continue;
-                }
-                if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
-                {
-                    halfShareCount++;
-                }
-                else
-                {
-                    fullShareCount++;
-                }
-            }
-        }
-        else
-        {
-            regularParticipantsCount = members.Count(m => !overrideLookup.ContainsKey(m.MemberId));
-        }
-
-        decimal divisor = isBirthdayEvent
-            ? (fullShareCount + 0.5m * halfShareCount)
-            : regularParticipantsCount;
-
-        decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
-
-        var contributions = members.Select(member =>
-        {
-            decimal amount;
-            if (overrideLookup.TryGetValue(member.MemberId, out var customAmount))
-            {
-                amount = customAmount;
-            }
-            else if (isBirthdayEvent)
-            {
-                bool isHalfShare = member.JoiningDate.AddYears(1) > eventItem.EventDate;
-                amount = Math.Round(isHalfShare ? (standardShare * 0.5m) : standardShare, 2);
-            }
-            else
-            {
-                amount = Math.Round(standardShare, 2);
+                    Id = Guid.NewGuid(),
+                    EventId = eventItem.EventId,
+                    UserId = member.MemberId,
+                    MemberId = member.MemberId,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = user.UserId
+                });
             }
 
-            return new Contribution
+            var memberAmounts = CalculateMemberContributionAmounts(
+                eventType,
+                eventItem.EventDate,
+                request.BaseAmount,
+                members,
+                request.ContributionOverrides ?? new List<ContributionOverrideDto>());
+
+            var creatorDisplayName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName;
+
+            var contributions = members.Select(member => new Contribution
             {
                 ContributionId = Guid.NewGuid(),
                 EventId = eventItem.EventId,
+                UserId = member.MemberId,
                 MemberId = member.MemberId,
-                Amount = amount
-            };
-        }).ToList();
+                Amount = memberAmounts.TryGetValue(member.MemberId, out var amount) ? amount : 0m,
+                PaymentStatus = PaymentStatus.Pending,
+                PaymentMode = PaymentMode.None,
+                IsActive = true,
+                IsDeleted = false,
+                CreatedBy = user.UserId,
+                CreatedAt = DateTime.UtcNow
+            }).ToList();
 
-        await _eventRepository.AddAsync(eventItem, cancellationToken);
-        await _contributionRepository.AddRangeAsync(contributions, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        // 1. First fetch the created event so event creation is guaranteed and complete
-        var createdEvent = await GetByIdAsync(eventItem.EventId, cancellationToken);
-
-        // 2. Then only the system sends the email to the particular users (contributors with positive contribution amount)
-        var particularContributors = members
-            .Where(m => !string.IsNullOrWhiteSpace(m.Email))
-            .Select(m => new
+            foreach (var c in contributions)
             {
-                m.MemberId,
-                m.Name,
-                m.Email,
-                ContributionAmount = contributions.FirstOrDefault(c => c.MemberId == m.MemberId)?.Amount ?? 0m
-            })
-            .Where(x => x.ContributionAmount > 0)
-            .ToList();
+                eventItem.Contributions.Add(c);
+            }
 
-        if (particularContributors.Count > 0)
-        {
-            var eventId = eventItem.EventId;
-            var eventName = eventItem.EventName;
-            var eventDate = eventItem.EventDate;
-            var eventDescription = eventItem.Description;
-            var baseAmount = eventItem.BaseAmount;
+            await _eventRepository.AddAsync(eventItem, cancellationToken);
+            await _contributionRepository.AddRangeAsync(contributions, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            var exemptCelebrantIds = request.ContributionOverrides
+            // Auto-create expenses from active BudgetCalculation items for the event types
+            try
+            {
+                var targetTypeIds = (request.EventTypeIds != null && request.EventTypeIds.Count > 0)
+                    ? request.EventTypeIds.Distinct().ToList()
+                    : new List<Guid> { eventType.EventTypeId };
+
+                var allBudgetItems = new List<(BudgetCalculation Item, string CategoryName)>();
+                foreach (var tid in targetTypeIds)
+                {
+                    var items = await _budgetCalculationRepository.GetByEventTypeIdAsync(tid, cancellationToken);
+                    var typeObj = tid == eventType.EventTypeId ? eventType : await _eventTypeRepository.GetByIdAsync(tid, cancellationToken);
+                    var catName = typeObj?.EventTypeName ?? eventType.EventTypeName;
+                    foreach (var item in items)
+                    {
+                        allBudgetItems.Add((item, catName));
+                    }
+                }
+
+                if (allBudgetItems.Count > 0)
+                {
+                    var creatorName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName;
+
+                    var autoExpenses = allBudgetItems.Select(b => new Expense
+                    {
+                        ExpenseId = Guid.NewGuid(),
+                        EventName = eventItem.EventName,
+                        Category = b.CategoryName,
+                        Amount = b.Item.Rate,
+                        ExpenseDate = eventItem.EventDate,
+                        Status = "Pending",
+                        SubmittedBy = creatorName,
+                        Description = b.Item.ExpenseItem,
+                        IsActive = true,
+                        IsDeleted = false,
+                        CreatedBy = user.UserId,
+                        CreatedAt = DateTime.UtcNow
+                    }).ToList();
+
+                    foreach (var expense in autoExpenses)
+                        await _expenseRepository.AddAsync(expense, cancellationToken);
+
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    _logger.LogInformation(
+                        "Auto-created {Count} expense(s) for event '{EventName}'",
+                        autoExpenses.Count, eventItem.EventName);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: log and continue — event is already saved
+                _logger.LogWarning(ex,
+                    "Failed to auto-create expenses for event '{EventName}'", eventItem.EventName);
+            }
+
+            // Fetch the created event to ensure it is fully committed
+            var createdEvent = await GetByIdAsync(eventItem.EventId, cancellationToken);
+
+            // Send notification emails asynchronously in the background to active contributors
+            var participantData = members.Select(m => (
+                MemberId: m.MemberId,
+                Name: m.Name,
+                Email: m.Email,
+                ContributionAmount: contributions.FirstOrDefault(c => c.MemberId == m.MemberId)?.Amount ?? 0m
+            ));
+
+            var exemptCelebrantIds = (request.ContributionOverrides ?? new List<ContributionOverrideDto>())
                 .Where(x => x.Amount == 0)
                 .Select(x => x.MemberId)
                 .ToHashSet();
 
-            _ = Task.Run(async () =>
+            DispatchEventNotificationEmails(
+                eventItem.EventId,
+                eventItem.EventName,
+                eventItem.EventDate,
+                eventItem.EventDates,
+                eventItem.Description,
+                eventItem.BaseAmount,
+                eventType.EventTypeId,
+                eventType.EventTypeName,
+                exemptCelebrantIds,
+                participantData);
+
+            return createdEvent;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
+            throw;
+        }
+    }
+
+    private void DispatchEventNotificationEmails(
+        Guid eventId,
+        string eventName,
+        DateTime eventDate,
+        string? eventDates,
+        string eventDescription,
+        decimal baseAmount,
+        Guid eventTypeId,
+        string eventTypeName,
+        HashSet<Guid> exemptCelebrantIds,
+        IEnumerable<(Guid MemberId, string? Name, string? Email, decimal ContributionAmount)> participants)
+    {
+        var particularContributors = participants
+            .Where(m => !string.IsNullOrWhiteSpace(m.Email))
+            .Select(m => new
             {
-                try
+                m.MemberId,
+                Name = !string.IsNullOrWhiteSpace(m.Name) ? m.Name.Trim() : "Member",
+                Email = m.Email!.Trim(),
+                m.ContributionAmount
+            })
+            .ToList();
+
+        if (particularContributors.Count == 0)
+        {
+            _logger.LogInformation("No contributors with valid email addresses found for event '{EventName}' ({EventId}). Skipping email dispatch.", eventName, eventId);
+            return;
+        }
+
+        bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventTypeName) &&
+            eventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _serviceScopeFactory.CreateScope();
+                var scopedEmailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<EventService>>();
+                var scopedMemberRepo = scope.ServiceProvider.GetRequiredService<IMemberRepository>();
+                var scopedSettingService = scope.ServiceProvider.GetService<ISystemSettingService>();
+
+                SystemSettingsDto? systemSettings = null;
+
+                if (scopedSettingService != null)
                 {
-                    using var scope = _serviceScopeFactory.CreateScope();
-                    var scopedEmailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                    var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<EventService>>();
-                    var scopedMemberRepo = scope.ServiceProvider.GetRequiredService<IMemberRepository>();
-                    var scopedSettingService = scope.ServiceProvider.GetService<ISystemSettingService>();
-
-                    string upiReceiverName = "Daniel A";
-                    string upiId = "danielrobertanto604@okicici";
-                    string qrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=danielrobertanto604@okicici%26pn=Daniel%20A";
-
-                    if (scopedSettingService != null)
+                    try
                     {
-                        try
-                        {
-                            var settings = await scopedSettingService.GetSettingsAsync(CancellationToken.None);
-                            if (!string.IsNullOrWhiteSpace(settings.QrReceiverName)) upiReceiverName = settings.QrReceiverName;
-                            if (!string.IsNullOrWhiteSpace(settings.QrUpiId)) upiId = settings.QrUpiId;
-                            if (!string.IsNullOrWhiteSpace(settings.QrImage) && settings.QrImage.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                            {
-                                qrImageUrl = settings.QrImage;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            scopedLogger.LogWarning(ex, "Could not load payment settings for email notification; using default scanner details.");
-                        }
+                        systemSettings = await scopedSettingService.GetSettingsAsync(CancellationToken.None);
                     }
-
-                    var gpayImagePath = ResolveGpayImagePath();
-                    if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+                    catch (Exception ex)
                     {
-                        try
-                        {
-                            var targetDir = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-                            var targetFile = Path.Combine(targetDir, "gpay.png");
-                            Directory.CreateDirectory(targetDir);
-                            File.Copy(gpayImagePath, targetFile, true);
-                        }
-                        catch { }
+                        scopedLogger.LogWarning(ex, CommonLogMessages.Events.SettingsLoadWarning);
                     }
+                }
 
-                    List<Member> targetCelebrants = new();
+                var orgName = !string.IsNullOrWhiteSpace(systemSettings?.OrgName)
+                    ? systemSettings.OrgName.Trim()
+                    : "Unit 1A Residents Association";
 
-                    if (isBirthdayEvent)
+                var (configuredSubject, configuredDescription) = ResolveConfiguredTemplate(systemSettings, eventTypeId, eventTypeName, "initial");
+
+                var gpayImagePath = ResolveGpayImagePath();
+                if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+                {
+                    try
+                    {
+                        var targetDir = Path.Combine(AppContext.BaseDirectory, CommonConstants.Defaults.WwwRoot);
+                        var targetFile = Path.Combine(targetDir, CommonConstants.Defaults.GpayFileName);
+                        Directory.CreateDirectory(targetDir);
+                        File.Copy(gpayImagePath, targetFile, true);
+                    }
+                    catch { }
+                }
+
+                List<MemberDto> targetCelebrants = new();
+
+                if (isBirthdayEvent)
+                {
+                    try
                     {
                         var allMonthCelebrants = await scopedMemberRepo.GetActiveBirthdaysInMonthAsync(eventDate.Month, CancellationToken.None);
 
-                        // 1. If exempt celebrant IDs were explicitly passed in request (e.g. from Birthday Event Dialog)
                         if (exemptCelebrantIds.Count > 0)
                         {
                             targetCelebrants = allMonthCelebrants.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
@@ -288,61 +415,69 @@ public class EventService : IEventService
                             }
                         }
 
-                        // 2. If celebrants not identified yet, check if member names appear in eventName or description
                         if (targetCelebrants.Count == 0)
                         {
                             var textToSearch = $"{eventName} {eventDescription}".ToLowerInvariant();
                             targetCelebrants = allMonthCelebrants
-                                .Where(m => !string.IsNullOrWhiteSpace(m.Name) && 
-                                            (textToSearch.Contains(m.Name.ToLowerInvariant()) || 
+                                .Where(m => !string.IsNullOrWhiteSpace(m.Name) &&
+                                            (textToSearch.Contains(m.Name.ToLowerInvariant()) ||
                                              textToSearch.Contains(m.MemberId.ToString().ToLowerInvariant())))
                                 .ToList();
                         }
 
-                        // 3. Fallback: all active celebrants with birthdays in this month
                         if (targetCelebrants.Count == 0)
                         {
                             targetCelebrants = allMonthCelebrants;
                         }
                     }
-
-                    // Order celebrants by birthday day
-                    targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
-
-                    var celebrantNames = targetCelebrants.Select(m => m.Name).Distinct().ToList();
-
-                    if (celebrantNames.Count == 0 && isBirthdayEvent)
+                    catch (Exception ex)
                     {
-                        var nameParts = eventName.Split(new[] { '-', ':' }, 2);
-                        if (nameParts.Length > 1 && !string.IsNullOrWhiteSpace(nameParts[1]))
+                        scopedLogger.LogWarning(ex, "Failed to resolve active birthday celebrants for event email dispatch");
+                    }
+                }
+
+                targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
+                var celebrantNames = targetCelebrants.Select(m => m.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+
+                if (celebrantNames.Count == 0 && isBirthdayEvent)
+                {
+                    var nameParts = eventName.Split(new[] { '-', ':' }, 2);
+                    if (nameParts.Length > 1 && !string.IsNullOrWhiteSpace(nameParts[1]))
+                    {
+                        var parsed = nameParts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(p => p.Trim())
+                            .Where(p => !string.IsNullOrWhiteSpace(p))
+                            .ToList();
+                        if (parsed.Count > 0)
                         {
-                            var parsed = nameParts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                                .Select(p => p.Trim())
-                                .Where(p => !string.IsNullOrWhiteSpace(p))
-                                .ToList();
-                            if (parsed.Count > 0)
-                            {
-                                celebrantNames = parsed;
-                            }
+                            celebrantNames = parsed;
                         }
                     }
+                }
 
-                    string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
+                string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
 
-                    // Build particular birthday event dates display
-                    string birthdayDatesSummary = string.Empty;
-                    string celebrantsAndDatesHtml = string.Empty;
+                Func<MemberDto, DateTime> getCelebrantBirthDate = (m) =>
+                {
+                    int birthMonth = m.DateOfBirth.Month >= 1 && m.DateOfBirth.Month <= 12 ? m.DateOfBirth.Month : (eventDate.Month >= 1 && eventDate.Month <= 12 ? eventDate.Month : DateTime.UtcNow.Month);
+                    int maxDays = DateTime.DaysInMonth(eventDate.Year, birthMonth);
+                    int birthDay = m.DateOfBirth.Day >= 1 && m.DateOfBirth.Day <= maxDays ? m.DateOfBirth.Day : Math.Min(Math.Max(1, m.DateOfBirth.Day), maxDays);
+                    return new DateTime(eventDate.Year, birthMonth, birthDay);
+                };
 
-                    if (isBirthdayEvent)
+                string birthdayDatesSummary = string.Empty;
+                string celebrantsAndDatesHtml = string.Empty;
+
+                if (isBirthdayEvent)
+                {
+                    if (targetCelebrants.Count == 1)
                     {
-                        if (targetCelebrants.Count == 1)
-                        {
-                            var c = targetCelebrants[0];
-                            var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
-                            string bdayDateStr = bdayDate.ToString("MMMM dd, yyyy");
-                            birthdayDatesSummary = $"{c.Name} ({bdayDate:MMMM dd})";
+                        var c = targetCelebrants[0];
+                        var bdayDate = getCelebrantBirthDate(c);
+                        string bdayDateStr = bdayDate.ToString("MMMM dd, yyyy");
+                        birthdayDatesSummary = $"{c.Name} ({bdayDate:MMMM dd})";
 
-                            celebrantsAndDatesHtml = $@"
+                        celebrantsAndDatesHtml = $@"
                 <div class=""detail-row"">
                     <span class=""detail-label"">Birthday Celebrant:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{c.Name}</span>
@@ -351,27 +486,27 @@ public class EventService : IEventService
                     <span class=""detail-label"">Particular Birthday Date:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #c026d3;"">{bdayDateStr}</span>
                 </div>";
-                        }
-                        else if (targetCelebrants.Count > 1)
+                    }
+                    else if (targetCelebrants.Count > 1)
+                    {
+                        var summaryItems = targetCelebrants.Select(c =>
                         {
-                            var summaryItems = targetCelebrants.Select(c =>
-                            {
-                                var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
-                                return $"{c.Name} ({bdayDate:MMM dd})";
-                            });
-                            birthdayDatesSummary = string.Join(", ", summaryItems);
+                            var bdayDate = getCelebrantBirthDate(c);
+                            return $"{c.Name} ({bdayDate:MMM dd})";
+                        });
+                        birthdayDatesSummary = string.Join(", ", summaryItems);
 
-                            var tableRows = string.Join("", targetCelebrants.Select(c =>
-                            {
-                                var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
-                                return $@"
-                                    <tr style=""border-bottom: 1px dashed rgba(74, 63, 107, 0.1);"">
-                                        <td style=""padding: 8px 12px; color: #4a3f6b; font-weight: 700; font-size: 13.5px;"">&#x1F382; {c.Name}</td>
-                                        <td align=""right"" style=""padding: 8px 12px; color: #c026d3; font-weight: 700; font-size: 13.5px;"">{bdayDate:MMMM dd, yyyy}</td>
-                                    </tr>";
-                            }));
+                        var tableRows = string.Join("", targetCelebrants.Select(c =>
+                        {
+                            var bdayDate = getCelebrantBirthDate(c);
+                            return $@"
+                                <tr style=""border-bottom: 1px dashed rgba(74, 63, 107, 0.1);"">
+                                    <td style=""padding: 8px 12px; color: #4a3f6b; font-weight: 700; font-size: 13.5px;"">&#x1F382; {c.Name}</td>
+                                    <td align=""right"" style=""padding: 8px 12px; color: #c026d3; font-weight: 700; font-size: 13.5px;"">{bdayDate:MMMM dd, yyyy}</td>
+                                </tr>";
+                        }));
 
-                            celebrantsAndDatesHtml = $@"
+                        celebrantsAndDatesHtml = $@"
                 <div class=""detail-row"">
                     <span class=""detail-label"" style=""vertical-align: top; padding-top: 4px;"">Birthday Celebrants &amp; Dates:</span>
                     <div class=""detail-value"" style=""display: block; margin-top: 6px;"">
@@ -380,10 +515,10 @@ public class EventService : IEventService
                         </table>
                     </div>
                 </div>";
-                        }
-                        else if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
-                        {
-                            celebrantsAndDatesHtml = $@"
+                    }
+                    else if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
+                    {
+                        celebrantsAndDatesHtml = $@"
                 <div class=""detail-row"">
                     <span class=""detail-label"">Birthday Celebrants:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{celebrantsFormatted}</span>
@@ -392,47 +527,75 @@ public class EventService : IEventService
                     <span class=""detail-label"">Particular Birthday Date:</span>
                     <span class=""detail-value"" style=""font-weight: 700; color: #c026d3;"">{eventDate:MMMM dd, yyyy}</span>
                 </div>";
-                        }
                     }
+                }
 
-                    string singleCelebrantDateStr = string.Empty;
-                    if (targetCelebrants.Count == 1)
+                foreach (var contributor in particularContributors)
+                {
+                    try
                     {
-                        var c = targetCelebrants[0];
-                        var bdayDate = new DateTime(eventDate.Year, c.DateOfBirth.Month, Math.Min(c.DateOfBirth.Day, DateTime.DaysInMonth(eventDate.Year, c.DateOfBirth.Month)));
-                        singleCelebrantDateStr = bdayDate.ToString("MMM dd");
-                    }
+                        var memberContributionAmount = contributor.ContributionAmount;
+                        var formattedAmount = memberContributionAmount % 1 == 0
+                            ? $"₹{memberContributionAmount:N0}"
+                            : $"₹{memberContributionAmount:F2}";
+                        var formattedDueDate = eventDate.ToString("dd/MM/yyyy");
 
-                    var emailTasks = particularContributors.Select(async contributor =>
-                    {
-                        try
+                        var memberName = !string.IsNullOrWhiteSpace(contributor.Name) ? contributor.Name.Trim() : "Member";
+                        var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
+                        var safeEventName = !string.IsNullOrWhiteSpace(eventName) ? eventName.Trim() : "Event";
+                        var safeOrgName = !string.IsNullOrWhiteSpace(orgName) ? orgName.Trim() : "Unit 1A Residents Association";
+
+                        string emailSubject = (configuredSubject ?? string.Empty)
+                            .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{eventName}", safeEventName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase);
+
+                        if (string.IsNullOrWhiteSpace(emailSubject))
                         {
-                            string emailSubject = isBirthdayEvent
-                                ? (targetCelebrants.Count == 1 
-                                    ? $"Birthday Celebration - {targetCelebrants[0].Name} ({singleCelebrantDateStr})"
-                                    : (!string.IsNullOrWhiteSpace(celebrantsFormatted) ? $"Birthday Celebration - {celebrantsFormatted}" : $"Event Detail: {eventName}"))
-                                : $"Event Detail: {eventName}";
+                            emailSubject = isBirthdayEvent
+                                ? $"Birthday Celebration Contribution - {safeCategoryName}"
+                                : $"Contribution Notice - {safeCategoryName}";
+                        }
 
-                            string emailHeader = isBirthdayEvent ? "Birthday Celebration" : "Event Detail";
+                        string emailHeader = isBirthdayEvent ? "Birthday Celebration" : $"{safeCategoryName} Contribution";
 
-                            string introText = isBirthdayEvent && !string.IsNullOrWhiteSpace(birthdayDatesSummary)
-                                ? $"We are celebrating the birthdays of our team members this month: <strong>{birthdayDatesSummary}</strong>! Here are the event details and your contribution amount:"
-                                : (isBirthdayEvent && !string.IsNullOrWhiteSpace(celebrantsFormatted)
-                                    ? $"We are celebrating the birthdays of our team members this month: <strong>{celebrantsFormatted}</strong>! Here are the event details and your contribution amount:"
-                                    : "You have been added to a new event. Here are the event details and your contribution amount:");
+                        string eventDateLabel = "Event Date:";
+                        string celebrantDatesCsv = !string.IsNullOrWhiteSpace(eventDates)
+                            ? eventDates
+                            : (isBirthdayEvent && targetCelebrants.Count > 0
+                                ? string.Join(", ", targetCelebrants.OrderBy(c => c.DateOfBirth.Day).Select(c => $"{c.DateOfBirth.Day} {getCelebrantBirthDate(c):MMM}"))
+                                : string.Empty);
+                        string eventDateValueDisplay = !string.IsNullOrWhiteSpace(celebrantDatesCsv)
+                            ? celebrantDatesCsv
+                            : $"{eventDate:MMMM dd, yyyy}";
 
-                            string eventDateLabel = isBirthdayEvent ? "Celebration Date:" : "Event Date:";
+                        string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
+                            ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
+                            : $"Rs.{baseAmount:F2}";
 
-                            string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
-                                ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
-                                : $"Rs.{baseAmount:F2}";
+                        var frontendBaseUrl = "http://localhost:5173";
+                        var portalContributionUrl = $"{frontendBaseUrl}/contributions";
 
-                            var memberContributionAmount = contributor.ContributionAmount;
-                            var upiPaymentUri = $"upi://pay?pa={upiId}&pn={Uri.EscapeDataString(upiReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString("Contribution for " + eventName)}";
-                            var memberQrCodeUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data={Uri.EscapeDataString(upiPaymentUri)}";
-                            var hasInlineScanner = false;
+                        var interpolated = (configuredDescription ?? string.Empty)
+                            .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{eventName}", safeEventName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{paymentLink}", portalContributionUrl, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{qrCode}", string.Empty, StringComparison.OrdinalIgnoreCase);
 
-                            var emailBody = $@"
+                        var formattedText = interpolated
+                            .Replace("\r\n", "<br />")
+                            .Replace("\n", "<br />");
+
+                        string customMessageHtml = $@"<div style=""font-size: 15px; line-height: 1.7; color: #334155; margin-bottom: 24px;"">{formattedText}</div>";
+
+                        var emailBody = $@"
 <!DOCTYPE html>
 <html>
 <head>
@@ -471,18 +634,6 @@ public class EventService : IEventService
         .content {{
             padding: 30px 25px;
         }}
-        .greeting {{
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 15px;
-            color: #1e1a2e;
-        }}
-        .intro {{
-            font-size: 15px;
-            line-height: 1.6;
-            margin-bottom: 25px;
-            color: #5b5280;
-        }}
         .details-card {{
             background-color: #faf9fd;
             border: 1px solid rgba(74, 63, 107, 0.08);
@@ -519,21 +670,17 @@ public class EventService : IEventService
             border-radius: 6px;
             display: inline-block;
         }}
-        .payment-card {{
-            background: linear-gradient(to right, #ffffff, #faf9fd);
-            border: 1.5px solid #e9e6f5;
+        .btn-portal {{
+            display: inline-block;
+            background: linear-gradient(135deg, #4a3f6b 0%, #2d2550 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 700;
+            padding: 14px 34px;
             border-radius: 10px;
-            padding: 18px 24px;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 10px rgba(74, 63, 107, 0.04);
-        }}
-        .gpay-image {{
-            display: block;
-            width: 100%;
-            max-width: 520px;
-            height: auto;
-            margin: 0 auto 14px;
-            border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(74, 63, 107, 0.3);
+            letter-spacing: 0.3px;
         }}
         .footer {{
             background-color: #ffffff;
@@ -551,18 +698,17 @@ public class EventService : IEventService
             <h1>{emailHeader}</h1>
         </div>
         <div class=""content"">
-            <div class=""greeting"">Hello {contributor.Name},</div>
-            <div class=""intro"">{introText}</div>
+            {customMessageHtml}
             
             <div class=""details-card"">
                 <div class=""detail-row"">
                     <span class=""detail-label"">Event Name:</span>
-                    <span class=""detail-value"" style=""font-weight: 700;"">{eventName}</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{safeEventName}</span>
                 </div>
                 {celebrantsAndDatesHtml}
                 <div class=""detail-row"">
                     <span class=""detail-label"">{eventDateLabel}</span>
-                    <span class=""detail-value"">{eventDate:MMMM dd, yyyy}</span>
+                    <span class=""detail-value"" style=""font-weight: 600;"">{eventDateValueDisplay}</span>
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Total Amount:</span>
@@ -574,128 +720,270 @@ public class EventService : IEventService
                 </div>
                 <div class=""detail-row"">
                     <span class=""detail-label"">Contribution Amount:</span>
-                    <span class=""detail-value amount-highlight"">Rs.{contributor.ContributionAmount:F2}</span>
+                    <span class=""detail-value amount-highlight"">{formattedAmount}</span>
                 </div>
             </div>
 
-            <!-- Dynamic UPI QR Scanner Card -->
-            <div class=""payment-card"" style=""background: #ffffff; border: 1.5px solid #ede9fe; border-radius: 14px; padding: 20px; margin: 22px 0; text-align: center; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08);"">
-                <div style=""font-family: 'Outfit', 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #4338ca; margin-bottom: 12px; letter-spacing: 0.5px; text-transform: uppercase;"">
-                    Scan QR Code to Pay via UPI
-                </div>
-                <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"">
-                    <tr>
-                        <td align=""center"" style=""padding: 0 0 14px 0;"">
-                            <div style=""display: inline-block; padding: 12px; background: #ffffff; border: 2px solid #7c3aed; border-radius: 12px; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.12);"">
-                                <a href=""{upiPaymentUri}"" style=""text-decoration: none; display: block;"">
-                                    <img src=""{memberQrCodeUrl}"" alt=""UPI Payment QR Code - {upiReceiverName}"" width=""220"" height=""220"" style=""display: block; margin: 0 auto; border-radius: 6px;"" />
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td align=""center"" style=""padding: 4px 0; font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif;"">
-                            <div style=""font-size: 14px; color: #475569; margin-bottom: 6px;"">
-                                Payee: <strong style=""color: #0f172a;"">{upiReceiverName}</strong>
-                            </div>
-                            <div style=""font-size: 14px; color: #334155; margin-bottom: 8px;"">
-                                <span style=""font-weight: 600; color: #64748b; margin-right: 6px;"">UPI ID:</span>
-                                <span style=""color: #312e81; background-color: #eef2ff; font-weight: 700; padding: 4px 12px; border-radius: 6px; font-family: 'Outfit', 'Courier New', monospace; letter-spacing: 0.5px; border: 1px solid #c7d2fe;"">{upiId}</span>
-                            </div>
-                            <div style=""font-size: 12px; color: #64748b; margin-top: 4px;"">
-                                Scan with Google Pay, PhonePe, Paytm, or Camera to pay automatically.
-                            </div>
-                            <div style=""margin-top: 10px;"">
-                                <a href=""{upiPaymentUri}"" style=""display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; font-size: 12.5px; font-weight: 700; padding: 7px 18px; border-radius: 6px;"">Open UPI App (Rs.{memberContributionAmount:F2})</a>
-                            </div>
-                        </td>
-                    </tr>
-                </table>
+            <div style=""text-align: center; margin: 30px 0 10px 0;"">
+                <a href=""{portalContributionUrl}"" target=""_blank"" class=""btn-portal"">
+                    Go to Contribution Page &amp; Pay
+                </a>
             </div>
         </div>
         <div class=""footer"">
-            This is an automated notification from the Team Contribution Management System.
+            This is an automated notification from {safeOrgName}.
         </div>
     </div>
 </body>
 </html>";
 
-                            var inlineImages = hasInlineScanner
-                                ? new[] { new InlineEmailImage("gpay-banner", gpayImagePath!, "image/png") }
-                                : null;
-
-                            await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, inlineImages, CancellationToken.None);
-                            scopedLogger.LogInformation("Successfully sent event creation email to contributor: {Email} for Event: {EventName}", contributor.Email, eventName);
-                        }
-                        catch (Exception ex)
-                        {
-                            scopedLogger.LogError(ex, "Failed to send event creation email to contributor: {Email}", contributor.Email);
-                        }
-                    });
-
-                    await Task.WhenAll(emailTasks);
+                        await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, null, CancellationToken.None);
+                        scopedLogger.LogInformation(CommonLogMessages.Events.EmailSentSuccess, contributor.Email, safeEventName);
+                        await Task.Delay(100);
+                    }
+                    catch (Exception ex)
+                    {
+                        scopedLogger.LogError(ex, CommonLogMessages.Events.EmailSendFailed, contributor.Email);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to run background email tasks for new event: {EventId}", eventId);
-                }
-            });
-        }
-
-        return createdEvent;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in CreateAsync");
-            throw;
-        }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, CommonLogMessages.Events.EmailTasksFailed, eventId);
+            }
+        });
     }
 
     public async Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default)
     {
         try
         {
-            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
-            ?? throw new KeyNotFoundException("Event not found.");
+            var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
+                ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
-        var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
-            ?? throw new KeyNotFoundException("Event type not found.");
+            var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
+                ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
 
-        eventItem.EventName = request.EventName.Trim();
-        eventItem.EventTypeId = eventType.EventTypeId;
-        eventItem.EventDate = request.EventDate.Date;
-        eventItem.Description = request.Description.Trim();
-        eventItem.Status = request.Status;
-        eventItem.BaseAmount = request.BaseAmount;
+            eventItem.EventName = (request.EventName ?? string.Empty).Trim();
+            eventItem.EventTypeId = eventType.EventTypeId;
+            eventItem.EventDate = request.EventDate.Date;
+            eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
+            eventItem.Description = (request.Description ?? string.Empty).Trim();
+            if (request.Status != 0)
+            {
+                eventItem.Status = request.Status;
+            }
+            eventItem.BaseAmount = request.BaseAmount;
+            eventItem.ModifiedOn = DateTime.UtcNow;
 
-        var newParticipantIds = request.ParticipantIds.Distinct().ToList();
-        if (newParticipantIds.Count == 0)
-        {
-            throw new InvalidOperationException("At least one participant is required.");
+            var newParticipantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
+            if (newParticipantIds.Count == 0)
+            {
+                throw new InvalidOperationException(CommonMessages.Events.AtLeastOneParticipantRequired);
+            }
+
+            var members = await _memberRepository.GetByIdsAsync(newParticipantIds, cancellationToken);
+            if (members.Count != newParticipantIds.Count)
+            {
+                throw new InvalidOperationException(CommonMessages.Events.ParticipantsNotFound);
+            }
+
+            var memberAmounts = CalculateMemberContributionAmounts(
+                eventType,
+                eventItem.EventDate,
+                request.BaseAmount,
+                members,
+                request.ContributionOverrides ?? new List<ContributionOverrideDto>());
+
+            // 1. Synchronize Event Participants
+            var currentParticipants = eventItem.Participants.Where(p => !p.IsDeleted).ToList();
+            var currentParticipantIds = currentParticipants.Select(p => p.MemberId).ToHashSet();
+
+            // Remove participants no longer in the request
+            var participantsToRemove = currentParticipants
+                .Where(p => !newParticipantIds.Contains(p.MemberId))
+                .ToList();
+            if (participantsToRemove.Count > 0)
+            {
+                _eventRepository.DeleteParticipants(participantsToRemove);
+                foreach (var p in participantsToRemove)
+                {
+                    eventItem.Participants.Remove(p);
+                }
+            }
+
+            // Add newly selected participants
+            var participantIdsToAdd = newParticipantIds
+                .Where(id => !currentParticipantIds.Contains(id))
+                .ToList();
+            foreach (var memberId in participantIdsToAdd)
+            {
+                eventItem.Participants.Add(new EventParticipant
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = eventItem.EventId,
+                    MemberId = memberId,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            // 2. Synchronize Contributions
+            var activeContributions = eventItem.Contributions.Where(c => !c.IsDeleted).ToList();
+            var memberContribLookup = activeContributions
+                .GroupBy(c => c.MemberId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // Remove contributions for removed participants
+            var contributionsToRemove = activeContributions
+                .Where(c => !newParticipantIds.Contains(c.MemberId))
+                .ToList();
+            if (contributionsToRemove.Count > 0)
+            {
+                _contributionRepository.DeleteRange(contributionsToRemove);
+                foreach (var c in contributionsToRemove)
+                {
+                    c.IsDeleted = true;
+                    c.ModifiedOn = DateTime.UtcNow;
+                    eventItem.Contributions.Remove(c);
+                }
+            }
+
+            // Update existing contributions or add new ones
+            foreach (var memberId in newParticipantIds)
+            {
+                if (!memberAmounts.TryGetValue(memberId, out var amount))
+                {
+                    continue;
+                }
+
+                if (memberContribLookup.TryGetValue(memberId, out var existingList) && existingList.Count > 0)
+                {
+                    var primary = existingList.First();
+                    if (!contributionsToRemove.Contains(primary))
+                    {
+                        primary.Amount = amount;
+                        primary.ModifiedOn = DateTime.UtcNow;
+                    }
+
+                    for (int i = 1; i < existingList.Count; i++)
+                    {
+                        existingList[i].IsDeleted = true;
+                        existingList[i].ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    eventItem.Contributions.Add(new Contribution
+                    {
+                        ContributionId = Guid.NewGuid(),
+                        EventId = eventItem.EventId,
+                        MemberId = memberId,
+                        Amount = amount,
+                        PaymentStatus = PaymentStatus.Pending,
+                        PaymentMode = PaymentMode.None,
+                        IsActive = true,
+                        IsDeleted = false,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // If new participants were added, dispatch notification emails to them
+            if (participantIdsToAdd.Count > 0)
+            {
+                var newMembers = members.Where(m => participantIdsToAdd.Contains(m.MemberId)).ToList();
+                var newParticipantData = newMembers.Select(m => (
+                    MemberId: m.MemberId,
+                    Name: (string?)m.Name,
+                    Email: (string?)m.Email,
+                    ContributionAmount: memberAmounts.TryGetValue(m.MemberId, out var amt) ? amt : 0m
+                ));
+                var exemptCelebrantIds = (request.ContributionOverrides ?? new List<ContributionOverrideDto>())
+                    .Where(x => x.Amount == 0)
+                    .Select(x => x.MemberId)
+                    .ToHashSet();
+
+                DispatchEventNotificationEmails(
+                    eventItem.EventId,
+                    eventItem.EventName,
+                    eventItem.EventDate,
+                    eventItem.EventDates,
+                    eventItem.Description,
+                    eventItem.BaseAmount,
+                    eventType.EventTypeId,
+                    eventType.EventTypeName,
+                    exemptCelebrantIds,
+                    newParticipantData);
+            }
+
+            return await GetByIdAsync(eventItem.EventId, cancellationToken);
         }
-
-        var members = await _memberRepository.GetByIdsAsync(newParticipantIds, cancellationToken);
-        if (members.Count != newParticipantIds.Count)
+        catch (Exception ex)
         {
-            throw new InvalidOperationException("One or more participants could not be found.");
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
+            throw;
         }
+    }
 
-        var overrideLookup = request.ContributionOverrides
+    public async Task DeleteAsync(Guid eventId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
+                ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
+
+            eventItem.IsDeleted = true;
+            eventItem.ModifiedOn = DateTime.UtcNow;
+
+            if (eventItem.Contributions != null)
+            {
+                foreach (var contribution in eventItem.Contributions)
+                {
+                    contribution.IsDeleted = true;
+                    contribution.ModifiedOn = DateTime.UtcNow;
+                }
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Computes contribution amounts for members based on dynamic event type tenure rules and custom overrides.
+    /// </summary>
+    private static Dictionary<Guid, decimal> CalculateMemberContributionAmounts(
+        EventType eventType,
+        DateTime eventDate,
+        decimal baseAmount,
+        IReadOnlyCollection<Member> members,
+        IReadOnlyCollection<ContributionOverrideDto> overrides)
+    {
+        var overrideLookup = (overrides ?? Array.Empty<ContributionOverrideDto>())
             .GroupBy(x => x.MemberId)
             .ToDictionary(x => x.Key, x => x.Last().Amount);
 
-        // 1. Map memberId to calculated amount
-        bool isBirthdayEvent = !string.IsNullOrWhiteSpace(eventType.EventTypeName) &&
-            eventType.EventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase);
+        bool hasTenureRule = eventType.HasTenureRule;
+        decimal thresholdYears = eventType.TenureThresholdYears > 0 ? eventType.TenureThresholdYears : 1.0m;
+        decimal newEntrantRatio = (eventType.NewEntrantSharePercentage > 0 ? eventType.NewEntrantSharePercentage : 50.0m) / 100.0m;
+        decimal standardRatio = (eventType.StandardSharePercentage > 0 ? eventType.StandardSharePercentage : 100.0m) / 100.0m;
 
-        decimal overrideSum = request.ContributionOverrides.Sum(x => x.Amount);
-        decimal splitPool = Math.Max(0m, request.BaseAmount - overrideSum);
+        decimal overrideSum = overrides?.Sum(x => x.Amount) ?? 0m;
+        decimal splitPool = Math.Max(0m, baseAmount - overrideSum);
 
         int fullShareCount = 0;
         int halfShareCount = 0;
         int regularParticipantsCount = 0;
 
-        if (isBirthdayEvent)
+        if (hasTenureRule)
         {
             foreach (var member in members)
             {
@@ -703,7 +991,10 @@ public class EventService : IEventService
                 {
                     continue;
                 }
-                if (member.JoiningDate.AddYears(1) > eventItem.EventDate)
+
+                double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
+                double tenureYears = tenureDays / 365.25;
+                if (tenureYears < (double)thresholdYears)
                 {
                     halfShareCount++;
                 }
@@ -718,13 +1009,13 @@ public class EventService : IEventService
             regularParticipantsCount = members.Count(m => !overrideLookup.ContainsKey(m.MemberId));
         }
 
-        decimal divisor = isBirthdayEvent
-            ? (fullShareCount + 0.5m * halfShareCount)
+        decimal divisor = hasTenureRule
+            ? (fullShareCount * standardRatio + halfShareCount * newEntrantRatio)
             : regularParticipantsCount;
 
         decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
 
-        var memberAmounts = members.ToDictionary(
+        return members.ToDictionary(
             member => member.MemberId,
             member =>
             {
@@ -733,126 +1024,17 @@ public class EventService : IEventService
                     return customAmount;
                 }
 
-                if (isBirthdayEvent)
+                if (hasTenureRule)
                 {
-                    bool isHalfShare = member.JoiningDate.AddYears(1) > eventItem.EventDate;
-                    return Math.Round(isHalfShare ? (standardShare * 0.5m) : standardShare, 2);
+                    double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
+                    double tenureYears = tenureDays / 365.25;
+                    bool isNewEntrant = tenureYears < (double)thresholdYears;
+                    decimal shareRatio = isNewEntrant ? newEntrantRatio : standardRatio;
+                    return Math.Round(standardShare * shareRatio, 2);
                 }
 
                 return Math.Round(standardShare, 2);
-            }
-        );
-
-        // 2. Perform Collection Diffing for Participants
-        var currentParticipantIds = eventItem.Participants.Select(p => p.MemberId).ToList();
-
-        // Identify participants to remove
-        var participantsToRemove = eventItem.Participants
-            .Where(p => !newParticipantIds.Contains(p.MemberId))
-            .ToList();
-        if (participantsToRemove.Any())
-        {
-            _eventRepository.DeleteParticipants(participantsToRemove);
-            foreach (var p in participantsToRemove)
-            {
-                eventItem.Participants.Remove(p);
-            }
-        }
-
-        // Identify participants to add
-        var participantIdsToAdd = newParticipantIds
-            .Where(id => !currentParticipantIds.Contains(id))
-            .ToList();
-        foreach (var memberId in participantIdsToAdd)
-        {
-            eventItem.Participants.Add(new EventParticipant
-            {
-                Id = Guid.NewGuid(),
-                EventId = eventItem.EventId,
-                MemberId = memberId
             });
-        }
-
-        // 3. Perform Collection Diffing for Contributions
-        var currentContributions = eventItem.Contributions.ToList();
-
-        // Identify contributions to remove
-        var contributionsToRemove = currentContributions
-            .Where(c => !newParticipantIds.Contains(c.MemberId))
-            .ToList();
-        if (contributionsToRemove.Any())
-        {
-            _contributionRepository.DeleteRange(contributionsToRemove);
-            foreach (var c in contributionsToRemove)
-            {
-                eventItem.Contributions.Remove(c);
-            }
-        }
-
-        // Update amounts of existing contributions
-        var existingContributions = eventItem.Contributions.ToList();
-        foreach (var contribution in existingContributions)
-        {
-            if (memberAmounts.TryGetValue(contribution.MemberId, out var newAmount))
-            {
-                contribution.Amount = newAmount;
-            }
-        }
-
-        // Identify new contributions to add
-        var existingContributionMemberIds = existingContributions.Select(c => c.MemberId).ToList();
-        var contributionMemberIdsToAdd = newParticipantIds
-            .Where(id => !existingContributionMemberIds.Contains(id))
-            .ToList();
-        foreach (var memberId in contributionMemberIdsToAdd)
-        {
-            if (memberAmounts.TryGetValue(memberId, out var amount))
-            {
-                eventItem.Contributions.Add(new Contribution
-                {
-                    ContributionId = Guid.NewGuid(),
-                    EventId = eventItem.EventId,
-                    MemberId = memberId,
-                    Amount = amount,
-                    PaymentStatus = Domain.Enums.PaymentStatus.Pending
-                });
-            }
-        }
-
-        // Save all changes in a single transaction
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return await GetByIdAsync(eventItem.EventId, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in UpdateAsync");
-            throw;
-        }
-    }
-
-    public async Task DeleteAsync(Guid eventId, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var eventItem = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
-            ?? throw new KeyNotFoundException("Event not found.");
-
-        eventItem.IsDeleted = true;
-
-        foreach (var contribution in eventItem.Contributions)
-        {
-            contribution.IsDeleted = true;
-        }
-
-        _eventRepository.Update(eventItem);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in DeleteAsync");
-            throw;
-        }
     }
 
     private static string? ResolveGpayImagePath()
@@ -880,5 +1062,167 @@ public class EventService : IEventService
         }
 
         return null;
+    }
+
+    private static (string Subject, string Description) ResolveConfiguredTemplate(
+        SystemSettingsDto? settings,
+        Guid eventTypeId,
+        string eventTypeName,
+        string templateType = "initial")
+    {
+        string defaultBirthdaySubject = "Birthday Celebration Contribution - {categoryName}";
+        string defaultBirthdayDesc = "Dear {memberName},\n\nWe have upcoming birthdays this month in our team! Your planned contribution for {categoryName} is {amount}, due by {dueDate}.\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nWarm regards,\n{orgName}";
+
+        string defaultGeneralSubject = "Contribution Notice - {categoryName}";
+        string defaultGeneralDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
+
+        bool isBirthday = (eventTypeName ?? string.Empty).Contains("Birthday", StringComparison.OrdinalIgnoreCase);
+        string fallbackSubject = isBirthday ? defaultBirthdaySubject : defaultGeneralSubject;
+        string fallbackDesc = isBirthday ? defaultBirthdayDesc : defaultGeneralDesc;
+
+        if (settings == null) return (fallbackSubject, fallbackDesc);
+
+        JsonElement root = default;
+        bool hasJson = false;
+
+        if (settings.CategoryTemplates is JsonElement element && element.ValueKind == JsonValueKind.Object)
+        {
+            root = element;
+            hasJson = true;
+        }
+        else if (settings.CategoryTemplates is string jsonStr && !string.IsNullOrWhiteSpace(jsonStr))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonStr);
+                root = doc.RootElement.Clone();
+                hasJson = true;
+            }
+            catch { }
+        }
+        else if (settings.CategoryTemplates != null)
+        {
+            try
+            {
+                var raw = JsonSerializer.Serialize(settings.CategoryTemplates);
+                using var doc = JsonDocument.Parse(raw);
+                root = doc.RootElement.Clone();
+                hasJson = true;
+            }
+            catch { }
+        }
+
+        if (hasJson && root.ValueKind == JsonValueKind.Object)
+        {
+            var idKey = eventTypeId.ToString();
+            var typeNameClean = (eventTypeName ?? string.Empty).Trim().ToLowerInvariant();
+
+            JsonElement? matchedEntry = null;
+
+            // 1. Try matching by eventTypeId (Guid string)
+            foreach (var property in root.EnumerateObject())
+            {
+                if (string.Equals(property.Name.Trim(), idKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedEntry = property.Value;
+                    break;
+                }
+            }
+
+            // 2. Try exact category name match
+            if (matchedEntry == null && !string.IsNullOrWhiteSpace(typeNameClean))
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    if (string.Equals(property.Name.Trim(), typeNameClean, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedEntry = property.Value;
+                        break;
+                    }
+                }
+            }
+
+            // 3. Try loose category name match
+            if (matchedEntry == null && !string.IsNullOrWhiteSpace(typeNameClean))
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    var key = property.Name.Trim().ToLowerInvariant();
+                    if ((typeNameClean.Contains("birthday") && key.Contains("birthday")) ||
+                        (typeNameClean.Contains("dinner") && key.Contains("dinner")) ||
+                        (typeNameClean.Contains("farewell") && key.Contains("farewell")) ||
+                        (typeNameClean.Contains("outing") && key.Contains("outing")))
+                    {
+                        matchedEntry = property.Value;
+                        break;
+                    }
+                }
+            }
+
+            // 4. Try "all" fallback
+            if (matchedEntry == null)
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    if (string.Equals(property.Name.Trim(), "all", StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedEntry = property.Value;
+                        break;
+                    }
+                }
+            }
+
+            if (matchedEntry.HasValue && matchedEntry.Value.ValueKind == JsonValueKind.Object)
+            {
+                string? sub = null;
+                string? desc = null;
+
+                bool isReminder = string.Equals(templateType, "reminder", StringComparison.OrdinalIgnoreCase);
+
+                if (isReminder)
+                {
+                    if (matchedEntry.Value.TryGetProperty("reminderSubject", out var rSub) && rSub.ValueKind == JsonValueKind.String)
+                        sub = rSub.GetString();
+                    if (matchedEntry.Value.TryGetProperty("reminderDescription", out var rDesc) && rDesc.ValueKind == JsonValueKind.String)
+                        desc = rDesc.GetString();
+                }
+
+                if (string.IsNullOrWhiteSpace(sub))
+                {
+                    if (matchedEntry.Value.TryGetProperty("initialSubject", out var subProp) && subProp.ValueKind == JsonValueKind.String)
+                        sub = subProp.GetString();
+                    else if (matchedEntry.Value.TryGetProperty("subject", out var sProp) && sProp.ValueKind == JsonValueKind.String)
+                        sub = sProp.GetString();
+                }
+
+                if (string.IsNullOrWhiteSpace(desc))
+                {
+                    if (matchedEntry.Value.TryGetProperty("initialDescription", out var descProp) && descProp.ValueKind == JsonValueKind.String)
+                        desc = descProp.GetString();
+                    else if (matchedEntry.Value.TryGetProperty("description", out var dProp) && dProp.ValueKind == JsonValueKind.String)
+                        desc = dProp.GetString();
+                }
+
+                if (!string.IsNullOrWhiteSpace(sub) || !string.IsNullOrWhiteSpace(desc))
+                {
+                    return (
+                        !string.IsNullOrWhiteSpace(sub) ? sub : fallbackSubject,
+                        !string.IsNullOrWhiteSpace(desc) ? desc : fallbackDesc
+                    );
+                }
+            }
+        }
+
+        // 5. Fallback to settings.EmailSubject / settings.EmailDescription
+        if (!string.IsNullOrWhiteSpace(settings.EmailSubject) || !string.IsNullOrWhiteSpace(settings.EmailDescription))
+        {
+            return (
+                !string.IsNullOrWhiteSpace(settings.EmailSubject) ? settings.EmailSubject : fallbackSubject,
+                !string.IsNullOrWhiteSpace(settings.EmailDescription) ? settings.EmailDescription : fallbackDesc
+            );
+        }
+
+        // 6. Default fallback to standard templates (never null!)
+        return (fallbackSubject, fallbackDesc);
     }
 }
