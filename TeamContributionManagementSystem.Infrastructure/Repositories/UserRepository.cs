@@ -313,7 +313,16 @@ public class UserRepository : IUserRepository
     {
         try
         {
-            _context.Users.Update(user);
+            var entry = _context.Entry(user);
+            if (entry.State == EntityState.Detached)
+            {
+                _context.Users.Attach(user);
+                entry.State = EntityState.Modified;
+            }
+            else
+            {
+                entry.State = EntityState.Modified;
+            }
         }
         catch (Exception ex)
         {
