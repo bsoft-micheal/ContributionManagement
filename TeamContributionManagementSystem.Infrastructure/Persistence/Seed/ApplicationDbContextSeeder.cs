@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Auth;
+using TeamContributionManagementSystem.Domain.Entities;
 
 namespace TeamContributionManagementSystem.Infrastructure.Persistence.Seed;
 
@@ -7,14 +11,27 @@ public class ApplicationDbContextSeeder
 {
     private readonly ApplicationDbContext _context;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IConfiguration? _configuration;
+    private readonly ILogger<ApplicationDbContextSeeder>? _logger;
 
-    public ApplicationDbContextSeeder(ApplicationDbContext context, IPasswordHasher passwordHasher)
+    private static class SeedDefaults
     {
-        _context = context;
-        _passwordHasher = passwordHasher;
+        public const string AdminEmail = "admin@gmail.com";
+        public const string FallbackAdminEmail = "daniel@example.com";
+        public const string AdminFullName = "System Admin";
+        public const string AdminPassword = "Password@123";
+
+        public const string MemberEmail = "member@gmail.com";
+        public const string MemberFullName = "Default Member";
+        public const string MemberPassword = "Password@123";
+
+        public const int MinimumNavigationMenuCount = 89;
+
+        public const string NavigationMenusScript = "seed_navigation_menus.sql";
+        public const string RoleRightsScript = "seed_role_rights.sql";
     }
 
-    public async Task SeedAsync(CancellationToken cancellationToken = default)
+    private static class ConfigKeys
     {
         try
         {
@@ -30,84 +47,130 @@ public class ApplicationDbContextSeeder
             }
 
 
-            var count = await _context.NavigationMenus.CountAsync(cancellationToken);
-            if (count < 89)
-            {
-                var sqlScriptPath = Path.Combine(AppContext.BaseDirectory, "Persistence", "Scripts", "seed_navigation_menus.sql");
-                if (!File.Exists(sqlScriptPath))
-                {
-                    sqlScriptPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "TeamContributionManagementSystem.Infrastructure", "Persistence", "Scripts", "seed_navigation_menus.sql");
-                }
-                if (File.Exists(sqlScriptPath))
-                {
-                    var sql = await File.ReadAllTextAsync(sqlScriptPath, cancellationToken);
-                    await _context.Database.ExecuteSqlRawAsync(sql, cancellationToken);
-                }
-            }
-
-            // Seed / sync role_rights for all roles
-            var rrScriptPath = Path.Combine(AppContext.BaseDirectory, "Persistence", "Scripts", "seed_role_rights.sql");
-            if (!File.Exists(rrScriptPath))
-            {
-                rrScriptPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "TeamContributionManagementSystem.Infrastructure", "Persistence", "Scripts", "seed_role_rights.sql");
-            }
-            if (File.Exists(rrScriptPath))
-            {
-                var rrSql = await File.ReadAllTextAsync(rrScriptPath, cancellationToken);
-                await _context.Database.ExecuteSqlRawAsync(rrSql, cancellationToken);
-            }
-            // Seed default roles & users if missing
-            var adminRole = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Admin", cancellationToken);
-            if (adminRole == null)
-            {
-                adminRole = new Domain.Entities.Role { RoleId = Guid.NewGuid(), RoleName = "Admin" };
-                await _context.Roles.AddAsync(adminRole, cancellationToken);
-            }
-
-            var memberRole = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Member", cancellationToken);
-            if (memberRole == null)
-            {
-                memberRole = new Domain.Entities.Role { RoleId = Guid.NewGuid(), RoleName = "Member" };
-                await _context.Roles.AddAsync(memberRole, cancellationToken);
-            }
+            // 4. Ensure default roles exist
+            var adminRole = await EnsureRoleAsync(CommonRoles.Admin, cancellationToken);
+            var memberRole = await EnsureRoleAsync(CommonRoles.Member, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
 
-            var adminUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == "admin@gmail.com" || u.Email == "daniel@example.com", cancellationToken);
-            if (adminUser == null)
-            {
-                adminUser = new Domain.Entities.AppUser
-                {
-                    UserId = Guid.NewGuid(),
-                    FullName = "System Admin",
-                    Email = "admin@gmail.com",
-                    PasswordHash = _passwordHasher.HashPassword("Password@123"),
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _context.Users.AddAsync(adminUser, cancellationToken);
-                await _context.UserRoles.AddAsync(new Domain.Entities.AppUserRole { UserId = adminUser.UserId, RoleId = adminRole.RoleId, IsPrimary = true }, cancellationToken);
-            }
+            // 5. Ensure default admin user exists
+            await EnsureAdminUserAsync(adminRole.RoleId, cancellationToken);
 
-            var memberUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == "member@gmail.com", cancellationToken);
-            if (memberUser == null)
-            {
-                memberUser = new Domain.Entities.AppUser
-                {
-                    UserId = Guid.NewGuid(),
-                    FullName = "Default Member",
-                    Email = "member@gmail.com",
-                    PasswordHash = _passwordHasher.HashPassword("Password@123"),
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _context.Users.AddAsync(memberUser, cancellationToken);
-                await _context.UserRoles.AddAsync(new Domain.Entities.AppUserRole { UserId = memberUser.UserId, RoleId = memberRole.RoleId, IsPrimary = true }, cancellationToken);
-            }
+            // 6. Ensure default member user exists
+            await EnsureMemberUserAsync(memberRole.RoleId, cancellationToken);
+
             await _context.SaveChangesAsync(cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Non-fatal if schema already contains the columns or permissions restrict DDL
+            // Non-fatal if schema already contains columns or permissions restrict DDL
+            _logger?.LogWarning(ex, "Non-fatal error occurred during database seeding / schema synchronization: {Message}", ex.Message);
         }
+    }
+
+    private async Task<Role> EnsureRoleAsync(string roleName, CancellationToken cancellationToken)
+    {
+        var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == roleName, cancellationToken);
+        if (role == null)
+        {
+            role = new Role
+            {
+                RoleId = Guid.NewGuid(),
+                RoleName = roleName,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _context.Roles.AddAsync(role, cancellationToken);
+        }
+        return role;
+    }
+
+    private async Task EnsureAdminUserAsync(Guid adminRoleId, CancellationToken cancellationToken)
+    {
+        var adminEmail = _configuration?[ConfigKeys.AdminEmail] ?? SeedDefaults.AdminEmail;
+        var fallbackEmail = _configuration?[ConfigKeys.AdminFallbackEmail] ?? SeedDefaults.FallbackAdminEmail;
+        var adminFullName = _configuration?[ConfigKeys.AdminFullName] ?? SeedDefaults.AdminFullName;
+        var adminPassword = _configuration?[ConfigKeys.AdminPassword] ?? SeedDefaults.AdminPassword;
+
+        var adminUser = await _context.Users.FirstOrDefaultAsync(
+            u => u.Email == adminEmail || (!string.IsNullOrEmpty(fallbackEmail) && u.Email == fallbackEmail),
+            cancellationToken);
+
+        if (adminUser == null)
+        {
+            adminUser = new AppUser
+            {
+                UserId = Guid.NewGuid(),
+                FullName = adminFullName,
+                Email = adminEmail,
+                PasswordHash = _passwordHasher.HashPassword(adminPassword),
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _context.Users.AddAsync(adminUser, cancellationToken);
+            await _context.UserRoles.AddAsync(new AppUserRole
+            {
+                UserId = adminUser.UserId,
+                RoleId = adminRoleId,
+                IsPrimary = true
+            }, cancellationToken);
+        }
+    }
+
+    private async Task EnsureMemberUserAsync(Guid memberRoleId, CancellationToken cancellationToken)
+    {
+        var memberEmail = _configuration?[ConfigKeys.MemberEmail] ?? SeedDefaults.MemberEmail;
+        var memberFullName = _configuration?[ConfigKeys.MemberFullName] ?? SeedDefaults.MemberFullName;
+        var memberPassword = _configuration?[ConfigKeys.MemberPassword] ?? SeedDefaults.MemberPassword;
+
+        var memberUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == memberEmail, cancellationToken);
+        if (memberUser == null)
+        {
+            memberUser = new AppUser
+            {
+                UserId = Guid.NewGuid(),
+                FullName = memberFullName,
+                Email = memberEmail,
+                PasswordHash = _passwordHasher.HashPassword(memberPassword),
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _context.Users.AddAsync(memberUser, cancellationToken);
+            await _context.UserRoles.AddAsync(new AppUserRole
+            {
+                UserId = memberUser.UserId,
+                RoleId = memberRoleId,
+                IsPrimary = true
+            }, cancellationToken);
+        }
+    }
+
+    private async Task ExecuteScriptIfExistsAsync(string scriptFileName, CancellationToken cancellationToken)
+    {
+        var scriptPath = ResolveScriptPath(scriptFileName);
+        if (scriptPath != null && File.Exists(scriptPath))
+        {
+            var sql = await File.ReadAllTextAsync(scriptPath, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(sql))
+            {
+                await _context.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+            }
+        }
+    }
+
+    private static string? ResolveScriptPath(string scriptFileName)
+    {
+        // 1. Check relative to base directory
+        var path = Path.Combine(AppContext.BaseDirectory, "Persistence", "Scripts", scriptFileName);
+        if (File.Exists(path)) return path;
+
+        // 2. Check relative to project source directory
+        path = Path.Combine(Directory.GetCurrentDirectory(), "..", "TeamContributionManagementSystem.Infrastructure", "Persistence", "Scripts", scriptFileName);
+        if (File.Exists(path)) return path;
+
+        // 3. Check directly in CurrentDirectory Persistence/Scripts
+        path = Path.Combine(Directory.GetCurrentDirectory(), "Persistence", "Scripts", scriptFileName);
+        if (File.Exists(path)) return path;
+
+        return null;
     }
 }

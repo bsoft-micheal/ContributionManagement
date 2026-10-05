@@ -8,11 +8,11 @@ public static class CommonValidationMessages
     // Auth Validations
     public const string PasswordMinLength = "Password must be at least 6 characters long.";
     public const string EmailRequired = "Email is required.";
-    public const string UsernameOrEmailRequired = "Username or email is required.";
+    public const string UsernameOrEmailRequired = "This Field is required.";
     public const string EmailValid = "A valid email address is required.";
     public const string EmailMaxLength = "Email must not exceed 150 characters.";
-    public const string PasswordRequired = "Password is required.";
-    public const string OtpRequired = "OTP is required.";
+    public const string PasswordRequired = "This Field is required.";
+    public const string OtpRequired = "This Field is required.";
     public const string OtpExactLength = "OTP must be exactly 6 characters.";
 
     // Member Validations
@@ -48,4 +48,7 @@ public static class CommonValidationMessages
     public const string SubjectRequired = "Subject is required.";
     public const string DescriptionRequired = "Description is required.";
     public const string MessageRequired = "Message is required.";
+
+    // Expense Validations
+    public const string ExpenseAmountExceedsExpected = "Expense amount cannot exceed the event's expected budget.";
 }

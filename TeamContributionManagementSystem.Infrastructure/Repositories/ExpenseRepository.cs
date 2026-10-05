@@ -57,6 +57,8 @@ public class ExpenseRepository : IExpenseRepository
 
             var items = await query
                 .OrderByDescending(x => x.ExpenseDate)
+                .ThenByDescending(x => x.ModifiedOn)
+                .ThenByDescending(x => x.CreatedAt)
                 .Select(x => new ExpenseDto
                 {
                     ExpenseId = x.ExpenseId,
