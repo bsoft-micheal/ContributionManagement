@@ -54,7 +54,7 @@ public class DashboardService : IDashboardService
             }
 
             var allExpenses = _expenseRepository != null
-                ? await _expenseRepository.GetAllAsync(startDate: startDate, endDate: endDate, cancellationToken: cancellationToken)
+                ? await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken)
                 : new List<TeamContributionManagementSystem.Application.DTOs.Expenses.ExpenseDto>();
 
             // If caller is in the Member role, restrict results to their own member record only
@@ -84,6 +84,8 @@ public class DashboardService : IDashboardService
                 }
 
                 var memberEvents = await _eventRepository.GetAllForMemberAsync(myMemberId.Value, filterMonth, filterYear, cancellationToken);
+                var allMonthlyEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
+
                 var memberPendingContributions = (await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken))
                     .Where(x => x.MemberId == myMemberId.Value)
                     .ToList();
@@ -91,17 +93,32 @@ public class DashboardService : IDashboardService
                 var memberEventPendingSum = memberEvents.Sum(x => x.TotalExpectedAmount - x.TotalPaidAmount);
                 var memberEventPendingCount = memberEvents.Sum(x => x.PendingContributionsCount);
 
+                var memberEventExpensesSum = allMonthlyEvents.Sum(x =>
+                    allExpenses.Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase)).Sum(e => e.Amount)
+                );
+                var memberPeriodExpenses = (startDate.HasValue || endDate.HasValue)
+                    ? allExpenses.Where(e => (!startDate.HasValue || e.ExpenseDate >= startDate.Value) && (!endDate.HasValue || e.ExpenseDate <= endDate.Value)).Sum(e => e.Amount)
+                    : allExpenses.Sum(e => e.Amount);
+                var overallExpenses = allMonthlyEvents.Count > 0 ? memberEventExpensesSum : memberPeriodExpenses;
+                var overallExpected = allMonthlyEvents.Sum(x => x.TotalExpectedAmount);
+                var overallRemaining = overallExpected - overallExpenses;
+
                 return new DashboardSummaryDto
                 {
                     MonthlyEventsCount = memberEvents.Count,
                     TotalContributions = memberEvents.Sum(x => x.TotalPaidAmount),
                     PendingPayments = memberEvents.Count > 0 ? memberEventPendingCount : memberPendingContributions.Count,
                     TotalPendingAmount = memberEvents.Count > 0 ? memberEventPendingSum : memberPendingContributions.Sum(x => x.Amount),
-                    TotalExpenses = memberEvents.Select(x => allExpenses.Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase)).Sum(e => e.Amount)).Sum(),
+                    TotalExpectedAmount = memberEvents.Sum(x => x.TotalExpectedAmount),
+                    TotalExpenses = overallExpenses,
+                    TotalRemainingAmount = overallRemaining,
                     UpcomingEvents = memberEvents.Select(x => {
+                        var overallEvent = allMonthlyEvents.FirstOrDefault(e => e.EventId == x.EventId);
                         var eventExp = allExpenses
                             .Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
                             .Sum(e => e.Amount);
+                        var overallExpVal = overallEvent != null ? overallEvent.TotalExpectedAmount : x.TotalExpectedAmount;
+                        var eventRemaining = overallExpVal - eventExp;
                         return new UpcomingEventDto
                         {
                             EventId = x.EventId,
@@ -112,6 +129,10 @@ public class DashboardService : IDashboardService
                             CollectedAmount = x.TotalPaidAmount,
                             PendingAmount = x.TotalExpectedAmount - x.TotalPaidAmount,
                             ExpenseAmount = eventExp,
+                            RemainingAmount = eventRemaining,
+                            OverallExpectedAmount = overallExpVal,
+                            OverallExpenseAmount = eventExp,
+                            OverallRemainingAmount = eventRemaining,
                             PendingContributionsCount = x.PendingContributionsCount,
                             TotalContributionsCount = x.ParticipantCount,
                             CreatedBy = x.CreatedBy,
@@ -128,17 +149,30 @@ public class DashboardService : IDashboardService
             var eventPendingSum = monthlyEvents.Sum(x => x.TotalExpectedAmount - x.TotalPaidAmount);
             var eventPendingCount = monthlyEvents.Sum(x => x.PendingContributionsCount);
 
+            var eventExpensesSum = monthlyEvents.Sum(x =>
+                allExpenses.Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase)).Sum(e => e.Amount)
+            );
+            var periodExpenses = (startDate.HasValue || endDate.HasValue)
+                ? allExpenses.Where(e => (!startDate.HasValue || e.ExpenseDate >= startDate.Value) && (!endDate.HasValue || e.ExpenseDate <= endDate.Value)).Sum(e => e.Amount)
+                : allExpenses.Sum(e => e.Amount);
+            var totalExpenses = monthlyEvents.Count > 0 ? eventExpensesSum : periodExpenses;
+            var adminOverallExpected = monthlyEvents.Sum(x => x.TotalExpectedAmount);
+            var adminOverallRemaining = adminOverallExpected - totalExpenses;
+
             return new DashboardSummaryDto
             {
                 MonthlyEventsCount = monthlyEvents.Count,
                 TotalContributions = monthlyEvents.Sum(x => x.TotalPaidAmount),
                 PendingPayments = monthlyEvents.Count > 0 ? eventPendingCount : pendingContributions.Count,
                 TotalPendingAmount = monthlyEvents.Count > 0 ? eventPendingSum : pendingContributions.Sum(x => x.Amount),
-                TotalExpenses = allExpenses.Sum(x => x.Amount),
+                TotalExpectedAmount = adminOverallExpected,
+                TotalExpenses = totalExpenses,
+                TotalRemainingAmount = adminOverallRemaining,
                 UpcomingEvents = monthlyEvents.Select(x => {
                     var eventExp = allExpenses
                         .Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
                         .Sum(e => e.Amount);
+                    var eventRemaining = x.TotalExpectedAmount - eventExp;
                     return new UpcomingEventDto
                     {
                         EventId = x.EventId,
@@ -149,6 +183,10 @@ public class DashboardService : IDashboardService
                         CollectedAmount = x.TotalPaidAmount,
                         PendingAmount = x.TotalExpectedAmount - x.TotalPaidAmount,
                         ExpenseAmount = eventExp,
+                        RemainingAmount = eventRemaining,
+                        OverallExpectedAmount = x.TotalExpectedAmount,
+                        OverallExpenseAmount = eventExp,
+                        OverallRemainingAmount = eventRemaining,
                         PendingContributionsCount = x.PendingContributionsCount,
                         TotalContributionsCount = x.ParticipantCount,
                         CreatedBy = x.CreatedBy,

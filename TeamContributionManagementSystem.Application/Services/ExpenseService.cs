@@ -14,6 +14,7 @@ public class ExpenseService : IExpenseService
 {
     private readonly ILogger<ExpenseService> _logger;
     private readonly IExpenseRepository _expenseRepository;
+    private readonly IEventRepository _eventRepository;
     private readonly IStatusRepository? _statusRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
@@ -21,12 +22,14 @@ public class ExpenseService : IExpenseService
     public ExpenseService(
         ILogger<ExpenseService> logger,
         IExpenseRepository expenseRepository,
+        IEventRepository eventRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IStatusRepository? statusRepository = null)
     {
         _logger = logger;
         _expenseRepository = expenseRepository;
+        _eventRepository = eventRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _statusRepository = statusRepository;
@@ -64,6 +67,8 @@ public class ExpenseService : IExpenseService
     {
         try
         {
+            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventName, request.Amount, null, cancellationToken);
+
             var attachment = !string.IsNullOrWhiteSpace(request.FileData)
                 ? request.FileData.Trim()
                 : request.FileName?.Trim();
@@ -124,6 +129,8 @@ public class ExpenseService : IExpenseService
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
 
+            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventName, request.Amount, expenseId, cancellationToken);
+
             var attachment = !string.IsNullOrWhiteSpace(request.FileData)
                 ? request.FileData.Trim()
                 : (!string.IsNullOrWhiteSpace(request.FileName) ? request.FileName.Trim() : expense.FileName);
@@ -157,6 +164,32 @@ public class ExpenseService : IExpenseService
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
             throw;
+        }
+    }
+
+    private async Task ValidateExpenseAmountAgainstEventBudgetAsync(string eventName, decimal requestedAmount, Guid? currentExpenseId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(eventName)) return;
+
+        var eventItem = await _eventRepository.GetByNameAsync(eventName.Trim(), cancellationToken);
+        if (eventItem == null) return;
+
+        var eventDetails = await _eventRepository.GetByIdWithDetailsAsync(eventItem.EventId, cancellationToken);
+        var expectedAmount = eventDetails?.TotalExpectedAmount ?? eventItem.BaseAmount;
+
+        var existingExpenses = await _expenseRepository.GetAllAsync(eventName: eventItem.EventName, cancellationToken: cancellationToken);
+        var spentAmount = existingExpenses
+            .Where(e => (currentExpenseId == null || e.ExpenseId != currentExpenseId.Value) && !string.Equals(e.Status, "Rejected", StringComparison.OrdinalIgnoreCase))
+            .Sum(e => e.Amount);
+
+        var remainingBudget = expectedAmount - spentAmount;
+        if (requestedAmount > remainingBudget)
+        {
+            throw new InvalidOperationException(string.Format(
+                CommonMessages.Expenses.ExceedsExpectedBudgetFormat,
+                expectedAmount,
+                spentAmount,
+                Math.Max(0, remainingBudget)));
         }
     }
 

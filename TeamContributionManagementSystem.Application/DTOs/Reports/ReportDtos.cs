@@ -20,6 +20,8 @@ public class EventCollectionReportDto
     public decimal PaidAmount { get; set; }
     public decimal PendingAmount { get; set; }
     public decimal CollectionRate { get; set; }
+    public decimal ExpenseAmount { get; set; }
+    public decimal RemainingAmount => ExpectedAmount - ExpenseAmount;
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn => CreatedAt;

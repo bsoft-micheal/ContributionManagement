@@ -54,7 +54,7 @@ public class ReportService : IReportService
                 endDate = new DateTime(targetYear.Value, 12, 31, 23, 59, 59, DateTimeKind.Utc);
             }
 
-            var allExpenses = await _expenseRepository.GetAllAsync(startDate: startDate, endDate: endDate, cancellationToken: cancellationToken);
+            var allExpenses = await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken);
             var allPayments = await _paymentTransactionRepository.GetAllAsync(startDate: startDate, endDate: endDate, cancellationToken: cancellationToken);
 
             // 1. Event Collections Report
@@ -64,6 +64,9 @@ public class ReportService : IReportService
                 var paid = x.TotalPaidAmount;
                 var pending = expected - paid;
                 var rate = expected > 0 ? Math.Round((paid / expected) * 100, 1) : 0;
+                var eventExp = allExpenses
+                    .Where(e => !string.IsNullOrWhiteSpace(e.EventName) && e.EventName.Trim().Equals(x.EventName.Trim(), StringComparison.OrdinalIgnoreCase))
+                    .Sum(e => e.Amount);
 
                 return new EventCollectionReportDto
                 {
@@ -75,6 +78,7 @@ public class ReportService : IReportService
                     PaidAmount = paid,
                     PendingAmount = pending,
                     CollectionRate = rate,
+                    ExpenseAmount = eventExp,
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt
                 };
