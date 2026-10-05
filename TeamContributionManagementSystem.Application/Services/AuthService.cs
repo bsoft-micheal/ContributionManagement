@@ -61,22 +61,47 @@ public class AuthService : IAuthService
             var identifier = request.Email?.Trim() ?? string.Empty;
             _logger.LogInformation(CommonLogMessages.Auth.LoginAttempt, identifier);
 
+            bool isEmailInput = identifier.Contains("@");
+
             var user = await _userRepository.GetByUsernameOrEmailAsync(identifier, cancellationToken);
 
-            bool isExactUsernameMatch = user != null && !string.IsNullOrEmpty(user.Username) &&
-                                        string.Equals(user.Username, identifier, StringComparison.Ordinal);
-            bool isEmailMatch = user != null && !string.IsNullOrEmpty(user.Email) &&
-                                string.Equals(user.Email, identifier, StringComparison.OrdinalIgnoreCase);
-
-            if (user is null || (!isExactUsernameMatch && !isEmailMatch) || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+            if (user == null)
             {
-                _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, CommonMessages.Auth.InvalidCredentials);
-                throw new InvalidOperationException(CommonMessages.Auth.InvalidCredentials);
+                _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, isEmailInput ? "Email not found" : "Username not found");
+                throw new InvalidOperationException(isEmailInput ? "Email address not found." : "Username not found.");
+            }
+
+            if (isEmailInput)
+            {
+                if (!string.Equals(user.Email, identifier, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, "Invalid email address");
+                    throw new InvalidOperationException("Invalid email address.");
+                }
+            }
+            else
+            {
+                if (!string.Equals(user.Username, identifier, StringComparison.Ordinal))
+                {
+                    if (string.Equals(user.Username, identifier, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, "Username case mismatch");
+                        throw new InvalidOperationException("Username is case-sensitive. Please check uppercase and lowercase characters.");
+                    }
+                    _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, "Invalid username");
+                    throw new InvalidOperationException("Invalid username.");
+                }
             }
 
             if (!user.IsActive)
             {
                 throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
+            }
+
+            if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+            {
+                _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, "Incorrect password");
+                throw new InvalidOperationException("Incorrect password. Please try again.");
             }
 
             bool isMobileLogin = request.IsFromMobile || (request.DeviceInfo != null && request.DeviceInfo.DeviceType == 2);
