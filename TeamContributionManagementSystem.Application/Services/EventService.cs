@@ -388,8 +388,8 @@ public class EventService : IEventService
             // Send notification emails asynchronously in the background to active contributors
             var participantData = members.Select(m => (
                 MemberId: m.MemberId,
-                Name: m.Name,
-                Email: m.Email,
+                Name: (string?)m.Name,
+                Email: (string?)m.Email,
                 ContributionAmount: contributions.FirstOrDefault(c => c.MemberId == m.MemberId)?.Amount ?? 0m
             ));
 

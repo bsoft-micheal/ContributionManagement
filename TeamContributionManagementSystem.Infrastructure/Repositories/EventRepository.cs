@@ -37,23 +37,42 @@ public class EventRepository : IEventRepository
                 query = query.Where(x => x.EventDate.Year == year.Value);
             }
 
-            var paymentTxnEventNames = await _context.PaymentTransactions
-                .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
-                .Select(x => x.Event!.EventName.ToLower())
-                .Distinct()
-                .ToListAsync(cancellationToken);
+            var paymentTxnEventNames = new List<string>();
+            var expenseEventNames = new List<string>();
+            var photoEventNames = new List<string>();
 
-            var expenseEventNames = await _context.Expenses
-                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
-                .Select(x => x.EventName.ToLower())
-                .Distinct()
-                .ToListAsync(cancellationToken);
+            try
+            {
+                paymentTxnEventNames = await _context.PaymentTransactions
+                    .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
+                    .Select(x => x.Event!.EventName.ToLower())
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load payment transaction event names."); }
 
-            var photoEventNames = await _context.GalleryPhotos
-                .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
-                .Select(x => x.Event!.EventName.ToLower())
-                .Distinct()
-                .ToListAsync(cancellationToken);
+            try
+            {
+                expenseEventNames = await _context.Expenses
+                    .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                    .Select(x => x.EventName.ToLower())
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load expense event names."); }
+
+            try
+            {
+                photoEventNames = await _context.GalleryPhotos
+                    .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
+                    .Select(x => x.Event!.EventName.ToLower())
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load photo event names."); }
 
             var results = await query
                 .OrderByDescending(x => x.EventDate)
@@ -105,6 +124,11 @@ public class EventRepository : IEventRepository
             }
 
             return results;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("GetAllAsync request was canceled.");
+            return new List<EventSummaryDto>();
         }
         catch (Exception ex)
         {
@@ -184,23 +208,42 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            var paymentTxnEventNames = await _context.PaymentTransactions
-                .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
-                .Select(x => x.Event!.EventName.ToLower())
-                .Distinct()
-                .ToListAsync(cancellationToken);
+            var paymentTxnEventNames = new List<string>();
+            var expenseEventNames = new List<string>();
+            var photoEventNames = new List<string>();
 
-            var expenseEventNames = await _context.Expenses
-                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
-                .Select(x => x.EventName.ToLower())
-                .Distinct()
-                .ToListAsync(cancellationToken);
+            try
+            {
+                paymentTxnEventNames = await _context.PaymentTransactions
+                    .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
+                    .Select(x => x.Event!.EventName.ToLower())
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load payment transaction event names."); }
 
-            var photoEventNames = await _context.GalleryPhotos
-                .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
-                .Select(x => x.Event!.EventName.ToLower())
-                .Distinct()
-                .ToListAsync(cancellationToken);
+            try
+            {
+                expenseEventNames = await _context.Expenses
+                    .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
+                    .Select(x => x.EventName.ToLower())
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load expense event names."); }
+
+            try
+            {
+                photoEventNames = await _context.GalleryPhotos
+                    .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
+                    .Select(x => x.Event!.EventName.ToLower())
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load photo event names."); }
 
             var results = await _context.Events
                 .Where(x => !x.IsDeleted && x.EventDate >= DateTime.UtcNow.Date)
@@ -254,6 +297,11 @@ public class EventRepository : IEventRepository
             }
 
             return results;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("GetUpcomingAsync request was canceled.");
+            return new List<EventSummaryDto>();
         }
         catch (Exception ex)
         {
