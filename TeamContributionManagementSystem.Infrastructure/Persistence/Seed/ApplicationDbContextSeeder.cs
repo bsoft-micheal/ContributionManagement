@@ -14,6 +14,18 @@ public class ApplicationDbContextSeeder
     private readonly IConfiguration? _configuration;
     private readonly ILogger<ApplicationDbContextSeeder>? _logger;
 
+    public ApplicationDbContextSeeder(
+        ApplicationDbContext context,
+        IPasswordHasher passwordHasher,
+        IConfiguration? configuration = null,
+        ILogger<ApplicationDbContextSeeder>? logger = null)
+    {
+        _context = context;
+        _passwordHasher = passwordHasher;
+        _configuration = configuration;
+        _logger = logger;
+    }
+
     private static class SeedDefaults
     {
         public const string AdminEmail = "admin@gmail.com";
@@ -33,6 +45,18 @@ public class ApplicationDbContextSeeder
 
     private static class ConfigKeys
     {
+        public const string AdminEmail = "SeedData:Admin:Email";
+        public const string AdminFallbackEmail = "SeedData:Admin:FallbackEmail";
+        public const string AdminFullName = "SeedData:Admin:FullName";
+        public const string AdminPassword = "SeedData:Admin:Password";
+
+        public const string MemberEmail = "SeedData:Member:Email";
+        public const string MemberFullName = "SeedData:Member:FullName";
+        public const string MemberPassword = "SeedData:Member:Password";
+    }
+
+    public async Task SeedAsync(CancellationToken cancellationToken = default)
+    {
         try
         {
             var initScriptPath = Path.Combine(AppContext.BaseDirectory, "Persistence", "Scripts", "init.sql");
@@ -46,6 +70,8 @@ public class ApplicationDbContextSeeder
                 await _context.Database.ExecuteSqlRawAsync(initSql, cancellationToken);
             }
 
+            await ExecuteScriptIfExistsAsync(SeedDefaults.NavigationMenusScript, cancellationToken);
+            await ExecuteScriptIfExistsAsync(SeedDefaults.RoleRightsScript, cancellationToken);
 
             // 4. Ensure default roles exist
             var adminRole = await EnsureRoleAsync(CommonRoles.Admin, cancellationToken);
