@@ -93,13 +93,13 @@ public class UserManagementService : IUserManagementService
         var secondaryRoleIds = activeUserRoles.Where(ur => ur.IsSecondary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
         var allRoleIds = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
 
-        var activeRoleId = user.RoleId ?? primaryRoleIds.FirstOrDefault();
-        if (activeRoleId == Guid.Empty && allRoleIds.Count > 0)
-        {
-            activeRoleId = allRoleIds.First();
-        }
+        Guid? activeRoleId = (user.RoleId.HasValue && user.RoleId.Value != Guid.Empty)
+            ? user.RoleId
+            : (primaryRoleIds.Count > 0
+                ? primaryRoleIds.First()
+                : (allRoleIds.Count > 0 ? allRoleIds.First() : (Guid?)null));
 
-        dto.RoleId = activeRoleId != Guid.Empty ? activeRoleId : null;
+        dto.RoleId = (activeRoleId.HasValue && activeRoleId.Value != Guid.Empty) ? activeRoleId : null;
         dto.RoleIds = allRoleIds;
         dto.PrimaryRoleIds = primaryRoleIds;
         dto.SecondaryRoleIds = secondaryRoleIds;
@@ -162,7 +162,8 @@ public class UserManagementService : IUserManagementService
         try
         {
             var emailToUse = request.Email.Trim().ToLowerInvariant();
-            var isAccessEnabled = request.EnableUserAccess ?? request.CreateMemberProfile ?? (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password));
+            var isAccessEnabled = (request.EnableUserAccess == true || request.CreateMemberProfile == true) ||
+                                  (request.CreateMemberProfile != false && request.EnableUserAccess != false && (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password)));
 
             // Check duplicate email
             var existingUser = await _userRepository.GetByEmailAsync(emailToUse, cancellationToken);
@@ -171,11 +172,11 @@ public class UserManagementService : IUserManagementService
                 throw new InvalidOperationException(CommonMessages.Users.EmailExists);
             }
 
-            var username = !string.IsNullOrWhiteSpace(request.Username)
-                ? request.Username.Trim()
-                : emailToUse.Split('@')[0];
+            var username = isAccessEnabled
+                ? (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : emailToUse.Split('@')[0])
+                : string.Empty;
 
-            if (!string.IsNullOrWhiteSpace(username))
+            if (isAccessEnabled && !string.IsNullOrWhiteSpace(username))
             {
                 var usernameExists = await _userRepository.GetByUsernameAsync(username, cancellationToken);
                 if (usernameExists != null && !usernameExists.IsDeleted)
@@ -236,7 +237,13 @@ public class UserManagementService : IUserManagementService
             Guid? assignedRoleId = null;
             string primaryRoleNameForUser = "Member";
 
-            if (isMultipleRoles)
+            if (!isAccessEnabled)
+            {
+                primaryRoleNameForUser = string.Empty;
+                assignedRoleId = null;
+                rolesToAdd.Clear();
+            }
+            else if (isMultipleRoles)
             {
                 primaryRoleNameForUser = primaryRolesReq.First();
                 foreach (var pRoleName in primaryRolesReq)
@@ -349,19 +356,19 @@ public class UserManagementService : IUserManagementService
                 UserId              = Guid.NewGuid(),
                 Username            = username,
                 Email               = emailToUse,
-                PasswordHash        = _passwordHasher.HashPassword(rawPassword),
+                PasswordHash        = isAccessEnabled ? _passwordHasher.HashPassword(rawPassword) : string.Empty,
                 Role                = enumRole,
                 FullName            = fullName,
                 IsActive            = request.IsActive,
                 IsFirstLogin        = false,
-                EnableMultipleRoles = isMultipleRoles,
-                IsPrimary           = true,
-                IsSecondary         = isMultipleRoles && secondaryRolesReq.Count > 0,
+                EnableMultipleRoles = isAccessEnabled && isMultipleRoles,
+                IsPrimary           = isAccessEnabled,
+                IsSecondary         = isAccessEnabled && isMultipleRoles && secondaryRolesReq.Count > 0,
                 Phone               = request.Phone?.Trim() ?? string.Empty,
                 Gender              = !string.IsNullOrWhiteSpace(request.Gender) ? request.Gender.Trim() : "Male",
                 WorkType            = assignedWorkTypeName,
                 WorkTypeId          = assignedWorkTypeId,
-                RoleId              = assignedRoleId,
+                RoleId              = isAccessEnabled ? assignedRoleId : null,
                 DateOfBirth         = (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
                     ? request.DateOfBirth.Value.ToUniversalTime()
                     : DateTime.UtcNow.Date,
@@ -458,7 +465,16 @@ public class UserManagementService : IUserManagementService
                 WorkType = appUser.WorkType,
                 DateOfBirth = appUser.DateOfBirth,
                 JoiningDate = appUser.JoiningDate,
-                RoleId = appUser.RoleId ?? primaryRoleIdsList.FirstOrDefault(),
+                RoleId = isAccessEnabled
+                    ? ((appUser.RoleId.HasValue && appUser.RoleId.Value != Guid.Empty)
+                        ? appUser.RoleId
+                        : (primaryRoleIdsList.Count > 0 ? primaryRoleIdsList.First() : (Guid?)null))
+                    : (Guid?)null,
+                Role = isAccessEnabled ? primaryRoleNameForUser : null,
+                RoleName = isAccessEnabled ? primaryRoleNameForUser : null,
+                Roles = isAccessEnabled ? rolesToAdd.Select(r => roleNamesDict.TryGetValue(r.RoleId, out var n) ? n : r.RoleId.ToString()).Distinct().ToList() : new List<string>(),
+                PrimaryRoles = isAccessEnabled ? rolesToAdd.Where(r => r.IsPrimary).Select(r => roleNamesDict.TryGetValue(r.RoleId, out var n) ? n : r.RoleId.ToString()).Distinct().ToList() : new List<string>(),
+                SecondaryRoles = isAccessEnabled ? rolesToAdd.Where(r => r.IsSecondary).Select(r => roleNamesDict.TryGetValue(r.RoleId, out var n) ? n : r.RoleId.ToString()).Distinct().ToList() : new List<string>(),
                 RoleIds = allRoleIdsList,
                 PrimaryRoleIds = primaryRoleIdsList,
                 SecondaryRoleIds = secondaryRoleIdsList,
@@ -761,7 +777,9 @@ public class UserManagementService : IUserManagementService
                 WorkType = appUser.WorkType,
                 DateOfBirth = appUser.DateOfBirth,
                 JoiningDate = appUser.JoiningDate,
-                RoleId = appUser.RoleId ?? primaryRoleIdsList.FirstOrDefault(),
+                RoleId = (appUser.RoleId.HasValue && appUser.RoleId.Value != Guid.Empty)
+                    ? appUser.RoleId
+                    : (primaryRoleIdsList.Count > 0 ? primaryRoleIdsList.First() : (Guid?)null),
                 RoleIds = allRoleIdsList,
                 PrimaryRoleIds = primaryRoleIdsList,
                 SecondaryRoleIds = secondaryRoleIdsList,
