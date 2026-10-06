@@ -53,9 +53,17 @@ public class DashboardService : IDashboardService
                 endDate = new DateTime(filterYear.Value, 12, 31, 23, 59, 59, DateTimeKind.Utc);
             }
 
-            var allExpenses = _expenseRepository != null
+            var allExpensesRaw = _expenseRepository != null
                 ? await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken)
                 : new List<TeamContributionManagementSystem.Application.DTOs.Expenses.ExpenseDto>();
+
+            // Only count verified expenses on the dashboard
+            var allExpenses = allExpensesRaw
+                .Where(e => !string.IsNullOrWhiteSpace(e.Status) && (
+                    e.Status.Contains("verif", StringComparison.OrdinalIgnoreCase) ||
+                    e.Status.Contains("approv", StringComparison.OrdinalIgnoreCase) ||
+                    e.Status.Equals("paid", StringComparison.OrdinalIgnoreCase)))
+                .ToList();
 
             // If caller is in the Member role, restrict results to their own member record only
             if (_currentUserService != null && _currentUserService.IsMemberRole)
