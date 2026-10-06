@@ -46,6 +46,7 @@ public class AuthResponseDto
     public string FullName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public Guid? RoleId { get; set; }
+    public List<string> Roles { get; set; } = new();
     public List<string> PrimaryRoles { get; set; } = new();
     public List<Guid> PrimaryRoleIds { get; set; } = new();
     public List<string> SecondaryRoles { get; set; } = new();
