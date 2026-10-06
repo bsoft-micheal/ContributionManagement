@@ -162,6 +162,76 @@ public class GalleryService : IGalleryService
                 catch { }
             }
 
+            // Enforce max 5 photos per event across all gallery entries
+            if (!string.IsNullOrWhiteSpace(request.EventName))
+            {
+                var cleanEvent = request.EventName.Trim().ToLower();
+                var allExistingPhotos = await _galleryRepository.GetAllAsync(null, null, cancellationToken);
+                var eventExistingPhotos = allExistingPhotos.Where(p =>
+                    !string.IsNullOrWhiteSpace(p.EventName) &&
+                    p.EventName.Trim().ToLower() == cleanEvent).ToList();
+
+                int existingCount = 0;
+                foreach (var p in eventExistingPhotos)
+                {
+                    if (string.IsNullOrWhiteSpace(p.ImageUrl)) continue;
+                    var trimmed = p.ImageUrl.Trim();
+                    if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+                    {
+                        try
+                        {
+                            var parsed = System.Text.Json.JsonSerializer.Deserialize<List<string>>(trimmed);
+                            existingCount += parsed?.Count(x => !string.IsNullOrWhiteSpace(x)) ?? 0;
+                        }
+                        catch
+                        {
+                            existingCount += 1;
+                        }
+                    }
+                    else if (trimmed.Contains("|||"))
+                    {
+                        existingCount += trimmed.Split("|||", StringSplitOptions.RemoveEmptyEntries).Length;
+                    }
+                    else
+                    {
+                        existingCount += 1;
+                    }
+                }
+
+                int incomingCount = 0;
+                if (!string.IsNullOrWhiteSpace(request.ImageUrl))
+                {
+                    var trimmedReq = request.ImageUrl.Trim();
+                    if (trimmedReq.StartsWith("[") && trimmedReq.EndsWith("]"))
+                    {
+                        try
+                        {
+                            var parsed = System.Text.Json.JsonSerializer.Deserialize<List<string>>(trimmedReq);
+                            incomingCount += parsed?.Count(x => !string.IsNullOrWhiteSpace(x)) ?? 0;
+                        }
+                        catch
+                        {
+                            incomingCount = 1;
+                        }
+                    }
+                    else if (trimmedReq.Contains("|||"))
+                    {
+                        incomingCount = trimmedReq.Split("|||", StringSplitOptions.RemoveEmptyEntries).Length;
+                    }
+                    else
+                    {
+                        incomingCount = 1;
+                    }
+                }
+
+                if (existingCount + incomingCount > 5)
+                {
+                    int remaining = Math.Max(0, 5 - existingCount);
+                    throw new InvalidOperationException(
+                        $"The event '{request.EventName}' already has {existingCount} photo(s) uploaded across existing entries. Maximum 5 photos allowed per event. You can only upload up to {remaining} more photo(s).");
+                }
+            }
+
             var photo = new GalleryPhoto
             {
                 PhotoId = Guid.NewGuid(),

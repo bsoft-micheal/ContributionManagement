@@ -141,11 +141,11 @@ public class UserRepository : IUserRepository
                     var secondaryRoleIds = assignedRoles.Where(ur => ur.IsSecondary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
                     var allRoleIds = assignedRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
 
-                    var activeRoleId = x.RoleId ?? primaryRoleIds.FirstOrDefault();
-                    if (activeRoleId == Guid.Empty && allRoleIds.Count > 0)
-                    {
-                        activeRoleId = allRoleIds.First();
-                    }
+                    Guid? activeRoleId = (x.RoleId.HasValue && x.RoleId.Value != Guid.Empty)
+                        ? x.RoleId
+                        : (primaryRoleIds.Count > 0
+                            ? primaryRoleIds.First()
+                            : (allRoleIds.Count > 0 ? allRoleIds.First() : (Guid?)null));
 
                     var primaryRoleName = primaryRoleNames.FirstOrDefault() ?? assignedRoles.FirstOrDefault()?.Role?.RoleName;
 
@@ -155,7 +155,7 @@ public class UserRepository : IUserRepository
                         Username = x.Username,
                         FullName = x.FullName,
                         Email = x.Email,
-                        RoleId = activeRoleId != Guid.Empty ? activeRoleId : null,
+                        RoleId = (activeRoleId.HasValue && activeRoleId.Value != Guid.Empty) ? activeRoleId : null,
                         Role = primaryRoleName,
                         RoleName = primaryRoleName,
                         Roles = allRoleNames,
@@ -191,11 +191,14 @@ public class UserRepository : IUserRepository
             foreach (var u in users)
             {
                 var uid = u.UserId.ToString();
-                var uname = u.Username.Trim().ToLowerInvariant();
-                var fname = u.FullName.Trim().ToLowerInvariant();
-                var email = u.Email.Trim().ToLowerInvariant();
+                var uname = !string.IsNullOrWhiteSpace(u.Username) ? u.Username.Trim().ToLowerInvariant() : string.Empty;
+                var fname = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName.Trim().ToLowerInvariant() : string.Empty;
+                var email = !string.IsNullOrWhiteSpace(u.Email) ? u.Email.Trim().ToLowerInvariant() : string.Empty;
 
-                u.IsReferred = referenced.Contains(uid) || referenced.Contains(uname) || referenced.Contains(fname) || referenced.Contains(email);
+                u.IsReferred = (!string.IsNullOrEmpty(uid) && referenced.Contains(uid))
+                    || (!string.IsNullOrEmpty(uname) && referenced.Contains(uname))
+                    || (!string.IsNullOrEmpty(fname) && referenced.Contains(fname))
+                    || (!string.IsNullOrEmpty(email) && referenced.Contains(email));
 
                 if (u.RoleIds.Count == 0 && u.RoleId.HasValue)
                 {
