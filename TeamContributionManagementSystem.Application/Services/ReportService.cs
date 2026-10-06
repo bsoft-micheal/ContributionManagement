@@ -54,7 +54,14 @@ public class ReportService : IReportService
                 endDate = new DateTime(targetYear.Value, 12, 31, 23, 59, 59, DateTimeKind.Utc);
             }
 
-            var allExpenses = await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken);
+            var allExpensesRaw = await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken);
+            // Only count verified expenses in reports
+            var allExpenses = allExpensesRaw
+                .Where(e => !string.IsNullOrWhiteSpace(e.Status) && (
+                    e.Status.Contains("verif", StringComparison.OrdinalIgnoreCase) ||
+                    e.Status.Contains("approv", StringComparison.OrdinalIgnoreCase) ||
+                    e.Status.Equals("paid", StringComparison.OrdinalIgnoreCase)))
+                .ToList();
             var allPayments = await _paymentTransactionRepository.GetAllAsync(startDate: startDate, endDate: endDate, cancellationToken: cancellationToken);
 
             // 1. Event Collections Report
