@@ -513,16 +513,19 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            // 2. Resolve Global Active Organizers (PrimaryRole or SecondaryRole == Organizer)
+            // 2. Resolve Global Active Organizers & Admins (PrimaryRole/SecondaryRole == Organizer or Admin)
             if (_userRepository != null)
             {
                 try
                 {
                     Guid? organizerRoleId = null;
+                    Guid? adminRoleId = null;
                     if (_roleRepository != null)
                     {
                         var organizerRole = await _roleRepository.GetByNameAsync(CommonConstants.UserRoles.Organizer, cancellationToken);
                         organizerRoleId = organizerRole?.RoleId;
+                        var adminRole = await _roleRepository.GetByNameAsync(CommonConstants.UserRoles.Admin, cancellationToken);
+                        adminRoleId = adminRole?.RoleId;
                     }
 
                     var allUsers = await _userRepository.GetAllAsync(cancellationToken);
@@ -530,10 +533,26 @@ public class SupportTicketService : ISupportTicketService
                     {
                         if (u.IsActive && !u.IsDeleted && !string.IsNullOrWhiteSpace(u.Email))
                         {
-                            bool isOrganizer = (organizerRoleId.HasValue && (u.RoleIds.Contains(organizerRoleId.Value) || u.PrimaryRoleIds.Contains(organizerRoleId.Value) || u.SecondaryRoleIds.Contains(organizerRoleId.Value)))
-                                || (u.RoleId.HasValue && organizerRoleId.HasValue && u.RoleId.Value == organizerRoleId.Value);
+                            bool isOrganizerOrAdmin =
+                                (organizerRoleId.HasValue && (u.RoleIds.Contains(organizerRoleId.Value) || u.PrimaryRoleIds.Contains(organizerRoleId.Value) || u.SecondaryRoleIds.Contains(organizerRoleId.Value)))
+                                || (adminRoleId.HasValue && (u.RoleIds.Contains(adminRoleId.Value) || u.PrimaryRoleIds.Contains(adminRoleId.Value) || u.SecondaryRoleIds.Contains(adminRoleId.Value)))
+                                || (u.RoleId.HasValue && ((organizerRoleId.HasValue && u.RoleId.Value == organizerRoleId.Value) || (adminRoleId.HasValue && u.RoleId.Value == adminRoleId.Value)))
+                                || string.Equals(u.Role, CommonConstants.UserRoles.Admin, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(u.Role, CommonConstants.UserRoles.Organizer, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(u.RoleName, CommonConstants.UserRoles.Admin, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(u.RoleName, CommonConstants.UserRoles.Organizer, StringComparison.OrdinalIgnoreCase);
 
-                            if (isOrganizer)
+                            if (isOrganizerOrAdmin)
+                            {
+                                organizerEmails.Add(u.Email.Trim());
+                            }
+                        }
+                    }
+                    if (organizerEmails.Count == 0 && allUsers.Count > 0)
+                    {
+                        foreach (var u in allUsers)
+                        {
+                            if (u.IsActive && !u.IsDeleted && !string.IsNullOrWhiteSpace(u.Email))
                             {
                                 organizerEmails.Add(u.Email.Trim());
                             }
@@ -542,7 +561,7 @@ public class SupportTicketService : ISupportTicketService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Could not query global active organizers for support ticket email notification.");
+                    _logger.LogWarning(ex, "Could not query global active organizers/admins for support ticket email notification.");
                 }
             }
 
@@ -552,7 +571,7 @@ public class SupportTicketService : ISupportTicketService
                 return;
             }
 
-            // 3. Resolve Member Contact Info
+            // 3. Resolve Member Contact Info & add to recipient list
             string? memberEmail = null;
             string? memberPhone = null;
             if (ticket.UserId.HasValue && _userRepository != null)
@@ -572,6 +591,11 @@ public class SupportTicketService : ISupportTicketService
             if (string.IsNullOrWhiteSpace(memberEmail) && _currentUserService != null)
             {
                 memberEmail = _currentUserService.Email;
+            }
+
+            if (!string.IsNullOrWhiteSpace(memberEmail))
+            {
+                organizerEmails.Add(memberEmail.Trim());
             }
 
             // 4. Build Email Subject and Body

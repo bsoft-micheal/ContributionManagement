@@ -133,6 +133,10 @@ public class UserRepository : IUserRepository
                 .Select(x =>
                 {
                     var assignedRoles = x.UserRoles?.Where(ur => ur.Role != null).ToList() ?? new List<AppUserRole>();
+                    var primaryRoleNames = assignedRoles.Where(ur => ur.IsPrimary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var secondaryRoleNames = assignedRoles.Where(ur => ur.IsSecondary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var allRoleNames = assignedRoles.Where(ur => ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
                     var primaryRoleIds = assignedRoles.Where(ur => ur.IsPrimary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
                     var secondaryRoleIds = assignedRoles.Where(ur => ur.IsSecondary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
                     var allRoleIds = assignedRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
@@ -143,6 +147,8 @@ public class UserRepository : IUserRepository
                         activeRoleId = allRoleIds.First();
                     }
 
+                    var primaryRoleName = primaryRoleNames.FirstOrDefault() ?? assignedRoles.FirstOrDefault()?.Role?.RoleName;
+
                     return new UserDto
                     {
                         UserId = x.UserId,
@@ -150,6 +156,11 @@ public class UserRepository : IUserRepository
                         FullName = x.FullName,
                         Email = x.Email,
                         RoleId = activeRoleId != Guid.Empty ? activeRoleId : null,
+                        Role = primaryRoleName,
+                        RoleName = primaryRoleName,
+                        Roles = allRoleNames,
+                        PrimaryRoles = primaryRoleNames,
+                        SecondaryRoles = secondaryRoleNames,
                         RoleIds = allRoleIds,
                         PrimaryRoleIds = primaryRoleIds,
                         SecondaryRoleIds = secondaryRoleIds,

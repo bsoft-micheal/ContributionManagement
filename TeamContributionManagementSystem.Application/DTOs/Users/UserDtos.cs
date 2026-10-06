@@ -10,6 +10,13 @@ public class UserDto
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public Guid? RoleId { get; set; }
+    public string? Role { get; set; }
+    public string? RoleName { get; set; }
+    public List<string> Roles { get; set; } = new();
+    public List<string> PrimaryRoles { get; set; } = new();
+    public List<string> SecondaryRoles { get; set; } = new();
+    public string? SecondaryRole => SecondaryRoles.Count > 0 ? string.Join(", ", SecondaryRoles) : null;
+    public string? SecondaryRolesCsv => SecondaryRoles.Count > 0 ? string.Join(", ", SecondaryRoles) : null;
     public List<Guid> RoleIds { get; set; } = new();
     public List<Guid> PrimaryRoleIds { get; set; } = new();
     public List<Guid> SecondaryRoleIds { get; set; } = new();
@@ -57,9 +64,12 @@ public class CreateUserRequestDto
     public string? RoleName { get; set; }
 
     public List<string>? Roles { get; set; }
+    public string? RolesCsv { get; set; }
     public List<Guid>? RoleIds { get; set; }
     public List<string>? PrimaryRoles { get; set; }
     public List<string>? SecondaryRoles { get; set; }
+    public string? SecondaryRole { get; set; }
+    public string? SecondaryRolesCsv { get; set; }
     public List<Guid>? PrimaryRoleIds { get; set; }
     public List<Guid>? SecondaryRoleIds { get; set; }
     public bool? EnableMultipleRoles { get; set; }
@@ -108,9 +118,12 @@ public class UpdateUserRequestDto
     public string? RoleName { get; set; }
 
     public List<string>? Roles { get; set; }
+    public string? RolesCsv { get; set; }
     public List<Guid>? RoleIds { get; set; }
     public List<string>? PrimaryRoles { get; set; }
     public List<string>? SecondaryRoles { get; set; }
+    public string? SecondaryRole { get; set; }
+    public string? SecondaryRolesCsv { get; set; }
     public List<Guid>? PrimaryRoleIds { get; set; }
     public List<Guid>? SecondaryRoleIds { get; set; }
     public bool? EnableMultipleRoles { get; set; }

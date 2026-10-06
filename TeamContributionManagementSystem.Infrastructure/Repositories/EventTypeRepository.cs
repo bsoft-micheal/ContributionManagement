@@ -22,7 +22,7 @@ public class EventTypeRepository : IEventTypeRepository
     {
         try
         {
-            return await _context.EventTypes.OrderBy(x => x.EventTypeName).ToListAsync(cancellationToken);
+            return await _context.EventTypes.Where(x => !x.IsDeleted).OrderBy(x => x.EventTypeName).ToListAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -35,7 +35,7 @@ public class EventTypeRepository : IEventTypeRepository
     {
         try
         {
-            return await _context.EventTypes.FirstOrDefaultAsync(x => x.EventTypeId == eventTypeId, cancellationToken);
+            return await _context.EventTypes.FirstOrDefaultAsync(x => x.EventTypeId == eventTypeId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -48,7 +48,7 @@ public class EventTypeRepository : IEventTypeRepository
     {
         try
         {
-            return await _context.EventTypes.FirstOrDefaultAsync(x => x.EventTypeName.ToLower() == eventTypeName.ToLower(), cancellationToken);
+            return await _context.EventTypes.FirstOrDefaultAsync(x => !x.IsDeleted && x.EventTypeName.ToLower() == eventTypeName.ToLower(), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -61,7 +61,7 @@ public class EventTypeRepository : IEventTypeRepository
     {
         try
         {
-            return await _context.Events.AnyAsync(x => x.EventTypeId == eventTypeId && !x.IsDeleted, cancellationToken);
+            return await _context.Events.AnyAsync(x => x.EventTypeId == eventTypeId, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -142,7 +142,9 @@ public class EventTypeRepository : IEventTypeRepository
     {
         try
         {
-            _context.EventTypes.Remove(eventType);
+            eventType.IsDeleted = true;
+            eventType.IsActive = false;
+            _context.EventTypes.Update(eventType);
         }
         catch (Exception ex)
         {
