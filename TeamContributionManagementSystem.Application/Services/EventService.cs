@@ -108,7 +108,7 @@ public class EventService : IEventService
                         .Where(e => string.Equals(e.EventName?.Trim(), ev.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
                         .Sum(e => e.Amount);
                     var overallExpVal = overallEvent != null ? overallEvent.TotalExpectedAmount : ev.TotalExpectedAmount;
-                    var eventRemaining = overallExpVal - eventExp;
+                    var eventRemaining = ev.TotalPaidAmount - eventExp;
 
                     ev.CollectedAmount = ev.TotalPaidAmount;
                     ev.PendingAmount = ev.TotalExpectedAmount - ev.TotalPaidAmount;
@@ -129,7 +129,7 @@ public class EventService : IEventService
                     var eventExp = allExpenses
                         .Where(e => string.Equals(e.EventName?.Trim(), ev.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
                         .Sum(e => e.Amount);
-                    var eventRemaining = ev.TotalExpectedAmount - eventExp;
+                    var eventRemaining = ev.TotalPaidAmount - eventExp;
 
                     ev.CollectedAmount = ev.TotalPaidAmount;
                     ev.PendingAmount = ev.TotalExpectedAmount - ev.TotalPaidAmount;
@@ -203,10 +203,10 @@ public class EventService : IEventService
                     eventDetails.CollectedAmount = eventDetails.TotalPaidAmount;
                     eventDetails.PendingAmount = eventDetails.TotalExpectedAmount - eventDetails.TotalPaidAmount;
                     eventDetails.ExpenseAmount = eventExp;
-                    eventDetails.RemainingAmount = eventDetails.TotalExpectedAmount - eventExp;
+                    eventDetails.RemainingAmount = eventDetails.TotalPaidAmount - eventExp;
                     eventDetails.OverallExpectedAmount = eventDetails.TotalExpectedAmount;
                     eventDetails.OverallExpenseAmount = eventExp;
-                    eventDetails.OverallRemainingAmount = eventDetails.TotalExpectedAmount - eventExp;
+                    eventDetails.OverallRemainingAmount = eventDetails.TotalPaidAmount - eventExp;
                 }
                 catch (Exception ex)
                 {
