@@ -85,6 +85,10 @@ public class UserManagementService : IUserManagementService
             : await ResolveDefaultWorkTypeAsync(cancellationToken);
 
         var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+        var primaryRoleNames = activeUserRoles.Where(ur => ur.IsPrimary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var secondaryRoleNames = activeUserRoles.Where(ur => ur.IsSecondary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var allRoleNames = activeUserRoles.Where(ur => ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
         var primaryRoleIds = activeUserRoles.Where(ur => ur.IsPrimary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
         var secondaryRoleIds = activeUserRoles.Where(ur => ur.IsSecondary).Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
         var allRoleIds = activeUserRoles.Select(ur => ur.RoleId).Where(id => id != Guid.Empty).Distinct().ToList();
@@ -99,6 +103,9 @@ public class UserManagementService : IUserManagementService
         dto.RoleIds = allRoleIds;
         dto.PrimaryRoleIds = primaryRoleIds;
         dto.SecondaryRoleIds = secondaryRoleIds;
+        dto.Roles = allRoleNames;
+        dto.PrimaryRoles = primaryRoleNames;
+        dto.SecondaryRoles = secondaryRoleNames;
         dto.EnableMultipleRoles = user.EnableMultipleRoles;
         dto.IsPrimary = user.IsPrimary || activeUserRoles.Any(ur => ur.IsPrimary);
         dto.IsSecondary = user.IsSecondary || activeUserRoles.Any(ur => ur.IsSecondary);
@@ -186,28 +193,39 @@ public class UserManagementService : IUserManagementService
 
             var isMultipleRoles = request.EnableMultipleRoles ?? false;
             var primaryRolesReq = (request.PrimaryRoles ?? new List<string>())
+                .Concat(!string.IsNullOrWhiteSpace(request.RoleName) ? new[] { request.RoleName } : Enumerable.Empty<string>())
+                .SelectMany(r => r.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .Where(r => !string.IsNullOrWhiteSpace(r))
                 .Select(r => r.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             var secondaryRolesReq = (request.SecondaryRoles ?? new List<string>())
+                .Concat(!string.IsNullOrWhiteSpace(request.SecondaryRolesCsv) ? request.SecondaryRolesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : Enumerable.Empty<string>())
+                .Concat(!string.IsNullOrWhiteSpace(request.SecondaryRole) ? request.SecondaryRole.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : Enumerable.Empty<string>())
+                .Concat((request.Roles ?? new List<string>()))
+                .Concat(!string.IsNullOrWhiteSpace(request.RolesCsv) ? request.RolesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : Enumerable.Empty<string>())
+                .SelectMany(r => r.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .Where(r => !string.IsNullOrWhiteSpace(r))
                 .Select(r => r.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            // Filter primary role out from secondary role entries so there's no conflict in DB flags
+            secondaryRolesReq = secondaryRolesReq
+                .Where(r => !primaryRolesReq.Contains(r, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
             if (isMultipleRoles)
             {
-                if (primaryRolesReq.Count == 0)
+                if (primaryRolesReq.Count == 0 && secondaryRolesReq.Count > 0)
                 {
-                    throw new InvalidOperationException("At least one Primary Role is required.");
+                    primaryRolesReq.Add(secondaryRolesReq.First());
+                    secondaryRolesReq.RemoveAt(0);
                 }
-
-                var overlap = primaryRolesReq.Intersect(secondaryRolesReq, StringComparer.OrdinalIgnoreCase).ToList();
-                if (overlap.Count > 0)
+                else if (primaryRolesReq.Count == 0)
                 {
-                    throw new InvalidOperationException("Same role cannot exist in both Primary and Secondary.");
+                    primaryRolesReq.Add(CommonRoles.Member);
                 }
             }
 
@@ -494,28 +512,39 @@ public class UserManagementService : IUserManagementService
 
             var isMultipleRoles = request.EnableMultipleRoles ?? appUser.EnableMultipleRoles;
             var primaryRolesReq = (request.PrimaryRoles ?? new List<string>())
+                .Concat(!string.IsNullOrWhiteSpace(request.RoleName) ? new[] { request.RoleName } : Enumerable.Empty<string>())
+                .SelectMany(r => r.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .Where(r => !string.IsNullOrWhiteSpace(r))
                 .Select(r => r.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             var secondaryRolesReq = (request.SecondaryRoles ?? new List<string>())
+                .Concat(!string.IsNullOrWhiteSpace(request.SecondaryRolesCsv) ? request.SecondaryRolesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : Enumerable.Empty<string>())
+                .Concat(!string.IsNullOrWhiteSpace(request.SecondaryRole) ? request.SecondaryRole.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : Enumerable.Empty<string>())
+                .Concat((request.Roles ?? new List<string>()))
+                .Concat(!string.IsNullOrWhiteSpace(request.RolesCsv) ? request.RolesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : Enumerable.Empty<string>())
+                .SelectMany(r => r.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .Where(r => !string.IsNullOrWhiteSpace(r))
                 .Select(r => r.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (isMultipleRoles && (request.PrimaryRoles != null || request.SecondaryRoles != null))
-            {
-                if (primaryRolesReq.Count == 0)
-                {
-                    throw new InvalidOperationException("At least one Primary Role is required.");
-                }
+            // Filter primary role out from secondary role entries so there's no conflict in DB flags
+            secondaryRolesReq = secondaryRolesReq
+                .Where(r => !primaryRolesReq.Contains(r, StringComparer.OrdinalIgnoreCase))
+                .ToList();
 
-                var overlap = primaryRolesReq.Intersect(secondaryRolesReq, StringComparer.OrdinalIgnoreCase).ToList();
-                if (overlap.Count > 0)
+            if (isMultipleRoles && (request.PrimaryRoles != null || request.SecondaryRoles != null || !string.IsNullOrWhiteSpace(request.SecondaryRolesCsv) || !string.IsNullOrWhiteSpace(request.SecondaryRole)))
+            {
+                if (primaryRolesReq.Count == 0 && secondaryRolesReq.Count > 0)
                 {
-                    throw new InvalidOperationException("Same role cannot exist in both Primary and Secondary.");
+                    primaryRolesReq.Add(secondaryRolesReq.First());
+                    secondaryRolesReq.RemoveAt(0);
+                }
+                else if (primaryRolesReq.Count == 0)
+                {
+                    primaryRolesReq.Add(CommonRoles.Member);
                 }
             }
 

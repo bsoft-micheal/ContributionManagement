@@ -517,7 +517,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                     else if (createdByProp.ClrType == typeof(Guid) || createdByProp.ClrType == typeof(Guid?))
                     {
                         var existingValue = entry.Property("CreatedBy").CurrentValue;
-                        if ((existingValue == null || (Guid)existingValue == Guid.Empty) && !string.IsNullOrWhiteSpace(currentUserId) && Guid.TryParse(currentUserId, out var parsedGuid))
+                        var isGuidEmpty = existingValue == null || (existingValue is Guid g && g == Guid.Empty);
+                        if (isGuidEmpty && !string.IsNullOrWhiteSpace(currentUserId) && Guid.TryParse(currentUserId, out var parsedGuid))
                         {
                             entry.Property("CreatedBy").CurrentValue = parsedGuid;
                         }

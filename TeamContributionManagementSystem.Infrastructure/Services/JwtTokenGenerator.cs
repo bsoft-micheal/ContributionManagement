@@ -184,6 +184,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             FullName = user.FullName,
             Role = effectiveActiveRole,
             RoleId = effectiveActiveRoleId,
+            Roles = resolvedRoles,
             PrimaryRoles = primaryRolesList,
             PrimaryRoleIds = primaryRoleIdsList,
             SecondaryRoles = secondaryRolesList,
