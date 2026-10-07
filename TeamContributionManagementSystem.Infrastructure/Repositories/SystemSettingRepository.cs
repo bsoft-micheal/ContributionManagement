@@ -69,4 +69,133 @@ public class SystemSettingRepository : ISystemSettingRepository
             throw;
         }
     }
+
+    public async Task<List<EventTypePaymentSetting>> GetAllEventTypePaymentSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await EnsureEventTypePaymentSettingsTableExistsAsync(cancellationToken);
+            return await _context.EventTypePaymentSettings.ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllEventTypePaymentSettingsAsync));
+            return new List<EventTypePaymentSetting>();
+        }
+    }
+
+    public async Task SyncEventTypePaymentSettingsAsync(string paymentQrConfigsJson, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(paymentQrConfigsJson))
+        {
+            return;
+        }
+
+        try
+        {
+            await EnsureEventTypePaymentSettingsTableExistsAsync(cancellationToken);
+
+            using var doc = System.Text.Json.JsonDocument.Parse(paymentQrConfigsJson);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                return;
+            }
+
+            var eventTypes = await _context.EventTypes.ToListAsync(cancellationToken);
+            var existingSettings = await _context.EventTypePaymentSettings.ToListAsync(cancellationToken);
+
+            foreach (var property in doc.RootElement.EnumerateObject())
+            {
+                var eventTypeName = property.Name.Trim();
+                if (string.IsNullOrWhiteSpace(eventTypeName)) continue;
+
+                var item = property.Value;
+                if (item.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+
+                string receiverName = item.TryGetProperty("receiverName", out var rn) ? rn.GetString() ?? string.Empty : string.Empty;
+                if (string.IsNullOrWhiteSpace(receiverName) && item.TryGetProperty("qrReceiverName", out var qrn))
+                {
+                    receiverName = qrn.GetString() ?? string.Empty;
+                }
+
+                string upiId = item.TryGetProperty("upiId", out var ui) ? ui.GetString() ?? string.Empty : string.Empty;
+                if (string.IsNullOrWhiteSpace(upiId) && item.TryGetProperty("qrUpiId", out var qui))
+                {
+                    upiId = qui.GetString() ?? string.Empty;
+                }
+
+                string qrMode = item.TryGetProperty("qrMode", out var qm) ? qm.GetString() ?? "generated" : "generated";
+                string? qrImageUrl = item.TryGetProperty("qrImage", out var qi) ? qi.GetString() : null;
+                if (string.IsNullOrWhiteSpace(qrImageUrl) && item.TryGetProperty("qrImageUrl", out var qiu))
+                {
+                    qrImageUrl = qiu.GetString();
+                }
+
+                bool isConfigured = !string.IsNullOrWhiteSpace(upiId) && !string.IsNullOrWhiteSpace(receiverName);
+                if (item.TryGetProperty("isConfigured", out var ic) && ic.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                {
+                    isConfigured = ic.GetBoolean();
+                }
+
+                var matchedEventType = eventTypes.FirstOrDefault(e => e.EventTypeName.Equals(eventTypeName, StringComparison.OrdinalIgnoreCase));
+                var matchedSetting = existingSettings.FirstOrDefault(s => s.EventTypeName.Equals(eventTypeName, StringComparison.OrdinalIgnoreCase));
+
+                if (matchedSetting != null)
+                {
+                    matchedSetting.EventTypeName = eventTypeName;
+                    if (matchedEventType != null) matchedSetting.EventTypeId = matchedEventType.EventTypeId;
+                    matchedSetting.ReceiverName = receiverName.Trim();
+                    matchedSetting.UpiId = upiId.Trim();
+                    matchedSetting.QrMode = qrMode;
+                    matchedSetting.QrImageUrl = qrImageUrl;
+                    matchedSetting.IsConfigured = isConfigured;
+                    _context.EventTypePaymentSettings.Update(matchedSetting);
+                }
+                else
+                {
+                    var newSetting = new EventTypePaymentSetting
+                    {
+                        PaymentSettingId = Guid.NewGuid(),
+                        EventTypeId = matchedEventType?.EventTypeId,
+                        EventTypeName = eventTypeName,
+                        ReceiverName = receiverName.Trim(),
+                        UpiId = upiId.Trim(),
+                        QrMode = qrMode,
+                        QrImageUrl = qrImageUrl,
+                        IsConfigured = isConfigured
+                    };
+                    await _context.EventTypePaymentSettings.AddAsync(newSetting, cancellationToken);
+                }
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to sync event_type_payment_settings: {Message}", ex.Message);
+        }
+    }
+
+    private async Task EnsureEventTypePaymentSettingsTableExistsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS public.event_type_payment_settings (
+                    payment_setting_id uuid PRIMARY KEY,
+                    event_type_id uuid NULL,
+                    event_type_name varchar(100) NOT NULL,
+                    upi_id varchar(150) NOT NULL,
+                    receiver_name varchar(150) NOT NULL,
+                    qr_mode varchar(50) DEFAULT 'generated',
+                    qr_image_url text NULL,
+                    is_configured boolean DEFAULT true
+                );";
+            await _context.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "EnsureEventTypePaymentSettingsTableExistsAsync warning: {Message}", ex.Message);
+        }
+    }
 }
