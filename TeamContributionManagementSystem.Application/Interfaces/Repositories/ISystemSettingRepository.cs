@@ -9,6 +9,9 @@ public interface ISystemSettingRepository
     Task AddRangeAsync(IEnumerable<SystemSetting> settings, CancellationToken cancellationToken = default);
     void Update(SystemSetting setting);
 
+    Task SyncEventTypePaymentSettingsAsync(string paymentQrConfigsJson, CancellationToken cancellationToken = default);
+    Task<List<EventTypePaymentSetting>> GetAllEventTypePaymentSettingsAsync(CancellationToken cancellationToken = default);
+
     // Standardized naming
     Task<List<SystemSetting>> GetAllSettingAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
     Task<SystemSetting?> GetSettingAsyncByKey(string key, CancellationToken cancellationToken = default) => GetByKeyAsync(key, cancellationToken);

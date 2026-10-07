@@ -120,6 +120,7 @@ public static class CommonConstants
         public const string EmailSubject = "emailSubject";
         public const string EmailDescription = "emailDescription";
         public const string CategoryTemplates = "categoryTemplates";
+        public const string PaymentQrConfigs = "payment_qr_configs";
         public const string SelectedTemplateCategoryId = "selectedTemplateCategoryId";
         public const string EnableMonthlyEmail = "enableMonthlyEmail";
         public const string EnableReminderEmail = "enableReminderEmail";

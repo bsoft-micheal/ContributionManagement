@@ -63,6 +63,7 @@ public class SystemSettingsDto
     public string? EmailDescription { get; set; }
     public string? SelectedTemplateCategoryId { get; set; }
     public object? CategoryTemplates { get; set; }
+    public object? PaymentQrConfigs { get; set; }
     public bool EnableMonthlyEmail { get; set; } = true;
     public bool EnableReminderEmail { get; set; } = true;
     public string ReminderIntervalDays { get; set; } = "10";

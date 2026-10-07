@@ -146,6 +146,37 @@ public class SystemSettingService : ISystemSettingService
                 }
             }
 
+            if (map.TryGetValue(CommonConstants.SettingKeys.PaymentQrConfigs, out var paymentQrConfigs) && !string.IsNullOrWhiteSpace(paymentQrConfigs))
+            {
+                try
+                {
+                    dto.PaymentQrConfigs = System.Text.Json.JsonSerializer.Deserialize<object>(paymentQrConfigs);
+                }
+                catch
+                {
+                    dto.PaymentQrConfigs = paymentQrConfigs;
+                }
+            }
+            else
+            {
+                var qrList = await _settingRepository.GetAllEventTypePaymentSettingsAsync(cancellationToken);
+                if (qrList != null && qrList.Count > 0)
+                {
+                    var qrMap = qrList.ToDictionary(
+                        x => x.EventTypeName,
+                        x => new
+                        {
+                            receiverName = x.ReceiverName,
+                            upiId = x.UpiId,
+                            qrMode = x.QrMode,
+                            qrImage = x.QrImageUrl,
+                            isConfigured = x.IsConfigured
+                        },
+                        StringComparer.OrdinalIgnoreCase);
+                    dto.PaymentQrConfigs = qrMap;
+                }
+            }
+
             return dto;
         }
         catch (Exception ex)
@@ -165,6 +196,14 @@ public class SystemSettingService : ISystemSettingService
                 string s => s,
                 System.Text.Json.JsonElement elem => elem.GetRawText(),
                 _ => System.Text.Json.JsonSerializer.Serialize(settings.CategoryTemplates)
+            };
+
+            string paymentQrConfigsJson = settings.PaymentQrConfigs switch
+            {
+                null => string.Empty,
+                string s => s,
+                System.Text.Json.JsonElement elem => elem.GetRawText(),
+                _ => System.Text.Json.JsonSerializer.Serialize(settings.PaymentQrConfigs)
             };
 
             var multipleEventsVal = settings.AllowedMultipleEvent.ToString().ToLowerInvariant();
@@ -200,6 +239,7 @@ public class SystemSettingService : ISystemSettingService
                 [CommonConstants.SettingKeys.EmailSubject] = (settings.EmailSubject ?? string.Empty, CommonConstants.SettingCategories.EmailTemplate),
                 [CommonConstants.SettingKeys.EmailDescription] = (settings.EmailDescription ?? string.Empty, CommonConstants.SettingCategories.EmailTemplate),
                 [CommonConstants.SettingKeys.CategoryTemplates] = (catTemplatesJson, CommonConstants.SettingCategories.EmailTemplate),
+                [CommonConstants.SettingKeys.PaymentQrConfigs] = (paymentQrConfigsJson, CommonConstants.SettingCategories.PaymentQr),
                 [CommonConstants.SettingKeys.SelectedTemplateCategoryId] = (settings.SelectedTemplateCategoryId ?? string.Empty, CommonConstants.SettingCategories.EmailTemplate),
                 [CommonConstants.SettingKeys.EnableMonthlyEmail] = (settings.EnableMonthlyEmail.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.EmailTemplate),
                 [CommonConstants.SettingKeys.EnableReminderEmail] = (settings.EnableReminderEmail.ToString().ToLowerInvariant(), CommonConstants.SettingCategories.EmailTemplate),
@@ -248,6 +288,11 @@ public class SystemSettingService : ISystemSettingService
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(paymentQrConfigsJson))
+            {
+                await _settingRepository.SyncEventTypePaymentSettingsAsync(paymentQrConfigsJson, cancellationToken);
+            }
 
             EnsureGpayImageExists();
             _logger.LogInformation(CommonLogMessages.Settings.SettingsUpdated, user ?? string.Empty);

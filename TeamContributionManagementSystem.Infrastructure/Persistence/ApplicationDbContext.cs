@@ -41,6 +41,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<Priority> Priorities => Set<Priority>();
     public DbSet<PaymentModeItem> PaymentModes => Set<PaymentModeItem>();
     public DbSet<NavigationMenu> NavigationMenus => Set<NavigationMenu>();
+    public DbSet<EventTypePaymentSetting> EventTypePaymentSettings => Set<EventTypePaymentSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -444,6 +445,20 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.SupportsQr).HasDefaultValue(true);
             entity.Property(x => x.PaymentType).HasMaxLength(50).HasDefaultValue("Digital");
             entity.HasIndex(x => x.PaymentModeName).IsUnique();
+        });
+
+        modelBuilder.Entity<EventTypePaymentSetting>(entity =>
+        {
+            entity.ToTable("event_type_payment_settings");
+            entity.HasKey(x => x.PaymentSettingId);
+            entity.Property(x => x.PaymentSettingId).HasColumnName("payment_setting_id");
+            entity.Property(x => x.EventTypeId).HasColumnName("event_type_id");
+            entity.Property(x => x.EventTypeName).HasColumnName("event_type_name").HasMaxLength(100).IsRequired();
+            entity.Property(x => x.UpiId).HasColumnName("upi_id").HasMaxLength(150).IsRequired();
+            entity.Property(x => x.ReceiverName).HasColumnName("receiver_name").HasMaxLength(150).IsRequired();
+            entity.Property(x => x.QrMode).HasColumnName("qr_mode").HasMaxLength(50).HasDefaultValue("generated");
+            entity.Property(x => x.QrImageUrl).HasColumnName("qr_image_url").HasColumnType("text");
+            entity.Property(x => x.IsConfigured).HasColumnName("is_configured").HasDefaultValue(true);
         });
 
         modelBuilder.ApplySnakeCaseNames();
