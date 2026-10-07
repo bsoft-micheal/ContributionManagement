@@ -78,13 +78,39 @@ public class UsersController : ControllerBase
             }
 
             var created = new List<UserDto>();
-            foreach (var req in requests)
+            for (int i = 0; i < requests.Count; i++)
             {
+                var req = requests[i];
                 if (req == null)
                 {
-                    return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult(CommonMessages.General.NullRequestItem, CommonStatusCodes.Status400BadRequest));
+                    return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult($"Row {i + 1}: {CommonMessages.General.NullRequestItem}", CommonStatusCodes.Status400BadRequest));
                 }
-                created.Add(await _userService.SaveUserAsync(req, currentUser, cancellationToken));
+
+                try
+                {
+                    created.Add(await _userService.SaveUserAsync(req, currentUser, cancellationToken));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult($"Row {i + 1} ({req.FullName ?? req.Email}): {ex.Message}", CommonStatusCodes.Status400BadRequest));
+                }
+                catch (Exception ex)
+                {
+                    var msg = ex.InnerException?.Message ?? ex.Message;
+                    if (msg.Contains("users_email_key", StringComparison.OrdinalIgnoreCase) || (msg.Contains("email", StringComparison.OrdinalIgnoreCase) && msg.Contains("unique", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult($"Row {i + 1}: Email '{req.Email}' already exists in the database.", CommonStatusCodes.Status400BadRequest));
+                    }
+                    if (msg.Contains("users_username_key", StringComparison.OrdinalIgnoreCase) || (msg.Contains("username", StringComparison.OrdinalIgnoreCase) && msg.Contains("unique", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult($"Row {i + 1}: Username '{req.Username ?? req.Email.Split('@')[0]}' already exists in the database.", CommonStatusCodes.Status400BadRequest));
+                    }
+                    if (msg.Contains("users_phone_key", StringComparison.OrdinalIgnoreCase) || (msg.Contains("phone", StringComparison.OrdinalIgnoreCase) && msg.Contains("unique", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult($"Row {i + 1}: Phone number '{req.Phone}' already exists in the database.", CommonStatusCodes.Status400BadRequest));
+                    }
+                    return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult($"Row {i + 1} ({req.FullName ?? req.Email}): {msg}", CommonStatusCodes.Status400BadRequest));
+                }
             }
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<UserDto>>.SuccessResult(created, CommonMessages.Users.SaveBulkSuccess, CommonStatusCodes.Status200OK));
         }

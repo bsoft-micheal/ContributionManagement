@@ -70,9 +70,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<AppUser>(entity =>
         {
             entity.HasKey(x => x.UserId);
-            entity.Property(x => x.Username).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Username).HasMaxLength(100).IsRequired(false);
             entity.Property(x => x.Email).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired(false);
             entity.Property(x => x.FullName).HasMaxLength(150).IsRequired();
             entity.Ignore(x => x.Role);
             entity.Property(x => x.ProfileImage).HasColumnType("text");

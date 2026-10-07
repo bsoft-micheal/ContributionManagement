@@ -73,6 +73,12 @@ public class ApplicationDbContextSeeder
             await ExecuteScriptIfExistsAsync(SeedDefaults.NavigationMenusScript, cancellationToken);
             await ExecuteScriptIfExistsAsync(SeedDefaults.RoleRightsScript, cancellationToken);
 
+            try
+            {
+                await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS users ALTER COLUMN username DROP NOT NULL; ALTER TABLE IF EXISTS users ALTER COLUMN password_hash DROP NOT NULL;", cancellationToken);
+            }
+            catch { /* Non-fatal */ }
+
             // 4. Ensure default roles exist
             var adminRole = await EnsureRoleAsync(CommonRoles.Admin, cancellationToken);
             var memberRole = await EnsureRoleAsync(CommonRoles.Member, cancellationToken);

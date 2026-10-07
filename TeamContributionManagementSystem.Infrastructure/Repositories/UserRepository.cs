@@ -246,11 +246,13 @@ public class UserRepository : IUserRepository
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(username)) return null;
+            var lowerUsername = username.Trim().ToLower();
             return await _context.Users
                 .Include(u => u.MfaDevices)
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(u => u.WorkTypeNavigation)
-                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Username.ToLower() == username.ToLower(), cancellationToken);
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Username != null && x.Username.ToLower() == lowerUsername, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -259,17 +261,36 @@ public class UserRepository : IUserRepository
         }
     }
 
+    public async Task<AppUser?> GetByPhoneAsync(string phone, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanDigits = new string((phone ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (string.IsNullOrWhiteSpace(cleanDigits)) return null;
+
+            return await _context.Users
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Phone != null && x.Phone.Replace("-", "").Replace(" ", "").Replace("(", "").Replace(")", "").Replace("+", "") == cleanDigits, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByPhoneAsync));
+            throw;
+        }
+    }
+
     public async Task<AppUser?> GetByUsernameOrEmailAsync(string identifier, CancellationToken cancellationToken = default)
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(identifier)) return null;
             var trimmed = identifier.Trim();
             var normalizedEmail = trimmed.ToLower();
             return await _context.Users
                 .Include(u => u.MfaDevices)
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(u => u.WorkTypeNavigation)
-                .FirstOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail || x.Username == trimmed, cancellationToken);
+                .FirstOrDefaultAsync(x => !x.IsDeleted && (x.Email.ToLower() == normalizedEmail || (x.Username != null && x.Username.ToLower() == normalizedEmail)), cancellationToken);
         }
         catch (Exception ex)
         {

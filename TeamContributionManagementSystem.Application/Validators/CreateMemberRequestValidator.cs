@@ -19,7 +19,8 @@ public class CreateMemberRequestValidator : AbstractValidator<CreateMemberReques
 
         RuleFor(x => x.Phone)
             .NotEmpty().WithMessage(CommonValidationMessages.PhoneRequired)
-            .MaximumLength(20).WithMessage(CommonValidationMessages.PhoneMaxLength);
+            .Matches(@"^[6-9]\d{9}$").WithMessage(CommonValidationMessages.PhoneInvalid)
+            .Length(10).WithMessage(CommonValidationMessages.PhoneMaxLength);
 
         RuleFor(x => x.DateOfBirth)
             .NotEmpty().WithMessage(CommonValidationMessages.DateOfBirthRequired)
