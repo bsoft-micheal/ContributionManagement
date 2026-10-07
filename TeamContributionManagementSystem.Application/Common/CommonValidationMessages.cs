@@ -10,7 +10,7 @@ public static class CommonValidationMessages
     public const string EmailRequired = "Email is required.";
     public const string UsernameOrEmailRequired = "This Field is required.";
     public const string EmailValid = "A valid email address is required.";
-    public const string EmailMaxLength = "Email must not exceed 150 characters.";
+    public const string EmailMaxLength = "Email must not exceed 250 characters.";
     public const string PasswordRequired = "This Field is required.";
     public const string OtpRequired = "This Field is required.";
     public const string OtpExactLength = "OTP must be exactly 6 characters.";
@@ -43,7 +43,7 @@ public static class CommonValidationMessages
     public const string PriorityNameRequired = "Priority name is required.";
     public const string PriorityNameMaxLength = "Priority name cannot exceed 100 characters.";
     public const string ExpenseItemRequired = "Expense Item is required.";
-    public const string RateRange = "Rate must be between 0 and 1,000,000.";
+    public const string RateRange = "Rate must be greater than 0 and up to 1,000,000.";
 
     // Support Ticket Validations
     public const string SubjectRequired = "Subject is required.";

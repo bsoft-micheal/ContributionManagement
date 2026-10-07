@@ -7,6 +7,7 @@ public interface IStatusRepository
 {
     Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly = null, string? module = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<string>> GetAllModuleAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default);
     Task<Status?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Status?> GetByNameAsync(string name, CancellationToken cancellationToken = default);

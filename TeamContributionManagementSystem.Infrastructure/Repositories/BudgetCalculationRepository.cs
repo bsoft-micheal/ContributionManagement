@@ -145,11 +145,8 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 var catClean = item.Category?.Trim().ToLower();
 
                 bool isUsedInExpenses = expenses.Any(x => x.Desc.Contains(itemClean) || (catClean != null && x.Cat == catClean && x.Event.Contains(itemClean)));
-                bool isUsedInEvents = events.Any(e =>
-                    (item.EventTypeId.HasValue && e.EventTypeId == item.EventTypeId.Value) ||
-                    (catClean != null && (e.EventTypeName == catClean || e.EventName.Contains(catClean))));
 
-                item.IsReferred = isUsedInExpenses || isUsedInEvents;
+                item.IsReferred = isUsedInExpenses;
 
                 if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
                 {
@@ -220,24 +217,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 (x.Description.ToLower().Contains(itemClean) ||
                  (catClean != null && x.Category.ToLower() == catClean && x.EventName.ToLower().Contains(itemClean))));
 
-            if (await query.AnyAsync(cancellationToken))
-            {
-                return true;
-            }
-
-            if (!string.IsNullOrWhiteSpace(catClean))
-            {
-                var eventQuery = _context.Events.Where(x => !x.IsDeleted &&
-                    ((x.EventType != null && x.EventType.EventTypeName.ToLower() == catClean) ||
-                     x.EventName.ToLower().Contains(catClean)));
-
-                if (await eventQuery.AnyAsync(cancellationToken))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return await query.AnyAsync(cancellationToken);
         }
         catch (Exception ex)
         {

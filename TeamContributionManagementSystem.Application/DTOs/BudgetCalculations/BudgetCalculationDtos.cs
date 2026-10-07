@@ -25,7 +25,7 @@ public class CreateBudgetCalculationRequestDto
     [MaxLength(150)]
     public string ExpenseItem { get; set; } = string.Empty;
 
-    [Range(0, 1000000, ErrorMessage = CommonValidationMessages.RateRange)]
+    [Range(1, 1000000, ErrorMessage = CommonValidationMessages.RateRange)]
     public decimal Rate { get; set; }
 
     [MaxLength(100)]
