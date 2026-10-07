@@ -171,7 +171,7 @@ public class PriorityService : IPriorityService
 
             if (await _repository.HasSupportTicketsAsync(entity.PriorityName, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete priority '{entity.PriorityName}' because it is assigned to existing support tickets.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             _repository.Delete(entity);

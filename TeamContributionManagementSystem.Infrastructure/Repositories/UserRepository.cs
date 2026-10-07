@@ -24,30 +24,45 @@ public class UserRepository : IUserRepository
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // 1. Contributions
         try
         {
-            var contributionMemberIds = await _context.Contributions
-                .Where(c => !c.IsDeleted)
-                .Select(c => c.UserId.ToString())
+            var contributions = await _context.Contributions
+                .AsNoTracking()
+                .Where(c => !c.IsDeleted && c.Event != null && !c.Event.IsDeleted)
+                .Select(c => new { c.UserId, c.CreatedBy })
                 .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (var id in contributionMemberIds) set.Add(id);
+            foreach (var c in contributions)
+            {
+                if (c.UserId != Guid.Empty) set.Add(c.UserId.ToString());
+                if (c.CreatedBy.HasValue && c.CreatedBy.Value != Guid.Empty) set.Add(c.CreatedBy.Value.ToString());
+            }
         }
         catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping Contributions sub-query"); }
 
+        // 2. Event Participants
         try
         {
-            var participantMemberIds = await _context.EventParticipants
-                .Select(ep => ep.UserId.ToString())
+            var participants = await _context.EventParticipants
+                .AsNoTracking()
+                .Where(ep => !ep.IsDeleted && ep.Event != null && !ep.Event.IsDeleted)
+                .Select(ep => new { ep.UserId, ep.CreatedBy })
                 .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (var id in participantMemberIds) set.Add(id);
+            foreach (var ep in participants)
+            {
+                if (ep.UserId != Guid.Empty) set.Add(ep.UserId.ToString());
+                if (ep.CreatedBy.HasValue && ep.CreatedBy.Value != Guid.Empty) set.Add(ep.CreatedBy.Value.ToString());
+            }
         }
         catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping EventParticipants sub-query"); }
 
+        // 3. Events Created By
         try
         {
             var eventCreators = await _context.Events
+                .AsNoTracking()
                 .Where(e => !e.IsDeleted && e.CreatedBy != Guid.Empty)
                 .Select(e => e.CreatedBy.ToString())
                 .Distinct()
@@ -56,60 +71,85 @@ public class UserRepository : IUserRepository
         }
         catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping Events sub-query"); }
 
+        // 4. Payment Transactions
         try
         {
-            var paymentTxnUserIds = await _context.PaymentTransactions
-                .Where(pt => !pt.IsDeleted && pt.UserId.HasValue)
-                .Select(pt => pt.UserId!.Value.ToString())
+            var paymentTxns = await _context.PaymentTransactions
+                .AsNoTracking()
+                .Where(pt => !pt.IsDeleted)
+                .Select(pt => new { pt.UserId, pt.CreatedBy, pt.VerifiedBy })
                 .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (var id in paymentTxnUserIds) set.Add(id);
+            foreach (var pt in paymentTxns)
+            {
+                if (pt.UserId.HasValue && pt.UserId.Value != Guid.Empty) set.Add(pt.UserId.Value.ToString());
+                if (pt.CreatedBy.HasValue && pt.CreatedBy.Value != Guid.Empty) set.Add(pt.CreatedBy.Value.ToString());
+                if (!string.IsNullOrWhiteSpace(pt.VerifiedBy)) set.Add(pt.VerifiedBy.Trim().ToLowerInvariant());
+            }
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping PaymentTransactions.UserId sub-query"); }
+        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping PaymentTransactions sub-query"); }
 
+        // 5. Expenses
         try
         {
-            var expenseUsers = await _context.Expenses
-                .Where(ex => !ex.IsDeleted && !string.IsNullOrEmpty(ex.SubmittedBy))
-                .Select(ex => ex.SubmittedBy.Trim().ToLower())
+            var expenses = await _context.Expenses
+                .AsNoTracking()
+                .Where(ex => !ex.IsDeleted)
+                .Select(ex => new { ex.SubmittedBy, ex.ApprovedBy, ex.CreatedBy })
                 .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (var name in expenseUsers) set.Add(name);
+            foreach (var ex in expenses)
+            {
+                if (!string.IsNullOrWhiteSpace(ex.SubmittedBy)) set.Add(ex.SubmittedBy.Trim().ToLowerInvariant());
+                if (!string.IsNullOrWhiteSpace(ex.ApprovedBy)) set.Add(ex.ApprovedBy.Trim().ToLowerInvariant());
+                if (ex.CreatedBy.HasValue && ex.CreatedBy.Value != Guid.Empty) set.Add(ex.CreatedBy.Value.ToString());
+            }
         }
         catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping Expenses sub-query"); }
 
+        // 6. Support Tickets
         try
         {
-            var ticketMembers = await _context.SupportTickets
-                .Where(st => !st.IsDeleted && st.User != null && !string.IsNullOrEmpty(st.User.FullName))
-                .Select(st => st.User!.FullName.Trim().ToLower())
+            var tickets = await _context.SupportTickets
+                .AsNoTracking()
+                .Where(st => !st.IsDeleted)
+                .Select(st => new { st.UserId, st.AssignedTo, st.CreatedBy })
                 .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (var name in ticketMembers) set.Add(name);
+            foreach (var st in tickets)
+            {
+                if (st.UserId.HasValue && st.UserId.Value != Guid.Empty) set.Add(st.UserId.Value.ToString());
+                if (!string.IsNullOrWhiteSpace(st.AssignedTo)) set.Add(st.AssignedTo.Trim().ToLowerInvariant());
+                if (st.CreatedBy.HasValue && st.CreatedBy.Value != Guid.Empty) set.Add(st.CreatedBy.Value.ToString());
+            }
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping SupportTickets.MemberName sub-query"); }
+        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping SupportTickets sub-query"); }
 
+        // 7. Gallery Photos
         try
         {
-            var ticketMemberIds = await _context.SupportTickets
-                .Where(st => !st.IsDeleted && st.UserId != null)
-                .Select(st => (st.UserId.HasValue ? st.UserId.Value.ToString() : string.Empty).ToLower())
+            var galleryPhotos = await _context.GalleryPhotos
+                .AsNoTracking()
+                .Where(gp => !gp.IsDeleted && gp.CreatedBy.HasValue && gp.CreatedBy.Value != Guid.Empty)
+                .Select(gp => gp.CreatedBy!.Value.ToString())
                 .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (var id in ticketMemberIds) set.Add(id);
+            foreach (var id in galleryPhotos) set.Add(id);
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping SupportTickets.MemberId sub-query"); }
+        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping GalleryPhotos sub-query"); }
 
+        // 8. Budget Calculations
         try
         {
-            var ticketAssigned = await _context.SupportTickets
-                .Where(st => !st.IsDeleted && !string.IsNullOrEmpty(st.AssignedTo))
-                .Select(st => st.AssignedTo!.Trim().ToLower())
+            var budgetCalculations = await _context.BudgetCalculations
+                .AsNoTracking()
+                .Where(bc => !bc.IsDeleted && bc.CreatedBy.HasValue && bc.CreatedBy.Value != Guid.Empty)
+                .Select(bc => bc.CreatedBy!.Value.ToString())
                 .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (var name in ticketAssigned) set.Add(name);
+            foreach (var id in budgetCalculations) set.Add(id);
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping SupportTickets.AssignedTo sub-query"); }
+        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping BudgetCalculations sub-query"); }
 
         return set;
     }

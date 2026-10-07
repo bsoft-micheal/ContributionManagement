@@ -846,7 +846,21 @@ public class UserManagementService : IUserManagementService
 
             if (!string.IsNullOrWhiteSpace(appUser.Username) || !string.IsNullOrWhiteSpace(appUser.PasswordHash))
             {
-                throw new InvalidOperationException("Users with a login account (username and password) cannot be deleted.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
+            }
+
+            var referenced = await _userRepository.GetReferencedUserIdentifiersAsync(cancellationToken);
+            var uid = appUser.UserId.ToString();
+            var uname = !string.IsNullOrWhiteSpace(appUser.Username) ? appUser.Username.Trim().ToLowerInvariant() : string.Empty;
+            var fname = !string.IsNullOrWhiteSpace(appUser.FullName) ? appUser.FullName.Trim().ToLowerInvariant() : string.Empty;
+            var email = !string.IsNullOrWhiteSpace(appUser.Email) ? appUser.Email.Trim().ToLowerInvariant() : string.Empty;
+
+            if ((!string.IsNullOrEmpty(uid) && referenced.Contains(uid))
+                || (!string.IsNullOrEmpty(uname) && referenced.Contains(uname))
+                || (!string.IsNullOrEmpty(fname) && referenced.Contains(fname))
+                || (!string.IsNullOrEmpty(email) && referenced.Contains(email)))
+            {
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             appUser.IsDeleted = true;

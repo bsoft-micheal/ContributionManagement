@@ -128,7 +128,7 @@ public class WorkTypeService : IWorkTypeService
 
             if (await _repository.HasMembersAsync(entity.WorkTypeName, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete work type '{entity.WorkTypeName}' because it is currently assigned to active members.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             _repository.Delete(entity);

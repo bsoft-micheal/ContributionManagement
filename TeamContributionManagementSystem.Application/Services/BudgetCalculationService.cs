@@ -183,7 +183,7 @@ public class BudgetCalculationService : IBudgetCalculationService
 
             if (await _repository.HasExpensesAsync(item.ExpenseItem, item.Category, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete budget calculation item '{item.ExpenseItem}' because it is associated with existing expense records.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             _repository.Delete(item);

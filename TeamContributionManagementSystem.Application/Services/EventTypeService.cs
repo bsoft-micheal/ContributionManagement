@@ -129,22 +129,22 @@ public class EventTypeService : IEventTypeService
 
             if (await _eventTypeRepository.HasEventsAsync(eventTypeId, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because it is referenced by existing events.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             if (await _eventTypeRepository.HasBudgetCalculationsAsync(eventType.EventTypeName, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because budget calculation rules are configured for it.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             if (await _eventTypeRepository.HasExpensesAsync(eventType.EventTypeName, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because expenses are recorded under this category.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             if (await _eventTypeRepository.HasGalleryPhotosAsync(eventType.EventTypeName, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete event type '{eventType.EventTypeName}' because photos are associated with this category in the gallery.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             _eventTypeRepository.Delete(eventType);

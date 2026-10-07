@@ -232,6 +232,18 @@ public class GalleryService : IGalleryService
                 }
             }
 
+            if (!string.IsNullOrWhiteSpace(request.Title))
+            {
+                if (request.Title.Trim().Length > 50)
+                {
+                    throw new InvalidOperationException("Photo Title cannot exceed 50 characters.");
+                }
+                if (!System.Text.RegularExpressions.Regex.IsMatch(request.Title.Trim(), @"^[a-zA-Z\s]+$"))
+                {
+                    throw new InvalidOperationException("Photo Title must contain only letters and spaces.");
+                }
+            }
+
             var photo = new GalleryPhoto
             {
                 PhotoId = Guid.NewGuid(),

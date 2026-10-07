@@ -37,7 +37,7 @@ public class SystemSettingService : ISystemSettingService
             var dto = new SystemSettingsDto();
 
             if (map.TryGetValue(CommonConstants.SettingKeys.OrgName, out var orgName)) dto.OrgName = orgName;
-            if (map.TryGetValue(CommonConstants.SettingKeys.BirthdayMembersExempt, out var birthdayMembersExempt)) dto.BirthdayMembersExempt = bool.TryParse(birthdayMembersExempt, out var bme) ? bme : true;
+            if (map.TryGetValue(CommonConstants.SettingKeys.BirthdayMembersExempt, out var birthdayMembersExempt)) dto.BirthdayMembersExempt = bool.TryParse(birthdayMembersExempt, out var bme) ? bme : false;
             if (map.TryGetValue(CommonConstants.SettingKeys.AllowedMultipleEvent, out var allowedMultipleEvent) ||
                 map.TryGetValue("allowedMultipleEvent", out allowedMultipleEvent) ||
                 map.TryGetValue("allowMultipleEvents", out allowedMultipleEvent) ||
