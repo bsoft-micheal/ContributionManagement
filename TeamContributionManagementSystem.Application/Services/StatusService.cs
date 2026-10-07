@@ -45,17 +45,22 @@ public class StatusService : IStatusService
         return GetAllStatusAsync(activeOnly, null, cancellationToken);
     }
 
-    public async Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<string>> GetAllModuleAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _repository.GetModulesAsync(cancellationToken);
+            return await _repository.GetAllModuleAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetModulesAsync));
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllModuleAsync));
             throw;
         }
+    }
+
+    public async Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetAllModuleAsync(cancellationToken);
     }
 
     public async Task<StatusDto?> GetStatusAsyncById(Guid id, CancellationToken cancellationToken = default)

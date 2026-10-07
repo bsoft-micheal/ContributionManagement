@@ -195,6 +195,7 @@ public static class CommonRoutes
     {
         public const string Base = $"{ApiBase}/statuses";
         public const string GetAll = "getAllStatusAsync";
+        public const string GetAllModule = "getAllModuleAsync";
         public const string GetModules = "getModulesAsync";
         public const string GetById = "getStatusAsyncById/{id:guid}";
         public const string Create = "saveStatusAsync";

@@ -161,50 +161,86 @@ public class StatusRepository : IStatusRepository
         return GetAllAsync(activeOnly, null, cancellationToken);
     }
 
+    public async Task<IReadOnlyCollection<string>> GetAllModuleAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // 1. Fetch distinct top-level Modules from navigation_menus
+            var topModules = await _context.NavigationMenus
+                .Where(x => !string.IsNullOrWhiteSpace(x.Module))
+                .Select(x => x.Module!.Trim())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            // 2. Fetch distinct SubModules for parent_id IN (3, 7, 13) (Events, Finance, Tools)
+            var targetedParentIds = new[] { 3, 7, 13 };
+            var subModules = await _context.NavigationMenus
+                .Where(x => targetedParentIds.Contains(x.ParentID))
+                .Select(x => !string.IsNullOrWhiteSpace(x.SubModule)
+                    ? x.SubModule.Trim()
+                    : (!string.IsNullOrWhiteSpace(x.Activity) && x.MenuType <= 2 ? x.Activity.Trim() : null))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            // 3. Statuses existing modules (e.g. General)
+            var existingStatusModules = await _context.Statuses
+                .Where(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.Module))
+                .Select(x => x.Module!.Trim())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Events", "Contribution" };
+
+            // Combine and sort
+            var allModules = topModules
+                .Concat(subModules!)
+                .Concat(existingStatusModules)
+                .Where(m => !string.IsNullOrWhiteSpace(m) && !excluded.Contains(m.Trim()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(m => m)
+                .ToList();
+
+            if (allModules.Count > 0)
+            {
+                return allModules;
+            }
+        }
+        catch
+        {
+            // fallback if navigation_menus query encounters an issue
+        }
+
+        return new List<string>
+        {
+            "Budget Calculation",
+            "Calculation",
+            "Calendar",
+            "Contributions",
+            "Dashboard",
+            "Event",
+            "Event Types",
+            "Exit Process",
+            "Expense",
+            "Finance",
+            "Gallery",
+            "General",
+            "Payment History",
+            "Reports",
+            "Roles",
+            "Settings",
+            "Status",
+            "Support Ticket",
+            "Tools",
+            "Types",
+            "User Rights",
+            "Users"
+        };
+    }
+
     public async Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default)
     {
-        await EnsureModuleColumnAsync(cancellationToken);
-
-        var navModules = await _context.NavigationMenus
-            .Where(x => !string.IsNullOrWhiteSpace(x.Module))
-            .Select(x => x.Module!)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        var navSubModules = await _context.NavigationMenus
-            .Where(x => !string.IsNullOrWhiteSpace(x.Activity) && x.Activity != "#")
-            .Select(x => x.Activity!)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        var statusModules = await _context.Statuses
-            .Where(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.Module))
-            .Select(x => x.Module!)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        var defaultModules = new List<string>
-        {
-            "Support Ticket",
-            "Expense",
-            "Events",
-            "Contributions / Payments",
-            "Members",
-            "Exit Process",
-            "Budget Calculations",
-            "General"
-        };
-
-        var allModules = navModules
-            .Concat(navSubModules)
-            .Concat(statusModules)
-            .Concat(defaultModules)
-            .Where(m => !string.IsNullOrWhiteSpace(m) && m != "Dashboard")
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(m => m)
-            .ToList();
-
-        return allModules;
+        return await GetAllModuleAsync(cancellationToken);
     }
 
     public async Task<Status?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

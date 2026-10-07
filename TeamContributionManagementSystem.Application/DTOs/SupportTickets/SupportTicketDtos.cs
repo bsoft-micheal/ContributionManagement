@@ -42,9 +42,8 @@ public class CreateSupportTicketRequestDto
     [MaxLength(100)]
     public string TicketType { get; set; } = string.Empty;
 
-    [Required]
     [MaxLength(2000)]
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     [MaxLength(50)]
     public string? Status { get; set; }

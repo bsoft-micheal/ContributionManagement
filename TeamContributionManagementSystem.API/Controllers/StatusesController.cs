@@ -35,13 +35,24 @@ public class StatusesController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves all system module names for status management.
+    /// Retrieves all distinct system module names from navigation_menus module column.
+    /// </summary>
+    [HttpGet(CommonRoutes.Statuses.GetAllModule)]
+    [ActionName(nameof(GetAllModuleAsync))]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<string>>>> GetAllModuleAsync(CancellationToken cancellationToken)
+    {
+        var result = await _statusService.GetAllModuleAsync(cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<string>>.SuccessResult(result, "Modules retrieved successfully.", CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Retrieves all system module names for status management (alias).
     /// </summary>
     [HttpGet(CommonRoutes.Statuses.GetModules)]
     [ActionName(nameof(GetModulesAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<string>>>> GetModulesAsync(CancellationToken cancellationToken)
     {
-        var result = await _statusService.GetModulesAsync(cancellationToken);
+        var result = await _statusService.GetAllModuleAsync(cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<string>>.SuccessResult(result, "Modules retrieved successfully.", CommonStatusCodes.Status200OK));
     }
 

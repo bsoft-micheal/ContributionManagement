@@ -269,7 +269,7 @@ public class SupportTicketService : ISupportTicketService
                 RelatedEvent = request.RelatedEvent?.Trim(),
                 TicketType = ticketType ?? string.Empty,
                 Subject = string.Empty,
-                Description = request.Description.Trim(),
+                Description = request.Description?.Trim() ?? string.Empty,
                 Status = status,
                 Priority = priority,
                 AssignedTo = null,
@@ -287,8 +287,18 @@ public class SupportTicketService : ISupportTicketService
 
             _logger.LogInformation(CommonLogMessages.SupportTickets.TicketCreated, ticketNo, request.MemberName);
 
-            // Safe non-blocking email notification dispatch to active organizers
-            await SendSupportTicketEmailNotificationAsync(ticket, cancellationToken);
+            // Safe non-blocking background email notification dispatch to active organizers
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await SendSupportTicketEmailNotificationAsync(ticket, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Background error sending support ticket email notification for TicketNo: {TicketNo}", ticket.TicketNo);
+                }
+            });
 
             return _mapper.Map<SupportTicketDto>(ticket);
         }
@@ -492,29 +502,51 @@ public class SupportTicketService : ISupportTicketService
 
             var organizerEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // 1. Resolve Event-Specific Organizer if ticket is associated with an event
+            // 1. Resolve Event-Specific Organizer who created that particular event
+            Domain.Entities.Event? eventObj = null;
             if (ticket.EventId.HasValue && _eventRepository != null)
             {
                 try
                 {
-                    var eventObj = await _eventRepository.GetByIdAsync(ticket.EventId.Value, cancellationToken);
-                    if (eventObj != null && eventObj.CreatedBy != Guid.Empty && _userRepository != null)
+                    eventObj = await _eventRepository.GetByIdAsync(ticket.EventId.Value, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not resolve Event by EventId {EventId}.", ticket.EventId);
+                }
+            }
+
+            if (eventObj == null && !string.IsNullOrWhiteSpace(ticket.RelatedEvent) && _eventRepository != null)
+            {
+                try
+                {
+                    eventObj = await _eventRepository.GetByNameAsync(ticket.RelatedEvent.Trim(), cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not resolve Event by name '{RelatedEvent}'.", ticket.RelatedEvent);
+                }
+            }
+
+            if (eventObj != null && eventObj.CreatedBy != Guid.Empty && _userRepository != null)
+            {
+                try
+                {
+                    var creatorUser = await _userRepository.GetByIdAsync(eventObj.CreatedBy, cancellationToken);
+                    if (creatorUser != null && creatorUser.IsActive && !creatorUser.IsDeleted && !string.IsNullOrWhiteSpace(creatorUser.Email))
                     {
-                        var creatorUser = await _userRepository.GetByIdAsync(eventObj.CreatedBy, cancellationToken);
-                        if (creatorUser != null && creatorUser.IsActive && !creatorUser.IsDeleted && !string.IsNullOrWhiteSpace(creatorUser.Email))
-                        {
-                            organizerEmails.Add(creatorUser.Email.Trim());
-                        }
+                        organizerEmails.Add(creatorUser.Email.Trim());
+                        _logger.LogInformation("Resolved creator organizer {Email} for Event '{EventName}' (Ticket {TicketNo}).", creatorUser.Email, eventObj.EventName, ticket.TicketNo);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Could not resolve event organizer for EventId {EventId}.", ticket.EventId);
+                    _logger.LogWarning(ex, "Could not resolve event creator organizer for Event '{EventName}'.", eventObj.EventName);
                 }
             }
 
-            // 2. Resolve Global Active Organizers & Admins (PrimaryRole/SecondaryRole == Organizer or Admin)
-            if (_userRepository != null)
+            // 2. If no event-specific organizer was found, fallback to active global organizers/admins
+            if (organizerEmails.Count == 0 && _userRepository != null)
             {
                 try
                 {

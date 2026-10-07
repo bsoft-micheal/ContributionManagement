@@ -61,6 +61,11 @@ public class BudgetCalculationService : IBudgetCalculationService
     {
         try
         {
+            if (request.Rate <= 0)
+            {
+                throw new ArgumentException(CommonValidationMessages.RateRange);
+            }
+
             var existing = await _repository.GetByNameAsync(request.ExpenseItem.Trim(), request.Category?.Trim(), cancellationToken);
             if (existing is not null)
             {
@@ -118,6 +123,11 @@ public class BudgetCalculationService : IBudgetCalculationService
     {
         try
         {
+            if (request.Rate <= 0)
+            {
+                throw new ArgumentException(CommonValidationMessages.RateRange);
+            }
+
             var item = await _repository.GetByIdAsync(budgetCalculationId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.BudgetCalculations.NotFound);
 
