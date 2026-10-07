@@ -259,6 +259,24 @@ public class UserRepository : IUserRepository
         }
     }
 
+    public async Task<AppUser?> GetByPhoneAsync(string phone, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cleanDigits = new string((phone ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (string.IsNullOrWhiteSpace(cleanDigits)) return null;
+
+            return await _context.Users
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Phone != null && x.Phone.Replace("-", "").Replace(" ", "").Replace("(", "").Replace(")", "").Replace("+", "") == cleanDigits, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByPhoneAsync));
+            throw;
+        }
+    }
+
     public async Task<AppUser?> GetByUsernameOrEmailAsync(string identifier, CancellationToken cancellationToken = default)
     {
         try

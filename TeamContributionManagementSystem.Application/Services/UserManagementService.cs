@@ -169,25 +169,42 @@ public class UserManagementService : IUserManagementService
             var existingUser = await _userRepository.GetByEmailAsync(emailToUse, cancellationToken);
             if (existingUser != null && !existingUser.IsDeleted)
             {
-                throw new InvalidOperationException(CommonMessages.Users.EmailExists);
+                var ownerName = !string.IsNullOrWhiteSpace(existingUser.FullName) ? existingUser.FullName : existingUser.Username;
+                throw new InvalidOperationException($"Email '{request.Email.Trim()}' already exists in the database (registered to '{ownerName}').");
+            }
+
+            // Check duplicate phone
+            if (!string.IsNullOrWhiteSpace(request.Phone))
+            {
+                var existingPhoneUser = await _userRepository.GetByPhoneAsync(request.Phone.Trim(), cancellationToken);
+                if (existingPhoneUser != null && !existingPhoneUser.IsDeleted)
+                {
+                    var ownerName = !string.IsNullOrWhiteSpace(existingPhoneUser.FullName) ? existingPhoneUser.FullName : existingPhoneUser.Username;
+                    throw new InvalidOperationException($"Phone number '{request.Phone.Trim()}' already exists in the database (registered to '{ownerName}').");
+                }
             }
 
             var username = isAccessEnabled
                 ? (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : emailToUse.Split('@')[0])
-                : string.Empty;
+                : (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : emailToUse.Split('@')[0]);
 
-            if (isAccessEnabled && !string.IsNullOrWhiteSpace(username))
+            if (!string.IsNullOrWhiteSpace(username))
             {
                 var usernameExists = await _userRepository.GetByUsernameAsync(username, cancellationToken);
                 if (usernameExists != null && !usernameExists.IsDeleted)
                 {
-                    if (string.IsNullOrWhiteSpace(request.Username))
+                    if (string.IsNullOrWhiteSpace(request.Username) && !isAccessEnabled)
+                    {
+                        username = $"{username}_{new Random().Next(100, 999)}";
+                    }
+                    else if (string.IsNullOrWhiteSpace(request.Username))
                     {
                         username = $"{username}_{new Random().Next(100, 999)}";
                     }
                     else
                     {
-                        throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
+                        var ownerName = !string.IsNullOrWhiteSpace(usernameExists.FullName) ? usernameExists.FullName : usernameExists.Username;
+                        throw new InvalidOperationException($"Username '{username}' already exists in the database (registered to '{ownerName}').");
                     }
                 }
             }
