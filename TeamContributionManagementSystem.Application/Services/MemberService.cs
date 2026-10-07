@@ -280,6 +280,18 @@ public class MemberService : IMemberService
             var member = await _memberRepository.GetByIdAsync(memberId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Members.NotFound);
 
+            var referenced = await _userRepository.GetReferencedUserIdentifiersAsync(cancellationToken);
+            var mid = member.MemberId.ToString();
+            var mname = (member.Name ?? string.Empty).Trim().ToLowerInvariant();
+            var memail = (member.Email ?? string.Empty).Trim().ToLowerInvariant();
+
+            if (referenced.Contains(mid)
+                || (!string.IsNullOrEmpty(mname) && referenced.Contains(mname))
+                || (!string.IsNullOrEmpty(memail) && referenced.Contains(memail)))
+            {
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
+            }
+
             member.IsDeleted = true;
             member.IsActive = false;
 

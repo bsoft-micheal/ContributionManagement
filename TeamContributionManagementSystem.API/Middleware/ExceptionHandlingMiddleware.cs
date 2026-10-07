@@ -48,10 +48,35 @@ public class ExceptionHandlingMiddleware
                 data = valEx.Errors?.Select(e => new { e.PropertyName, e.ErrorMessage })
             };
         }
+        else if (exception is Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            statusCode = HttpStatusCode.Conflict;
+            payload = new
+            {
+                success = false,
+                statusCode = (int)statusCode,
+                message = "The record was modified or deleted by another operation. Please refresh the page and try again.",
+                data = (object?)null
+            };
+        }
         else if (exception is Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
         {
             statusCode = HttpStatusCode.BadRequest;
-            var msg = dbEx.InnerException?.Message ?? dbEx.Message;
+            var innerMsg = dbEx.InnerException?.Message ?? dbEx.Message;
+            string msg;
+            if (innerMsg.Contains("23503") || innerMsg.IndexOf("foreign key", StringComparison.OrdinalIgnoreCase) >= 0 || innerMsg.IndexOf("reference", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                msg = CommonMessages.General.RecordInUse;
+            }
+            else if (innerMsg.Contains("23505") || innerMsg.IndexOf("unique", StringComparison.OrdinalIgnoreCase) >= 0 || innerMsg.IndexOf("duplicate", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                msg = "A record with this information already exists.";
+            }
+            else
+            {
+                msg = "Unable to save changes to the database. Please verify your data and try again.";
+            }
+
             payload = new
             {
                 success = false,

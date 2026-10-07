@@ -200,7 +200,7 @@ public class PaymentModeService : IPaymentModeService
 
             if (await _repository.IsInUseAsync(entity.PaymentModeName, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete payment mode '{entity.PaymentModeName}' because transactions or contributions have been recorded using this payment mode.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             _repository.Delete(entity);

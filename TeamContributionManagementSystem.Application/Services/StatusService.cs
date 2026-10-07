@@ -150,7 +150,7 @@ public class StatusService : IStatusService
 
             if (await _repository.IsInUseAsync(entity.StatusName, entity.Module, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete status '{entity.StatusName}' because it is currently assigned to existing records in the system.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             _repository.Delete(entity);

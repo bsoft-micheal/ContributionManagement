@@ -17,6 +17,9 @@ public static class CommonMessages
         public const string NullRequestItem = "One of the request items is null.";
         public const string Unauthorized = "Unauthorized";
         public const string UserIdentityNotAvailable = "User identity is not available.";
+        public const string RecordInUse = "This record cannot be deleted because it is currently in use.";
+        public const string DeleteSuccess = "Record deleted successfully.";
+        public const string DeleteFailure = "Unable to delete the record. Please try again.";
     }
 
     public static class Validation
@@ -105,7 +108,7 @@ public static class CommonMessages
         public const string DeleteSuccess = "Role deleted successfully.";
         public const string NotFound = "Role not found.";
         public const string AlreadyExists = "Role already exists.";
-        public const string CannotDeleteWithMembers = "Cannot delete role because members are assigned to this role.";
+        public const string CannotDeleteWithMembers = General.RecordInUse;
         public const string InvalidRoleFormat = "Invalid role: '{0}'. Valid values: Admin, Organizer, Member.";
     }
 
@@ -126,7 +129,7 @@ public static class CommonMessages
         public const string DeleteSuccess = "Event type deleted successfully.";
         public const string NotFound = "Event type not found.";
         public const string AlreadyExists = "Event type already exists.";
-        public const string CannotDeleteWithEvents = "Cannot delete this event type because it is associated with existing events.";
+        public const string CannotDeleteWithEvents = General.RecordInUse;
         public const string NoActiveConfigured = "No active event type is configured in the database.";
     }
 

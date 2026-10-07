@@ -22,7 +22,8 @@ public class GalleryPhotoDto
 public class CreateGalleryPhotoRequestDto
 {
     [Required]
-    [MaxLength(200)]
+    [MaxLength(50)]
+    [RegularExpression(@"^[a-zA-Z\s]+$", ErrorMessage = "Title must contain only letters and spaces.")]
     public string Title { get; set; } = string.Empty;
 
     [Required]

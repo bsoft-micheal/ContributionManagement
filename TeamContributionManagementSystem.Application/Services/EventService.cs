@@ -818,6 +818,21 @@ public class EventService : IEventService
             var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
+            // Disallow editing if any payments have been recorded for this event
+            var hasPaidContributions = eventItem.Contributions.Any(c =>
+                !c.IsDeleted && (
+                    c.PaymentDate != null ||
+                    c.PaymentStatus == PaymentStatus.Paid ||
+                    (c.StatusItem != null && c.StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase)) ||
+                    (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                    (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                ));
+
+            if (hasPaidContributions)
+            {
+                throw new InvalidOperationException("Cannot edit this event because contributions have already been paid by members.");
+            }
+
             var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
 
@@ -853,61 +868,80 @@ public class EventService : IEventService
                 request.ContributionOverrides ?? new List<ContributionOverrideDto>());
 
             // 1. Synchronize Event Participants
-            var currentParticipants = eventItem.Participants.Where(p => !p.IsDeleted).ToList();
-            var currentParticipantIds = currentParticipants.Select(p => p.MemberId).ToHashSet();
+            var allExistingParticipants = eventItem.Participants.ToList();
+            var participantLookup = allExistingParticipants
+                .GroupBy(p => p.UserId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            // Remove participants no longer in the request
-            var participantsToRemove = currentParticipants
-                .Where(p => !newParticipantIds.Contains(p.MemberId))
-                .ToList();
-            if (participantsToRemove.Count > 0)
+            var participantIdsToAdd = new List<Guid>();
+
+            // Deactivate participants not present in newParticipantIds
+            foreach (var p in allExistingParticipants)
             {
-                _eventRepository.DeleteParticipants(participantsToRemove);
-                foreach (var p in participantsToRemove)
+                if (!newParticipantIds.Contains(p.UserId))
                 {
-                    eventItem.Participants.Remove(p);
+                    if (!p.IsDeleted)
+                    {
+                        p.IsDeleted = true;
+                        p.ModifiedOn = DateTime.UtcNow;
+                    }
                 }
             }
 
-            // Add newly selected participants
-            var participantIdsToAdd = newParticipantIds
-                .Where(id => !currentParticipantIds.Contains(id))
-                .ToList();
-            foreach (var memberId in participantIdsToAdd)
+            // Add or Reactivate requested participants
+            foreach (var memberId in newParticipantIds)
             {
-                eventItem.Participants.Add(new EventParticipant
+                if (participantLookup.TryGetValue(memberId, out var existingList) && existingList.Count > 0)
                 {
-                    Id = Guid.NewGuid(),
-                    EventId = eventItem.EventId,
-                    MemberId = memberId,
-                    IsActive = true,
-                    IsDeleted = false,
-                    CreatedAt = DateTime.UtcNow
-                });
+                    var primary = existingList.First();
+                    if (primary.IsDeleted)
+                    {
+                        primary.IsDeleted = false;
+                        primary.IsActive = true;
+                        primary.ModifiedOn = DateTime.UtcNow;
+                        participantIdsToAdd.Add(memberId);
+                    }
+                    for (int i = 1; i < existingList.Count; i++)
+                    {
+                        existingList[i].IsDeleted = true;
+                        existingList[i].ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    eventItem.Participants.Add(new EventParticipant
+                    {
+                        Id = Guid.NewGuid(),
+                        EventId = eventItem.EventId,
+                        UserId = memberId,
+                        IsActive = true,
+                        IsDeleted = false,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    participantIdsToAdd.Add(memberId);
+                }
             }
 
             // 2. Synchronize Contributions
-            var activeContributions = eventItem.Contributions.Where(c => !c.IsDeleted).ToList();
-            var memberContribLookup = activeContributions
-                .GroupBy(c => c.MemberId)
+            var allExistingContributions = eventItem.Contributions.ToList();
+            var contribLookup = allExistingContributions
+                .GroupBy(c => c.UserId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            // Remove contributions for removed participants
-            var contributionsToRemove = activeContributions
-                .Where(c => !newParticipantIds.Contains(c.MemberId))
-                .ToList();
-            if (contributionsToRemove.Count > 0)
+            // Deactivate contributions for removed participants
+            foreach (var c in allExistingContributions)
             {
-                _contributionRepository.DeleteRange(contributionsToRemove);
-                foreach (var c in contributionsToRemove)
+                if (!newParticipantIds.Contains(c.UserId))
                 {
-                    c.IsDeleted = true;
-                    c.ModifiedOn = DateTime.UtcNow;
-                    eventItem.Contributions.Remove(c);
+                    if (!c.IsDeleted)
+                    {
+                        c.IsDeleted = true;
+                        c.ModifiedOn = DateTime.UtcNow;
+                    }
                 }
             }
 
-            // Update existing contributions or add new ones
+            // Update or Add contributions for requested participants
             foreach (var memberId in newParticipantIds)
             {
                 if (!memberAmounts.TryGetValue(memberId, out var amount))
@@ -915,14 +949,13 @@ public class EventService : IEventService
                     continue;
                 }
 
-                if (memberContribLookup.TryGetValue(memberId, out var existingList) && existingList.Count > 0)
+                if (contribLookup.TryGetValue(memberId, out var existingList) && existingList.Count > 0)
                 {
                     var primary = existingList.First();
-                    if (!contributionsToRemove.Contains(primary))
-                    {
-                        primary.Amount = amount;
-                        primary.ModifiedOn = DateTime.UtcNow;
-                    }
+                    primary.Amount = amount;
+                    primary.IsDeleted = false;
+                    primary.IsActive = true;
+                    primary.ModifiedOn = DateTime.UtcNow;
 
                     for (int i = 1; i < existingList.Count; i++)
                     {
@@ -936,7 +969,7 @@ public class EventService : IEventService
                     {
                         ContributionId = Guid.NewGuid(),
                         EventId = eventItem.EventId,
-                        MemberId = memberId,
+                        UserId = memberId,
                         Amount = amount,
                         PaymentStatus = PaymentStatus.Pending,
                         PaymentMode = PaymentMode.None,
@@ -1000,8 +1033,11 @@ public class EventService : IEventService
             {
                 foreach (var contribution in eventItem.Contributions)
                 {
-                    contribution.IsDeleted = true;
-                    contribution.ModifiedOn = DateTime.UtcNow;
+                    if (!contribution.IsDeleted)
+                    {
+                        contribution.IsDeleted = true;
+                        contribution.ModifiedOn = DateTime.UtcNow;
+                    }
                 }
             }
 

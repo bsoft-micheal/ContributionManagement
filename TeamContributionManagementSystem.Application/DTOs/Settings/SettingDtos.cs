@@ -16,7 +16,7 @@ public class SystemSettingsDto
 {
     // General
     public string OrgName { get; set; } = "Unit 1A Residents Association";
-    public bool BirthdayMembersExempt { get; set; } = true;
+    public bool BirthdayMembersExempt { get; set; } = false;
     private bool _allowedMultipleEvent = false;
     public bool AllowedMultipleEvent
     {

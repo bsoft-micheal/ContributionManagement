@@ -128,7 +128,7 @@ public class TicketTypeService : ITicketTypeService
 
             if (await _repository.HasSupportTicketsAsync(entity.TypeName, cancellationToken))
             {
-                throw new InvalidOperationException($"Cannot delete ticket type '{entity.TypeName}' because it is referenced by existing support tickets.");
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
             }
 
             _repository.Delete(entity);

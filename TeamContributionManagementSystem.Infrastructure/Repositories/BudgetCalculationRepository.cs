@@ -105,6 +105,16 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 .Select(x => new { Desc = x.Description.ToLower(), Cat = x.Category.ToLower(), Event = x.EventName.ToLower() })
                 .ToListAsync(cancellationToken);
 
+            var events = await _context.Events
+                .Where(x => !x.IsDeleted)
+                .Select(x => new
+                {
+                    x.EventTypeId,
+                    EventTypeName = x.EventType != null ? x.EventType.EventTypeName.ToLower() : "",
+                    EventName = x.EventName.ToLower()
+                })
+                .ToListAsync(cancellationToken);
+
             var users = await _context.Users
                 .AsNoTracking()
                 .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
@@ -134,7 +144,12 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 var itemClean = item.ExpenseItem.Trim().ToLower();
                 var catClean = item.Category?.Trim().ToLower();
 
-                item.IsReferred = expenses.Any(x => x.Desc.Contains(itemClean) || (catClean != null && x.Cat == catClean && x.Event.Contains(itemClean)));
+                bool isUsedInExpenses = expenses.Any(x => x.Desc.Contains(itemClean) || (catClean != null && x.Cat == catClean && x.Event.Contains(itemClean)));
+                bool isUsedInEvents = events.Any(e =>
+                    (item.EventTypeId.HasValue && e.EventTypeId == item.EventTypeId.Value) ||
+                    (catClean != null && (e.EventTypeName == catClean || e.EventName.Contains(catClean))));
+
+                item.IsReferred = isUsedInExpenses || isUsedInEvents;
 
                 if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
                 {
@@ -205,7 +220,24 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 (x.Description.ToLower().Contains(itemClean) ||
                  (catClean != null && x.Category.ToLower() == catClean && x.EventName.ToLower().Contains(itemClean))));
 
-            return await query.AnyAsync(cancellationToken);
+            if (await query.AnyAsync(cancellationToken))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(catClean))
+            {
+                var eventQuery = _context.Events.Where(x => !x.IsDeleted &&
+                    ((x.EventType != null && x.EventType.EventTypeName.ToLower() == catClean) ||
+                     x.EventName.ToLower().Contains(catClean)));
+
+                if (await eventQuery.AnyAsync(cancellationToken))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
         catch (Exception ex)
         {
