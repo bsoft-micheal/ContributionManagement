@@ -121,6 +121,9 @@ public class UserManagementService : IUserManagementService
             dto.IsPrimary = true;
         }
 
+        dto.CreateMemberProfile = user.IsPrimary || activeUserRoles.Any(ur => ur.IsPrimary) || !string.IsNullOrWhiteSpace(user.Username);
+        dto.Username = !string.IsNullOrWhiteSpace(user.Username) ? user.Username : null;
+
         return dto;
     }
 
@@ -173,39 +176,27 @@ public class UserManagementService : IUserManagementService
                 throw new InvalidOperationException($"Email '{request.Email.Trim()}' already exists in the database (registered to '{ownerName}').");
             }
 
-            // Check duplicate phone
+            // Validate mobile number format: strictly 10 digits starting with 6–9 (duplicate phone is allowed)
             if (!string.IsNullOrWhiteSpace(request.Phone))
             {
-                var existingPhoneUser = await _userRepository.GetByPhoneAsync(request.Phone.Trim(), cancellationToken);
-                if (existingPhoneUser != null && !existingPhoneUser.IsDeleted)
+                var cleanPhone = request.Phone.Trim();
+                if (!System.Text.RegularExpressions.Regex.IsMatch(cleanPhone, @"^[6-9]\d{9}$"))
                 {
-                    var ownerName = !string.IsNullOrWhiteSpace(existingPhoneUser.FullName) ? existingPhoneUser.FullName : existingPhoneUser.Username;
-                    throw new InvalidOperationException($"Phone number '{request.Phone.Trim()}' already exists in the database (registered to '{ownerName}').");
+                    throw new InvalidOperationException("Invalid mobile number. Enter a valid 10-digit mobile number starting with 6–9.");
                 }
             }
 
-            var username = isAccessEnabled
-                ? (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : emailToUse.Split('@')[0])
-                : (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : emailToUse.Split('@')[0]);
+            var username = !string.IsNullOrWhiteSpace(request.Username)
+                ? request.Username.Trim()
+                : null;
 
             if (!string.IsNullOrWhiteSpace(username))
             {
                 var usernameExists = await _userRepository.GetByUsernameAsync(username, cancellationToken);
                 if (usernameExists != null && !usernameExists.IsDeleted)
                 {
-                    if (string.IsNullOrWhiteSpace(request.Username) && !isAccessEnabled)
-                    {
-                        username = $"{username}_{new Random().Next(100, 999)}";
-                    }
-                    else if (string.IsNullOrWhiteSpace(request.Username))
-                    {
-                        username = $"{username}_{new Random().Next(100, 999)}";
-                    }
-                    else
-                    {
-                        var ownerName = !string.IsNullOrWhiteSpace(usernameExists.FullName) ? usernameExists.FullName : usernameExists.Username;
-                        throw new InvalidOperationException($"Username '{username}' already exists in the database (registered to '{ownerName}').");
-                    }
+                    var ownerName = !string.IsNullOrWhiteSpace(usernameExists.FullName) ? usernameExists.FullName : usernameExists.Username;
+                    throw new InvalidOperationException($"Username '{username}' already exists in the database (registered to '{ownerName}').");
                 }
             }
 
@@ -501,6 +492,8 @@ public class UserManagementService : IUserManagementService
                 ActiveRoleId = appUser.RoleId,
                 IsActive = appUser.IsActive,
                 HasMemberProfile = true,
+                CreateMemberProfile = isAccessEnabled,
+                EnableUserAccess = isAccessEnabled,
                 IsFirstLogin = appUser.IsFirstLogin,
                 CreatedOn = appUser.CreatedOn,
                 CreatedAt = appUser.CreatedAt
@@ -542,6 +535,9 @@ public class UserManagementService : IUserManagementService
             {
                 throw new InvalidOperationException(CommonMessages.Users.EmailExists);
             }
+
+            var isAccessEnabled = (request.EnableUserAccess == true || request.CreateMemberProfile == true) ||
+                                  (request.CreateMemberProfile != false && request.EnableUserAccess != false && (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password) || !string.IsNullOrWhiteSpace(appUser.Username)));
 
             var isMultipleRoles = request.EnableMultipleRoles ?? appUser.EnableMultipleRoles;
             var primaryRolesReq = (request.PrimaryRoles ?? new List<string>())
@@ -737,12 +733,17 @@ public class UserManagementService : IUserManagementService
             }
 
             var fullName = !string.IsNullOrWhiteSpace(request.FullName) ? request.FullName.Trim() : appUser.FullName;
-            var username = !string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : appUser.Username;
+            var username = isAccessEnabled
+                ? (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : appUser.Username)
+                : (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : null);
 
-            var usernameOwner = await _userRepository.GetByUsernameAsync(username, cancellationToken);
-            if (usernameOwner != null && usernameOwner.UserId != appUser.UserId && !usernameOwner.IsDeleted)
+            if (!string.IsNullOrWhiteSpace(username))
             {
-                throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
+                var usernameOwner = await _userRepository.GetByUsernameAsync(username, cancellationToken);
+                if (usernameOwner != null && usernameOwner.UserId != appUser.UserId && !usernameOwner.IsDeleted)
+                {
+                    throw new InvalidOperationException(CommonMessages.Users.UsernameExists);
+                }
             }
 
             var oldUsername = appUser.Username;
@@ -752,7 +753,15 @@ public class UserManagementService : IUserManagementService
             appUser.Role = enumRole;
             appUser.IsActive = request.IsActive;
 
-            if (!string.IsNullOrWhiteSpace(request.Phone)) appUser.Phone = request.Phone.Trim();
+            if (!string.IsNullOrWhiteSpace(request.Phone))
+            {
+                var cleanPhone = request.Phone.Trim();
+                if (!System.Text.RegularExpressions.Regex.IsMatch(cleanPhone, @"^[6-9]\d{9}$"))
+                {
+                    throw new InvalidOperationException("Invalid mobile number. Enter a valid 10-digit mobile number starting with 6–9.");
+                }
+                appUser.Phone = cleanPhone;
+            }
             if (!string.IsNullOrWhiteSpace(request.Gender)) appUser.Gender = request.Gender.Trim();
             if (!string.IsNullOrWhiteSpace(request.WorkType))
             {
@@ -774,9 +783,9 @@ public class UserManagementService : IUserManagementService
             _userRepository.Update(appUser);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            if (!string.Equals(oldUsername, username, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(oldUsername) && !string.Equals(oldUsername, username, StringComparison.OrdinalIgnoreCase))
             {
-                await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldUsername, username, cancellationToken);
+                await _userRepository.CascadeUpdateCreatorDisplayNameAsync(appUser.UserId, oldUsername, username ?? string.Empty, cancellationToken);
             }
 
             var primaryRoleIdsList = appUser.UserRoles.Where(ur => ur.IsPrimary).Select(ur => ur.RoleId).Distinct().ToList();
@@ -806,6 +815,8 @@ public class UserManagementService : IUserManagementService
                 ActiveRoleId = appUser.RoleId,
                 IsActive = appUser.IsActive,
                 HasMemberProfile = true,
+                CreateMemberProfile = isAccessEnabled,
+                EnableUserAccess = isAccessEnabled,
                 IsFirstLogin = appUser.IsFirstLogin,
                 CreatedOn = appUser.CreatedOn,
                 CreatedAt = appUser.CreatedAt
@@ -831,6 +842,11 @@ public class UserManagementService : IUserManagementService
             if (appUser == null)
             {
                 throw new KeyNotFoundException(CommonMessages.Users.NotFound);
+            }
+
+            if (!string.IsNullOrWhiteSpace(appUser.Username) || !string.IsNullOrWhiteSpace(appUser.PasswordHash))
+            {
+                throw new InvalidOperationException("Users with a login account (username and password) cannot be deleted.");
             }
 
             appUser.IsDeleted = true;

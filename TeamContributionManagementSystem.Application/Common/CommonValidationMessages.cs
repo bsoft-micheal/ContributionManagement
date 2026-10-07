@@ -19,7 +19,8 @@ public static class CommonValidationMessages
     public const string NameRequired = "Name is required.";
     public const string NameMaxLength = "Name must not exceed 150 characters.";
     public const string PhoneRequired = "Phone number is required.";
-    public const string PhoneMaxLength = "Phone number must not exceed 20 characters.";
+    public const string PhoneInvalid = "Enter a valid 10-digit mobile number starting with 6–9.";
+    public const string PhoneMaxLength = "Phone number must be exactly 10 digits.";
     public const string RoleRequired = "Role is required.";
     public const string DateOfBirthRequired = "Date of birth is required.";
     public const string DateOfBirthPast = "Date of birth cannot be in the future.";

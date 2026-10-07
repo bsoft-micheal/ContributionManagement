@@ -384,7 +384,7 @@ public class MemberRepository : IMemberRepository
             var user = new AppUser
             {
                 UserId = member.MemberId == Guid.Empty ? Guid.NewGuid() : member.MemberId,
-                Username = member.Email.Split('@')[0],
+                Username = null,
                 Email = member.Email,
                 FullName = member.Name,
                 Phone = member.Phone,

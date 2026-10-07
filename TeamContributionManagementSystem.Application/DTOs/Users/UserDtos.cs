@@ -6,9 +6,11 @@ namespace TeamContributionManagementSystem.Application.DTOs.Users;
 public class UserDto
 {
     public Guid UserId { get; set; }
-    public string Username { get; set; } = string.Empty;
+    public string? Username { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public bool? CreateMemberProfile { get; set; }
+    public bool? EnableUserAccess { get; set; }
     public Guid? RoleId { get; set; }
     public string? Role { get; set; }
     public string? RoleName { get; set; }

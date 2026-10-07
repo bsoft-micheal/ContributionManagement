@@ -246,11 +246,13 @@ public class UserRepository : IUserRepository
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(username)) return null;
+            var lowerUsername = username.Trim().ToLower();
             return await _context.Users
                 .Include(u => u.MfaDevices)
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(u => u.WorkTypeNavigation)
-                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Username.ToLower() == username.ToLower(), cancellationToken);
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Username != null && x.Username.ToLower() == lowerUsername, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -281,13 +283,14 @@ public class UserRepository : IUserRepository
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(identifier)) return null;
             var trimmed = identifier.Trim();
             var normalizedEmail = trimmed.ToLower();
             return await _context.Users
                 .Include(u => u.MfaDevices)
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(u => u.WorkTypeNavigation)
-                .FirstOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail || x.Username == trimmed, cancellationToken);
+                .FirstOrDefaultAsync(x => !x.IsDeleted && (x.Email.ToLower() == normalizedEmail || (x.Username != null && x.Username.ToLower() == normalizedEmail)), cancellationToken);
         }
         catch (Exception ex)
         {
