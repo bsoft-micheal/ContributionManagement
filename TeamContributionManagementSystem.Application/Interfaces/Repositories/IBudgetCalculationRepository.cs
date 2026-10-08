@@ -14,10 +14,15 @@ public interface IBudgetCalculationRepository
     void Update(BudgetCalculation budgetCalculation);
     void Delete(BudgetCalculation budgetCalculation);
 
+    Task<List<BudgetCalculationHistoryDto>> GetHistoryByBudgetIdAsync(Guid budgetCalculationId, CancellationToken cancellationToken = default);
+    Task AddHistoryAsync(BudgetCalculationHistory history, CancellationToken cancellationToken = default);
+    Task<BudgetCalculationHistory?> GetLatestHistoryAsync(Guid budgetCalculationId, CancellationToken cancellationToken = default);
+
     // Standardized aliases
     Task<List<BudgetCalculationDto>> GetAllBudgetCalculationAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
     Task<BudgetCalculation?> GetBudgetCalculationAsyncById(Guid budgetCalculationId, CancellationToken cancellationToken = default) => GetByIdAsync(budgetCalculationId, cancellationToken);
     Task SaveBudgetCalculationAsync(BudgetCalculation budgetCalculation, CancellationToken cancellationToken = default) => AddAsync(budgetCalculation, cancellationToken);
     void UpdateBudgetCalculationAsyncById(BudgetCalculation budgetCalculation) => Update(budgetCalculation);
     void DeleteBudgetCalculationAsyncById(BudgetCalculation budgetCalculation) => Delete(budgetCalculation);
+    Task<List<BudgetCalculationHistoryDto>> GetBudgetCalculationHistoryAsyncById(Guid budgetCalculationId, CancellationToken cancellationToken = default) => GetHistoryByBudgetIdAsync(budgetCalculationId, cancellationToken);
 }

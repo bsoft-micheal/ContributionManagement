@@ -32,12 +32,68 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
             await _context.Database.ExecuteSqlRawAsync(@"
                 ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS category VARCHAR(100) NULL;
                 ALTER TABLE IF EXISTS budget_calculations ADD COLUMN IF NOT EXISTS event_type_id UUID NULL;
+
+                CREATE TABLE IF NOT EXISTS budget_calculation_history (
+                    history_id UUID PRIMARY KEY,
+                    budget_calculation_id UUID NOT NULL,
+                    previous_rate NUMERIC(12,2) NULL,
+                    new_rate NUMERIC(12,2) NOT NULL,
+                    effective_from DATE NOT NULL,
+                    change_type VARCHAR(20) NOT NULL,
+                    change_amount NUMERIC(12,2) NULL,
+                    change_percentage NUMERIC(8,2) NULL,
+                    change_reason VARCHAR(500) NOT NULL,
+                    remarks VARCHAR(1000) NULL,
+                    changed_by UUID NULL,
+                    changed_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_bch_bc_id ON budget_calculation_history(budget_calculation_id);
+                CREATE INDEX IF NOT EXISTS idx_bch_effective_from ON budget_calculation_history(effective_from);
+                CREATE INDEX IF NOT EXISTS idx_bch_changed_on ON budget_calculation_history(changed_on);
+
+                -- Seed initial history record for existing budget calculations missing history
+                INSERT INTO budget_calculation_history (
+                    history_id,
+                    budget_calculation_id,
+                    previous_rate,
+                    new_rate,
+                    effective_from,
+                    change_type,
+                    change_amount,
+                    change_percentage,
+                    change_reason,
+                    remarks,
+                    changed_by,
+                    changed_on,
+                    is_active
+                )
+                SELECT 
+                    gen_random_uuid(),
+                    bc.budget_calculation_id,
+                    NULL,
+                    bc.rate,
+                    COALESCE(bc.created_at::DATE, CURRENT_DATE),
+                    'INITIAL',
+                    0,
+                    0,
+                    'Initial rate',
+                    NULL,
+                    bc.created_by,
+                    COALESCE(bc.created_at, CURRENT_TIMESTAMP),
+                    TRUE
+                FROM budget_calculations bc
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM budget_calculation_history bch 
+                    WHERE bch.budget_calculation_id = bc.budget_calculation_id
+                );
             ", cancellationToken);
             _columnsEnsured = true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not ensure columns on budget_calculations");
+            _logger.LogWarning(ex, "Could not ensure columns and tables on budget_calculations");
         }
         finally
         {
@@ -285,6 +341,93 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Delete));
+            throw;
+        }
+    }
+
+    public async Task<List<BudgetCalculationHistoryDto>> GetHistoryByBudgetIdAsync(Guid budgetCalculationId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await EnsureColumnsAsync(cancellationToken);
+
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
+            var list = await _context.BudgetCalculationHistories
+                .Where(x => x.BudgetCalculationId == budgetCalculationId && x.IsActive)
+                .OrderByDescending(x => x.EffectiveFrom)
+                .ThenByDescending(x => x.ChangedOn)
+                .Select(x => new BudgetCalculationHistoryDto
+                {
+                    HistoryId = x.HistoryId,
+                    BudgetCalculationId = x.BudgetCalculationId,
+                    PreviousRate = x.PreviousRate,
+                    NewRate = x.NewRate,
+                    ChangeType = x.ChangeType,
+                    ChangeAmount = x.ChangeAmount,
+                    ChangePercentage = x.ChangePercentage,
+                    EffectiveFrom = x.EffectiveFrom,
+                    ChangeReason = x.ChangeReason,
+                    Remarks = x.Remarks,
+                    ChangedById = x.ChangedBy,
+                    ChangedBy = x.ChangedBy.HasValue ? x.ChangedBy.Value.ToString() : null,
+                    ChangedOn = x.ChangedOn,
+                    IsActive = x.IsActive
+                })
+                .ToListAsync(cancellationToken);
+
+            foreach (var item in list)
+            {
+                if (item.ChangedById.HasValue && users.TryGetValue(item.ChangedById.Value, out var userName))
+                {
+                    item.ChangedBy = userName;
+                }
+                else if (string.IsNullOrWhiteSpace(item.ChangedBy))
+                {
+                    item.ChangedBy = "System";
+                }
+            }
+
+            return list;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetHistoryByBudgetIdAsync));
+            throw;
+        }
+    }
+
+    public async Task AddHistoryAsync(BudgetCalculationHistory history, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await EnsureColumnsAsync(cancellationToken);
+            await _context.BudgetCalculationHistories.AddAsync(history, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddHistoryAsync));
+            throw;
+        }
+    }
+
+    public async Task<BudgetCalculationHistory?> GetLatestHistoryAsync(Guid budgetCalculationId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await EnsureColumnsAsync(cancellationToken);
+            return await _context.BudgetCalculationHistories
+                .Where(x => x.BudgetCalculationId == budgetCalculationId && x.IsActive)
+                .OrderByDescending(x => x.EffectiveFrom)
+                .ThenByDescending(x => x.ChangedOn)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetLatestHistoryAsync));
             throw;
         }
     }

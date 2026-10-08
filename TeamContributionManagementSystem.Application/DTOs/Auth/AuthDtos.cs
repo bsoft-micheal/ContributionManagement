@@ -113,7 +113,7 @@ public class ResetPasswordRequestDto
     public string Otp { get; set; } = string.Empty;
 
     [Required]
-    [MinLength(6, ErrorMessage = CommonValidationMessages.PasswordMinLength)]
+    [MinLength(8, ErrorMessage = CommonValidationMessages.PasswordMinLength)]
     public string NewPassword { get; set; } = string.Empty;
 }
 

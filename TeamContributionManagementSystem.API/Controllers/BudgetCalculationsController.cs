@@ -50,9 +50,9 @@ public class BudgetCalculationsController : ControllerBase
     }
 
     /// <summary>
-    /// Creates a new budget calculation item (Admin only).
+    /// Creates a new budget calculation item (Admin or Organizer).
     /// </summary>
-    [Authorize(Roles = CommonRoles.Admin)]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
     [HttpPost(CommonRoutes.BudgetCalculations.Create)]
     [ActionName(nameof(SaveBudgetCalculationAsync))]
     public async Task<ActionResult<ApiResponse<BudgetCalculationDto>>> SaveBudgetCalculationAsync([FromBody] CreateBudgetCalculationRequestDto request, CancellationToken cancellationToken)
@@ -63,9 +63,9 @@ public class BudgetCalculationsController : ControllerBase
     }
 
     /// <summary>
-    /// Updates an existing budget calculation item (Admin only).
+    /// Updates an existing budget calculation item (Admin or Organizer).
     /// </summary>
-    [Authorize(Roles = CommonRoles.Admin)]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
     [HttpPut(CommonRoutes.BudgetCalculations.Update)]
     [ActionName(nameof(UpdateBudgetCalculationAsyncById))]
     public async Task<ActionResult<ApiResponse<BudgetCalculationDto>>> UpdateBudgetCalculationAsyncById(Guid id, [FromBody] UpdateBudgetCalculationRequestDto request, CancellationToken cancellationToken)
@@ -76,9 +76,35 @@ public class BudgetCalculationsController : ControllerBase
     }
 
     /// <summary>
-    /// Deletes a budget calculation item (Admin only).
+    /// Updates only the rate of a budget calculation item, storing audit history (Admin or Organizer).
     /// </summary>
-    [Authorize(Roles = CommonRoles.Admin)]
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [HttpPut(CommonRoutes.BudgetCalculations.UpdateRate)]
+    [HttpPut(CommonRoutes.BudgetCalculations.UpdateRateAsync)]
+    [ActionName(nameof(UpdateBudgetCalculationRateAsyncById))]
+    public async Task<ActionResult<ApiResponse<BudgetCalculationDto>>> UpdateBudgetCalculationRateAsyncById(Guid id, [FromBody] UpdateBudgetCalculationRateRequestDto request, CancellationToken cancellationToken)
+    {
+        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var result = await _budgetCalculationService.UpdateBudgetCalculationRateAsyncById(id, request, currentUser, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<BudgetCalculationDto>.SuccessResult(result, "Rate updated successfully.", CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Retrieves complete rate revision history for a budget calculation item.
+    /// </summary>
+    [HttpGet(CommonRoutes.BudgetCalculations.GetHistory)]
+    [HttpGet(CommonRoutes.BudgetCalculations.GetHistoryAsync)]
+    [ActionName(nameof(GetBudgetCalculationHistoryAsyncById))]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<BudgetCalculationHistoryDto>>>> GetBudgetCalculationHistoryAsyncById(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _budgetCalculationService.GetBudgetCalculationHistoryAsyncById(id, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<BudgetCalculationHistoryDto>>.SuccessResult(result, "Budget calculation rate history retrieved successfully.", CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Deletes a budget calculation item (Admin or Organizer).
+    /// </summary>
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
     [HttpDelete(CommonRoutes.BudgetCalculations.Delete)]
     [ActionName(nameof(DeleteBudgetCalculationAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteBudgetCalculationAsyncById(Guid id, CancellationToken cancellationToken)
