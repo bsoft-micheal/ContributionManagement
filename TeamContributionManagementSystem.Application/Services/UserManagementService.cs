@@ -985,6 +985,10 @@ public class UserManagementService : IUserManagementService
             _logger.LogInformation("Password successfully changed for user {UserId}", userId);
             return true;
         }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(ChangePasswordAsync));

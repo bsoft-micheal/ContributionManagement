@@ -185,14 +185,23 @@ public class UsersController : ControllerBase
     [ActionName(nameof(ChangePasswordAsync))]
     public async Task<ActionResult<ApiResponse<bool>>> ChangePasswordAsync([FromBody] ChangePasswordRequestDto request, CancellationToken cancellationToken)
     {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException(CommonMessages.General.UserIdentityNotAvailable);
-
-        if (!Guid.TryParse(userIdClaim, out var userId))
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
             return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<bool>.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
 
-        var result = await _userService.ChangePasswordAsync(userId, request, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<bool>.SuccessResult(result, "Password changed successfully.", CommonStatusCodes.Status200OK));
+        try
+        {
+            var result = await _userService.ChangePasswordAsync(userId, request, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<bool>.SuccessResult(result, "Password changed successfully.", CommonStatusCodes.Status200OK));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<bool>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<bool>.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
     }
 
     /// <summary>
