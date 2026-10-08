@@ -14,6 +14,8 @@ public class BudgetCalculation
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
 
+    public ICollection<BudgetCalculationHistory> History { get; set; } = new List<BudgetCalculationHistory>();
+
     // Common Audit Properties
     public Guid? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;

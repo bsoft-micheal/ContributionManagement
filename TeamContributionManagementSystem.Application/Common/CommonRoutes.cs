@@ -178,6 +178,10 @@ public static class CommonRoutes
         public const string GetById = "getBudgetCalculationAsyncById/{id:guid}";
         public const string Create = "saveBudgetCalculationAsync";
         public const string Update = "updateBudgetCalculationAsyncById/{id:guid}";
+        public const string UpdateRate = "{id:guid}/rate";
+        public const string UpdateRateAsync = "updateRateAsyncById/{id:guid}";
+        public const string GetHistory = "{id:guid}/history";
+        public const string GetHistoryAsync = "getBudgetCalculationHistoryAsyncById/{id:guid}";
         public const string Delete = "deleteBudgetCalculationAsyncById/{id:guid}";
     }
 

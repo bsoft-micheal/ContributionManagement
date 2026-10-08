@@ -49,6 +49,16 @@ public interface IBudgetCalculationService
     Task DeleteAsync(Guid budgetCalculationId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Updates only the rate of a budget calculation item, capturing mandatory reason, effective date and audit history.
+    /// </summary>
+    Task<BudgetCalculationDto> UpdateRateAsync(Guid budgetCalculationId, UpdateBudgetCalculationRateRequestDto request, string? user = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Retrieves the complete rate revision history for a budget calculation item.
+    /// </summary>
+    Task<IReadOnlyCollection<BudgetCalculationHistoryDto>> GetHistoryAsync(Guid budgetCalculationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Standardized alias method to retrieve all budget calculation records.
     /// </summary>
     Task<IReadOnlyCollection<BudgetCalculationDto>> GetAllBudgetCalculationAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);
@@ -67,6 +77,16 @@ public interface IBudgetCalculationService
     /// Standardized alias method to update an existing budget calculation record by ID.
     /// </summary>
     Task<BudgetCalculationDto> UpdateBudgetCalculationAsyncById(Guid budgetCalculationId, UpdateBudgetCalculationRequestDto request, string? user = null, CancellationToken cancellationToken = default) => UpdateAsync(budgetCalculationId, request, user, cancellationToken);
+
+    /// <summary>
+    /// Standardized alias method to update rate of a budget calculation record by ID.
+    /// </summary>
+    Task<BudgetCalculationDto> UpdateBudgetCalculationRateAsyncById(Guid budgetCalculationId, UpdateBudgetCalculationRateRequestDto request, string? user = null, CancellationToken cancellationToken = default) => UpdateRateAsync(budgetCalculationId, request, user, cancellationToken);
+
+    /// <summary>
+    /// Standardized alias method to get rate history of a budget calculation record by ID.
+    /// </summary>
+    Task<IReadOnlyCollection<BudgetCalculationHistoryDto>> GetBudgetCalculationHistoryAsyncById(Guid budgetCalculationId, CancellationToken cancellationToken = default) => GetHistoryAsync(budgetCalculationId, cancellationToken);
 
     /// <summary>
     /// Standardized alias method to delete a budget calculation record by ID.

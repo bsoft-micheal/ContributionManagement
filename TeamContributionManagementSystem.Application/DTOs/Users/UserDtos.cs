@@ -60,6 +60,7 @@ public class CreateUserRequestDto
     [MaxLength(150)]
     public string Email { get; set; } = string.Empty;
 
+    [MaxLength(64)]
     public string? Password { get; set; }
 
     [MaxLength(50)]
@@ -114,6 +115,7 @@ public class UpdateUserRequestDto
     public string Email { get; set; } = string.Empty;
 
     /// <summary>Optional – only set when the caller wants to change the password.</summary>
+    [MaxLength(64)]
     public string? Password { get; set; }
 
     [MaxLength(50)]
