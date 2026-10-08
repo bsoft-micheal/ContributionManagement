@@ -273,9 +273,10 @@ public class EventService : IEventService
 
             var members = await _memberRepository.GetByIdsAsync(participantIds, cancellationToken);
 
-            if (members.Count == 0)
+            var isBirthday = !string.IsNullOrWhiteSpace(eventType.EventTypeName) && eventType.EventTypeName.IndexOf("birthday", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (isBirthday && request.BaseAmount <= 0)
             {
-                throw new InvalidOperationException(CommonMessages.Events.ParticipantsNotFound);
+                throw new InvalidOperationException("Birthday event cannot be saved with ₹0. Please configure budget calculation rates or add valid expenses.");
             }
 
             var eventItem = new Event
@@ -835,6 +836,12 @@ public class EventService : IEventService
 
             var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
+
+            var isBirthday = !string.IsNullOrWhiteSpace(eventType.EventTypeName) && eventType.EventTypeName.IndexOf("birthday", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (isBirthday && request.BaseAmount <= 0)
+            {
+                throw new InvalidOperationException("Birthday event cannot be saved with ₹0. Please configure budget calculation rates or add valid expenses.");
+            }
 
             eventItem.EventName = (request.EventName ?? string.Empty).Trim();
             eventItem.EventTypeId = eventType.EventTypeId;
