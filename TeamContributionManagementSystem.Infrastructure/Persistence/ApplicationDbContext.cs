@@ -453,8 +453,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.StatusId);
             entity.Property(x => x.StatusName).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.Module).HasMaxLength(100);
-            entity.HasIndex(x => new { x.StatusName, x.Module }).IsUnique();
+            entity.HasIndex(x => x.StatusName).IsUnique();
         });
 
         modelBuilder.Entity<WorkType>(entity =>
