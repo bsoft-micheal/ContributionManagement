@@ -48,7 +48,7 @@ public class EventTypeRepository : IEventTypeRepository
     {
         try
         {
-            return await _context.EventTypes.FirstOrDefaultAsync(x => !x.IsDeleted && x.EventTypeName.ToLower() == eventTypeName.ToLower(), cancellationToken);
+            return await _context.EventTypes.FirstOrDefaultAsync(x => x.EventTypeName.ToLower() == eventTypeName.ToLower(), cancellationToken);
         }
         catch (Exception ex)
         {

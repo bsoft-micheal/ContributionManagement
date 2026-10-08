@@ -69,6 +69,22 @@ public class BudgetCalculationService : IBudgetCalculationService
             var existing = await _repository.GetByNameAsync(request.ExpenseItem.Trim(), request.Category?.Trim(), cancellationToken);
             if (existing is not null)
             {
+                if (existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.IsActive = request.IsActive;
+                    existing.Rate = request.Rate;
+                    if (request.EventTypeId.HasValue) existing.EventTypeId = request.EventTypeId.Value;
+                    if (!string.IsNullOrWhiteSpace(request.Category)) existing.Category = request.Category.Trim();
+                    existing.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+                    existing.ModifiedOn = DateTime.UtcNow;
+
+                    _repository.Update(existing);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    return _mapper.Map<BudgetCalculationDto>(existing);
+                }
+
                 throw new InvalidOperationException(string.Format(CommonMessages.BudgetCalculations.AlreadyExistsFormat, request.ExpenseItem.Trim()));
             }
 

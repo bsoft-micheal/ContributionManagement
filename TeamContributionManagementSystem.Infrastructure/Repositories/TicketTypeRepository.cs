@@ -84,7 +84,7 @@ public class TicketTypeRepository : ITicketTypeRepository
     public async Task<TicketType?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
     {
         return await _context.TicketTypes
-            .FirstOrDefaultAsync(x => x.TypeName.ToLower() == name.Trim().ToLower() && !x.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(x => x.TypeName.ToLower() == name.Trim().ToLower(), cancellationToken);
     }
 
     public async Task<bool> HasSupportTicketsAsync(string typeName, CancellationToken cancellationToken = default)

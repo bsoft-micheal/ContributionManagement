@@ -79,7 +79,7 @@ public class WorkTypeRepository : IWorkTypeRepository
     public async Task<WorkType?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
     {
         return await _context.WorkTypes
-            .FirstOrDefaultAsync(x => x.WorkTypeName.ToLower() == name.Trim().ToLower() && !x.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(x => x.WorkTypeName.ToLower() == name.Trim().ToLower(), cancellationToken);
     }
 
     public async Task<bool> HasMembersAsync(string workTypeName, CancellationToken cancellationToken = default)
