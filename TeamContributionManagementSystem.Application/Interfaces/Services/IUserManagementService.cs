@@ -9,6 +9,7 @@ public interface IUserManagementService
     Task<UserDto> UpdateAsync(Guid userId, UpdateUserRequestDto request, string? user = null, CancellationToken cancellationToken = default);
     Task<UserDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto request, CancellationToken cancellationToken = default);
     Task<UserDto> GetProfileAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid userId, CancellationToken cancellationToken = default);
 
     // Standardized terminology
