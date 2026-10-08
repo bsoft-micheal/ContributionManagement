@@ -177,6 +177,25 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Changes the password of the currently authenticated user after verifying their current password.
+    /// </summary>
+    /// <param name="request">Contains CurrentPassword, NewPassword, and ConfirmPassword.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpPost(CommonRoutes.Users.ChangePassword)]
+    [ActionName(nameof(ChangePasswordAsync))]
+    public async Task<ActionResult<ApiResponse<bool>>> ChangePasswordAsync([FromBody] ChangePasswordRequestDto request, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new UnauthorizedAccessException(CommonMessages.General.UserIdentityNotAvailable);
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
+            return StatusCode(CommonStatusCodes.Status401Unauthorized, ApiResponse<bool>.FailureResult(CommonMessages.General.Unauthorized, CommonStatusCodes.Status401Unauthorized));
+
+        var result = await _userService.ChangePasswordAsync(userId, request, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<bool>.SuccessResult(result, "Password changed successfully.", CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
     /// Deletes a user account from the system.
     /// </summary>
     /// <param name="id">The unique identifier of the user to delete.</param>

@@ -51,6 +51,7 @@ public static class CommonRoutes
         public const string SwitchRole = "switchRoleAsync";
         public const string GetProfile = "getProfileAsync";
         public const string UpdateProfile = "updateProfileAsync";
+        public const string ChangePassword = "changePasswordAsync";
         public const string Delete = "deleteUserAsyncById/{id:guid}";
     }
 
