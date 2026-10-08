@@ -67,7 +67,7 @@ public class ContributionOverrideDto
 public class CreateEventRequestDto
 {
     [Required]
-    [MaxLength(200)]
+    [MaxLength(250)]
     public string EventName { get; set; } = string.Empty;
 
     [Required]

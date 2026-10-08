@@ -165,7 +165,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<Event>(entity =>
         {
             entity.HasKey(x => x.EventId);
-            entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.EventName).HasMaxLength(250).IsRequired();
             entity.Property(x => x.EventDates).HasColumnName("event_dates").HasMaxLength(500);
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
@@ -352,7 +352,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<GalleryPhoto>(entity =>
         {
             entity.HasKey(x => x.PhotoId);
-            entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Title).HasMaxLength(250).IsRequired();
             entity.Ignore(x => x.EventName);
             entity.Ignore(x => x.Category);
             entity.Property(x => x.EventId).HasColumnName("event_id");
