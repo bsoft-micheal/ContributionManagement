@@ -35,6 +35,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<DeviceLoginHistory> DeviceLoginHistories => Set<DeviceLoginHistory>();
     public DbSet<UserMfaDevice> UserMfaDevices => Set<UserMfaDevice>();
     public DbSet<BudgetCalculation> BudgetCalculations => Set<BudgetCalculation>();
+    public DbSet<BudgetCalculationHistory> BudgetCalculationHistories => Set<BudgetCalculationHistory>();
     public DbSet<TicketType> TicketTypes => Set<TicketType>();
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<WorkType> WorkTypes => Set<WorkType>();
@@ -405,6 +406,40 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => x.ExpenseItem);
+        });
+
+        modelBuilder.Entity<BudgetCalculationHistory>(entity =>
+        {
+            entity.ToTable("budget_calculation_history");
+            entity.HasKey(x => x.HistoryId);
+            entity.Property(x => x.HistoryId).HasColumnName("history_id");
+            entity.Property(x => x.BudgetCalculationId).HasColumnName("budget_calculation_id").IsRequired();
+            entity.Property(x => x.PreviousRate).HasColumnName("previous_rate").HasPrecision(12, 2);
+            entity.Property(x => x.NewRate).HasColumnName("new_rate").HasPrecision(12, 2).IsRequired();
+            entity.Property(x => x.EffectiveFrom).HasColumnName("effective_from").HasColumnType("date").IsRequired();
+            entity.Property(x => x.ChangeType).HasColumnName("change_type").HasMaxLength(20).IsRequired();
+            entity.Property(x => x.ChangeAmount).HasColumnName("change_amount").HasPrecision(12, 2);
+            entity.Property(x => x.ChangePercentage).HasColumnName("change_percentage").HasPrecision(8, 2);
+            entity.Property(x => x.ChangeReason).HasColumnName("change_reason").HasMaxLength(500).IsRequired();
+            entity.Property(x => x.Remarks).HasColumnName("remarks").HasMaxLength(1000);
+            entity.Property(x => x.ChangedBy).HasColumnName("changed_by");
+            entity.Property(x => x.ChangedOn).HasColumnName("changed_on").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+
+            entity.HasOne(x => x.BudgetCalculation)
+                .WithMany(x => x.History)
+                .HasForeignKey(x => x.BudgetCalculationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.ChangedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ChangedBy)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(x => x.BudgetCalculationId);
+            entity.HasIndex(x => x.EffectiveFrom);
+            entity.HasIndex(x => x.ChangedOn);
         });
 
         modelBuilder.Entity<TicketType>(entity =>

@@ -1085,72 +1085,91 @@ public class EventService : IEventService
     {
         var overrideLookup = (overrides ?? Array.Empty<ContributionOverrideDto>())
             .GroupBy(x => x.MemberId)
-            .ToDictionary(x => x.Key, x => x.Last().Amount);
+            .ToDictionary(x => x.Key, x => Math.Round(x.Last().Amount, 0, MidpointRounding.AwayFromZero));
 
         bool hasTenureRule = eventType.HasTenureRule;
         decimal thresholdYears = eventType.TenureThresholdYears > 0 ? eventType.TenureThresholdYears : 1.0m;
         decimal newEntrantRatio = (eventType.NewEntrantSharePercentage > 0 ? eventType.NewEntrantSharePercentage : 50.0m) / 100.0m;
         decimal standardRatio = (eventType.StandardSharePercentage > 0 ? eventType.StandardSharePercentage : 100.0m) / 100.0m;
 
-        decimal overrideSum = overrides?.Sum(x => x.Amount) ?? 0m;
-        decimal splitPool = Math.Max(0m, baseAmount - overrideSum);
+        decimal totalBaseInteger = Math.Round(baseAmount, 0, MidpointRounding.AwayFromZero);
+        decimal overrideSum = overrideLookup.Values.Sum();
+        decimal splitPool = Math.Max(0m, totalBaseInteger - overrideSum);
 
-        int fullShareCount = 0;
-        int halfShareCount = 0;
-        int regularParticipantsCount = 0;
+        var nonOverrideMembers = members.Where(m => !overrideLookup.ContainsKey(m.MemberId)).ToList();
+        var result = new Dictionary<Guid, decimal>();
 
-        if (hasTenureRule)
+        foreach (var member in members)
         {
-            foreach (var member in members)
+            if (overrideLookup.TryGetValue(member.MemberId, out var customAmount))
             {
-                if (overrideLookup.ContainsKey(member.MemberId))
-                {
-                    continue;
-                }
-
-                double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
-                double tenureYears = tenureDays / 365.25;
-                if (tenureYears < (double)thresholdYears)
-                {
-                    halfShareCount++;
-                }
-                else
-                {
-                    fullShareCount++;
-                }
+                result[member.MemberId] = customAmount;
             }
         }
-        else
+
+        if (nonOverrideMembers.Count > 0)
         {
-            regularParticipantsCount = members.Count(m => !overrideLookup.ContainsKey(m.MemberId));
-        }
-
-        decimal divisor = hasTenureRule
-            ? (fullShareCount * standardRatio + halfShareCount * newEntrantRatio)
-            : regularParticipantsCount;
-
-        decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
-
-        return members.ToDictionary(
-            member => member.MemberId,
-            member =>
+            if (hasTenureRule)
             {
-                if (overrideLookup.TryGetValue(member.MemberId, out var customAmount))
+                int fullShareCount = 0;
+                int halfShareCount = 0;
+
+                foreach (var member in nonOverrideMembers)
                 {
-                    return customAmount;
+                    double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
+                    double tenureYears = tenureDays / 365.25;
+                    if (tenureYears < (double)thresholdYears)
+                    {
+                        halfShareCount++;
+                    }
+                    else
+                    {
+                        fullShareCount++;
+                    }
                 }
 
-                if (hasTenureRule)
+                decimal divisor = (fullShareCount * standardRatio + halfShareCount * newEntrantRatio);
+                decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
+
+                foreach (var member in nonOverrideMembers)
                 {
                     double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
                     double tenureYears = tenureDays / 365.25;
                     bool isNewEntrant = tenureYears < (double)thresholdYears;
                     decimal shareRatio = isNewEntrant ? newEntrantRatio : standardRatio;
-                    return Math.Round(standardShare * shareRatio, 2);
+                    result[member.MemberId] = Math.Round(standardShare * shareRatio, 0, MidpointRounding.AwayFromZero);
                 }
+            }
+            else
+            {
+                decimal rawPerPerson = splitPool / nonOverrideMembers.Count;
+                decimal roundedPerPerson = Math.Round(rawPerPerson, 0, MidpointRounding.AwayFromZero);
 
-                return Math.Round(standardShare, 2);
-            });
+                foreach (var member in nonOverrideMembers)
+                {
+                    result[member.MemberId] = roundedPerPerson;
+                }
+            }
+
+            // Distribute integer remainder (+1/-1 rupees) so sum of member amounts equals splitPool
+            decimal nonOverrideSum = nonOverrideMembers.Sum(m => result[m.MemberId]);
+            decimal remainder = splitPool - nonOverrideSum;
+
+            if (remainder != 0)
+            {
+                int step = remainder > 0 ? 1 : -1;
+                int remainingAdjustment = (int)Math.Abs(remainder);
+
+                for (int i = 0; i < nonOverrideMembers.Count && remainingAdjustment > 0; i++)
+                {
+                    var mId = nonOverrideMembers[i].MemberId;
+                    result[mId] += step;
+                    remainingAdjustment--;
+                }
+            }
+        }
+
+        return result;
     }
 
     private static string? ResolveGpayImagePath()

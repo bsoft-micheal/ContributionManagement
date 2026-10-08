@@ -38,4 +38,44 @@ public class CreateBudgetCalculationRequestDto
 
 public class UpdateBudgetCalculationRequestDto : CreateBudgetCalculationRequestDto
 {
+    public DateTime? EffectiveFrom { get; set; }
+    public string? ChangeReason { get; set; }
+    public string? Remarks { get; set; }
 }
+
+public class BudgetCalculationHistoryDto
+{
+    public Guid HistoryId { get; set; }
+    public Guid BudgetCalculationId { get; set; }
+    public decimal? PreviousRate { get; set; }
+    public decimal NewRate { get; set; }
+    public string ChangeType { get; set; } = string.Empty; // INITIAL, INCREASE, DECREASE
+    public decimal? ChangeAmount { get; set; }
+    public decimal? ChangePercentage { get; set; }
+    public DateTime EffectiveFrom { get; set; }
+    public string ChangeReason { get; set; } = string.Empty;
+    public string? Remarks { get; set; }
+    public string? ChangedBy { get; set; }
+    public Guid? ChangedById { get; set; }
+    public DateTime ChangedOn { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public class UpdateBudgetCalculationRateRequestDto
+{
+    [Required(ErrorMessage = "New rate is required.")]
+    [Range(0, 10000000, ErrorMessage = "New rate must be between 0 and 10,000,000.")]
+    public decimal NewRate { get; set; }
+
+    [Required(ErrorMessage = "Effective from date is required.")]
+    public DateTime EffectiveFrom { get; set; } = DateTime.UtcNow.Date;
+
+    [Required(ErrorMessage = "Reason for rate change is required.")]
+    [MinLength(5, ErrorMessage = "Reason must be at least 5 characters.")]
+    [MaxLength(500, ErrorMessage = "Reason cannot exceed 500 characters.")]
+    public string ChangeReason { get; set; } = string.Empty;
+
+    [MaxLength(1000, ErrorMessage = "Remarks cannot exceed 1000 characters.")]
+    public string? Remarks { get; set; }
+}
+
