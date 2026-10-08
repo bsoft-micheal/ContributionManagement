@@ -105,6 +105,19 @@ public class PriorityService : IPriorityService
             var existing = await _repository.GetByNameAsync(trimmedName, cancellationToken);
             if (existing != null)
             {
+                if (existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.IsActive = request.IsActive;
+                    existing.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+                    existing.ModifiedOn = DateTime.UtcNow;
+
+                    _repository.Update(existing);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    return _mapper.Map<PriorityDto>(existing);
+                }
+
                 throw new InvalidOperationException(string.Format(CommonMessages.Priorities.AlreadyExistsFormat, trimmedName));
             }
 

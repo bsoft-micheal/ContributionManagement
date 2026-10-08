@@ -188,7 +188,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
         {
             await EnsureColumnsAsync(cancellationToken);
             var query = _context.BudgetCalculations
-                .Where(x => !x.IsDeleted && x.ExpenseItem.ToLower() == expenseItem.ToLower());
+                .Where(x => x.ExpenseItem.ToLower() == expenseItem.ToLower());
 
             if (!string.IsNullOrWhiteSpace(category))
             {

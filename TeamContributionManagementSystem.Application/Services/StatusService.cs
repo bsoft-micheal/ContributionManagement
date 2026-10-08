@@ -86,6 +86,19 @@ public class StatusService : IStatusService
             var existing = await _repository.GetByNameAndModuleAsync(trimmedName, trimmedModule, cancellationToken);
             if (existing != null)
             {
+                if (existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.IsActive = request.IsActive;
+                    existing.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+                    existing.ModifiedOn = DateTime.UtcNow;
+
+                    _repository.Update(existing);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    return _mapper.Map<StatusDto>(existing);
+                }
+
                 throw new InvalidOperationException($"Status '{trimmedName}' already exists for module '{trimmedModule}'.");
             }
 

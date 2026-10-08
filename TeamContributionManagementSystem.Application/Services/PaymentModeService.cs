@@ -108,17 +108,35 @@ public class PaymentModeService : IPaymentModeService
         {
             var trimmedName = request.PaymentModeName.Trim();
             var existing = await _repository.GetByNameAsync(trimmedName, cancellationToken);
-            if (existing != null)
-            {
-                throw new InvalidOperationException(string.Format(CommonMessages.PaymentModes.AlreadyExistsFormat, trimmedName));
-            }
-
             var isCash = request.IsCash ?? (string.Equals(trimmedName, "Cash", StringComparison.OrdinalIgnoreCase) || trimmedName.IndexOf("cash", StringComparison.OrdinalIgnoreCase) >= 0);
             var isSplit = string.Equals(trimmedName, "Split", StringComparison.OrdinalIgnoreCase) || trimmedName.IndexOf("split", StringComparison.OrdinalIgnoreCase) >= 0;
             var supportsQr = request.SupportsQr ?? !isCash;
             var paymentType = !string.IsNullOrWhiteSpace(request.PaymentType)
                 ? request.PaymentType
                 : (isCash ? "Cash" : (isSplit ? "Split" : "Digital"));
+
+            if (existing != null)
+            {
+                if (existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.IsActive = request.IsActive;
+                    existing.IsCash = isCash;
+                    existing.SupportsQr = supportsQr;
+                    existing.PaymentType = paymentType;
+                    existing.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+                    existing.ModifiedOn = DateTime.UtcNow;
+
+                    _repository.Update(existing);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    var restoredDto = _mapper.Map<PaymentModeDto>(existing);
+                    EnrichPaymentMode(restoredDto, existing);
+                    return restoredDto;
+                }
+
+                throw new InvalidOperationException(string.Format(CommonMessages.PaymentModes.AlreadyExistsFormat, trimmedName));
+            }
 
             var entity = new PaymentModeItem
             {
