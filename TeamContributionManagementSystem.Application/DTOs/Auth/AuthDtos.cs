@@ -83,15 +83,17 @@ public class VerifyTwoFactorRequestDto
 
 public class ForgotPasswordRequestDto
 {
-    [Required]
-    [EmailAddress]
+    [Required(ErrorMessage = "Email address is required.")]
+    [EmailAddress(ErrorMessage = "Please enter a valid email address.")]
+    [MaxLength(254, ErrorMessage = "Email address cannot exceed 254 characters.")]
     public string Email { get; set; } = string.Empty;
 }
 
 public class VerifyOtpRequestDto
 {
-    [Required]
-    [EmailAddress]
+    [Required(ErrorMessage = "Email address is required.")]
+    [EmailAddress(ErrorMessage = "Please enter a valid email address.")]
+    [MaxLength(254, ErrorMessage = "Email address cannot exceed 254 characters.")]
     public string Email { get; set; } = string.Empty;
 
     [Required]
@@ -101,8 +103,9 @@ public class VerifyOtpRequestDto
 
 public class ResetPasswordRequestDto
 {
-    [Required]
-    [EmailAddress]
+    [Required(ErrorMessage = "Email address is required.")]
+    [EmailAddress(ErrorMessage = "Please enter a valid email address.")]
+    [MaxLength(254, ErrorMessage = "Email address cannot exceed 254 characters.")]
     public string Email { get; set; } = string.Empty;
 
     [Required]

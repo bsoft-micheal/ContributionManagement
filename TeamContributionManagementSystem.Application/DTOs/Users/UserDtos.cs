@@ -186,3 +186,17 @@ public class UpdateProfileRequestDto
     [MaxLength(50)]
     public string WorkType { get; set; } = string.Empty;
 }
+
+public class ChangePasswordRequestDto
+{
+    [Required(ErrorMessage = "Current password is required.")]
+    public string CurrentPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "New password is required.")]
+    [StringLength(8, MinimumLength = 8, ErrorMessage = "New password must be exactly 8 characters.")]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Confirm password is required.")]
+    [Compare(nameof(NewPassword), ErrorMessage = "New password and confirm password do not match.")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+}

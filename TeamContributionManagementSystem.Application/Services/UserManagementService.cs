@@ -904,39 +904,17 @@ public class UserManagementService : IUserManagementService
                 user.Gender = request.Gender.Trim();
             if (!string.IsNullOrWhiteSpace(request.WorkType))
             {
-                user.WorkType = request.WorkType.Trim();
-                user.WorkTypeId = await ResolveWorkTypeIdAsync(request.WorkType.Trim(), cancellationToken);
-            }
-            if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
-                user.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
-            if (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
-                user.JoiningDate = request.JoiningDate.Value.ToUniversalTime();
-
-            if (!string.IsNullOrWhiteSpace(request.RoleName))
-            {
-                var allRoles = await _roleRepository.GetAllAsync(cancellationToken);
-                var matchedRole = allRoles.FirstOrDefault(r => string.Equals(r.RoleName, request.RoleName.Trim(), StringComparison.OrdinalIgnoreCase));
-                if (matchedRole != null)
+                var resolvedId = await ResolveWorkTypeIdAsync(request.WorkType.Trim(), cancellationToken);
+                if (resolvedId.HasValue)
                 {
-                    var existingRole = user.UserRoles.FirstOrDefault();
-                    if (existingRole != null)
-                    {
-                        if (existingRole.RoleId != matchedRole.RoleId)
-                        {
-                            existingRole.RoleId = matchedRole.RoleId;
-                        }
-                    }
-                    else
-                    {
-                        user.UserRoles.Add(new AppUserRole
-                        {
-                            UserId = user.UserId,
-                            RoleId = matchedRole.RoleId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                    }
+                    user.WorkTypeId = resolvedId.Value;
+                    user.WorkType = request.WorkType.Trim();
                 }
             }
+            if (request.DateOfBirth.HasValue && request.DateOfBirth.Value != default)
+                user.DateOfBirth = DateTime.SpecifyKind(request.DateOfBirth.Value, DateTimeKind.Utc);
+            if (request.JoiningDate.HasValue && request.JoiningDate.Value != default)
+                user.JoiningDate = DateTime.SpecifyKind(request.JoiningDate.Value, DateTimeKind.Utc);
 
             if (!string.IsNullOrWhiteSpace(request.Password))
             {
@@ -976,6 +954,40 @@ public class UserManagementService : IUserManagementService
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateProfileAsync));
+            throw;
+        }
+    }
+
+    // ── CHANGE PASSWORD ───────────────────────────────────────────────────────
+    public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+                ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
+
+            if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+            {
+                throw new InvalidOperationException("Current password is incorrect.");
+            }
+
+            if (string.Equals(request.CurrentPassword, request.NewPassword, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("New password cannot be the same as current password.");
+            }
+
+            user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+            user.IsFirstLogin = false;
+
+            _userRepository.Update(user);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Password successfully changed for user {UserId}", userId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(ChangePasswordAsync));
             throw;
         }
     }
