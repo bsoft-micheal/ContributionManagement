@@ -300,6 +300,23 @@ public class UserRepository : IUserRepository
         }
     }
 
+    public async Task<AppUser?> GetByEmailIncludingDeletedAsync(string email, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Users
+                .Include(u => u.MfaDevices)
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Include(u => u.WorkTypeNavigation)
+                .FirstOrDefaultAsync(x => x.Email.ToLower() == email.ToLower(), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByEmailIncludingDeletedAsync));
+            throw;
+        }
+    }
+
     public async Task<AppUser?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
     {
         try
@@ -411,10 +428,6 @@ public class UserRepository : IUserRepository
             if (entry.State == EntityState.Detached)
             {
                 _context.Users.Attach(user);
-                entry.State = EntityState.Modified;
-            }
-            else
-            {
                 entry.State = EntityState.Modified;
             }
         }

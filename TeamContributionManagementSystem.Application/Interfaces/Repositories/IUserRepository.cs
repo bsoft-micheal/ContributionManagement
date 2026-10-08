@@ -7,6 +7,7 @@ public interface IUserRepository
 {
     Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
+    Task<AppUser?> GetByEmailIncludingDeletedAsync(string email, CancellationToken cancellationToken = default);
     Task<AppUser?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default);
     Task<AppUser?> GetByPhoneAsync(string phone, CancellationToken cancellationToken = default);
     Task<AppUser?> GetByUsernameOrEmailAsync(string identifier, CancellationToken cancellationToken = default);

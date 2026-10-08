@@ -76,6 +76,7 @@ public class ApplicationDbContextSeeder
             try
             {
                 await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS users ALTER COLUMN username DROP NOT NULL; ALTER TABLE IF EXISTS users ALTER COLUMN password_hash DROP NOT NULL;", cancellationToken);
+                await _context.Database.ExecuteSqlRawAsync("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username_lower ON users (LOWER(username)) WHERE is_deleted = false AND username IS NOT NULL AND username <> '';", cancellationToken);
             }
             catch { /* Non-fatal */ }
 

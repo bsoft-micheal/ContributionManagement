@@ -48,9 +48,25 @@ public class UsersController : ControllerBase
     [ActionName(nameof(SaveUserAsync))]
     public async Task<ActionResult<ApiResponse<UserDto>>> SaveUserAsync([FromBody] CreateUserRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var user = await _userService.SaveUserAsync(request, currentUser, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<UserDto>.SuccessResult(user, CommonMessages.Users.SaveSuccess, CommonStatusCodes.Status201Created));
+        try
+        {
+            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var user = await _userService.SaveUserAsync(request, currentUser, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<UserDto>.SuccessResult(user, CommonMessages.Users.SaveSuccess, CommonStatusCodes.Status201Created));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<UserDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            if (msg.Contains("ix_users_email", StringComparison.OrdinalIgnoreCase) || msg.Contains("users_email_key", StringComparison.OrdinalIgnoreCase) || (msg.Contains("email", StringComparison.OrdinalIgnoreCase) && msg.Contains("unique", StringComparison.OrdinalIgnoreCase)))
+            {
+                return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<UserDto>.FailureResult("This email is already registered.", CommonStatusCodes.Status400BadRequest));
+            }
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<UserDto>.FailureResult(msg, CommonStatusCodes.Status400BadRequest));
+        }
     }
 
     /// <summary>
@@ -134,9 +150,25 @@ public class UsersController : ControllerBase
     [ActionName(nameof(UpdateUserAsyncById))]
     public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUserAsyncById(Guid id, [FromBody] UpdateUserRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var result = await _userService.UpdateUserAsyncById(id, request, currentUser, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<UserDto>.SuccessResult(result, CommonMessages.Users.UpdateSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var result = await _userService.UpdateUserAsyncById(id, request, currentUser, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<UserDto>.SuccessResult(result, CommonMessages.Users.UpdateSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<UserDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            if (msg.Contains("ix_users_email", StringComparison.OrdinalIgnoreCase) || msg.Contains("users_email_key", StringComparison.OrdinalIgnoreCase) || (msg.Contains("email", StringComparison.OrdinalIgnoreCase) && msg.Contains("unique", StringComparison.OrdinalIgnoreCase)))
+            {
+                return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<UserDto>.FailureResult("This email is already registered.", CommonStatusCodes.Status400BadRequest));
+            }
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<UserDto>.FailureResult(msg, CommonStatusCodes.Status400BadRequest));
+        }
     }
 
     /// <summary>
