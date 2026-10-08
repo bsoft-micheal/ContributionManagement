@@ -50,7 +50,7 @@ public static class CommonMessages
         public const string InvalidCredentials = "Invalid username/email or password.";
         public const string UserNotFound = "User not found.";
         public const string AccountDeactivated = "This user account is deactivated. Please contact an administrator.";
-        public const string MobileAdminLoginNotAllowed = "Admin users are not permitted to log in via the Mobile Application.";
+        public const string MobileAdminLoginNotAllowed = "Mobile application access is not available for this account.";
         public const string MobileAdminRoleSwitchNotAllowed = "Admin role is not allowed for the Mobile application.";
         public const string MaxOtpAttemptsExceeded = "Maximum OTP attempts exceeded. Please request a new OTP.";
         public const string OtpExpired = "The password reset OTP has expired. Please request a new one.";
