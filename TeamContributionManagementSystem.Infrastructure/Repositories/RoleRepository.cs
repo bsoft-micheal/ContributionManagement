@@ -46,6 +46,7 @@ public class RoleRepository : IRoleRepository
                 .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
 
             var roles = await _context.Roles
+                .Where(x => !x.IsDeleted)
                 .OrderBy(x => x.RoleName)
                 .Select(x => new RoleDto
                 {
@@ -180,7 +181,8 @@ public class RoleRepository : IRoleRepository
     {
         try
         {
-            _context.Roles.Remove(role);
+            role.IsDeleted = true;
+            _context.Roles.Update(role);
         }
         catch (Exception ex)
         {

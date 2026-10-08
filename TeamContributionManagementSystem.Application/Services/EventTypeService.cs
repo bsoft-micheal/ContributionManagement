@@ -56,6 +56,24 @@ public class EventTypeService : IEventTypeService
             var existing = await _eventTypeRepository.GetByNameAsync(request.EventTypeName.Trim(), cancellationToken);
             if (existing is not null)
             {
+                if (existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.IsActive = request.IsActive;
+                    existing.HasTenureRule = request.HasTenureRule;
+                    existing.TenureThresholdYears = request.TenureThresholdYears > 0 ? request.TenureThresholdYears : 1.0m;
+                    existing.NewEntrantSharePercentage = request.NewEntrantSharePercentage > 0 ? request.NewEntrantSharePercentage : 50.0m;
+                    existing.StandardSharePercentage = request.StandardSharePercentage > 0 ? request.StandardSharePercentage : 100.0m;
+                    existing.RuleDescription = request.RuleDescription?.Trim();
+                    existing.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+                    existing.ModifiedOn = DateTime.UtcNow;
+
+                    _eventTypeRepository.Update(existing);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    return _mapper.Map<EventTypeDto>(existing);
+                }
+
                 throw new InvalidOperationException(CommonMessages.EventTypes.AlreadyExists);
             }
 

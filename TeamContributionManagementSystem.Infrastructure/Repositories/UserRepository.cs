@@ -29,7 +29,7 @@ public class UserRepository : IUserRepository
         {
             var contributions = await _context.Contributions
                 .AsNoTracking()
-                .Where(c => !c.IsDeleted && c.Event != null && !c.Event.IsDeleted)
+                .Where(c => !c.IsDeleted)
                 .Select(c => new { c.UserId, c.CreatedBy })
                 .Distinct()
                 .ToListAsync(cancellationToken);
@@ -46,7 +46,7 @@ public class UserRepository : IUserRepository
         {
             var participants = await _context.EventParticipants
                 .AsNoTracking()
-                .Where(ep => !ep.IsDeleted && ep.Event != null && !ep.Event.IsDeleted)
+                .Where(ep => !ep.IsDeleted)
                 .Select(ep => new { ep.UserId, ep.CreatedBy })
                 .Distinct()
                 .ToListAsync(cancellationToken);
@@ -151,6 +151,19 @@ public class UserRepository : IUserRepository
         }
         catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping BudgetCalculations sub-query"); }
 
+        // 9. Users Created By
+        try
+        {
+            var usersCreatedBy = await _context.Users
+                .AsNoTracking()
+                .Where(u => !u.IsDeleted && u.CreatedBy.HasValue && u.CreatedBy.Value != Guid.Empty)
+                .Select(u => u.CreatedBy!.Value.ToString())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in usersCreatedBy) set.Add(id);
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "GetReferencedUserIdentifiers: skipping Users Created By sub-query"); }
+
         return set;
     }
 
@@ -230,15 +243,20 @@ public class UserRepository : IUserRepository
 
             foreach (var u in users)
             {
+                var matchingEntity = userEntities.FirstOrDefault(e => e.UserId == u.UserId);
+                var hasLoginAccount = !string.IsNullOrWhiteSpace(u.Username) || !string.IsNullOrWhiteSpace(matchingEntity?.PasswordHash);
+
                 var uid = u.UserId.ToString();
                 var uname = !string.IsNullOrWhiteSpace(u.Username) ? u.Username.Trim().ToLowerInvariant() : string.Empty;
                 var fname = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName.Trim().ToLowerInvariant() : string.Empty;
                 var email = !string.IsNullOrWhiteSpace(u.Email) ? u.Email.Trim().ToLowerInvariant() : string.Empty;
 
-                u.IsReferred = (!string.IsNullOrEmpty(uid) && referenced.Contains(uid))
+                var isReferencedInDb = (!string.IsNullOrEmpty(uid) && referenced.Contains(uid))
                     || (!string.IsNullOrEmpty(uname) && referenced.Contains(uname))
                     || (!string.IsNullOrEmpty(fname) && referenced.Contains(fname))
                     || (!string.IsNullOrEmpty(email) && referenced.Contains(email));
+
+                u.IsReferred = hasLoginAccount || isReferencedInDb;
 
                 if (u.RoleIds.Count == 0 && u.RoleId.HasValue)
                 {

@@ -39,7 +39,7 @@ public class PriorityRepository : IPriorityRepository
     public async Task<Priority?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
     {
         return await _context.Priorities
-            .FirstOrDefaultAsync(x => x.PriorityName.ToLower() == name.ToLower() && !x.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(x => x.PriorityName.ToLower() == name.ToLower(), cancellationToken);
     }
 
     public async Task<bool> HasSupportTicketsAsync(string priorityName, CancellationToken cancellationToken = default)

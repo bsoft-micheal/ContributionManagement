@@ -43,6 +43,20 @@ public class RoleService : IRoleService
             var existing = await _roleRepository.GetByNameAsync(request.RoleName.Trim(), cancellationToken);
             if (existing is not null)
             {
+                if (existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.IsActive = true;
+                    existing.DefaultContributionAmount = request.DefaultContributionAmount;
+                    existing.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+                    existing.ModifiedOn = DateTime.UtcNow;
+
+                    _roleRepository.Update(existing);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    return _mapper.Map<RoleDto>(existing);
+                }
+
                 throw new InvalidOperationException(CommonMessages.Roles.AlreadyExists);
             }
 

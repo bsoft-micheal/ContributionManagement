@@ -255,37 +255,14 @@ public class StatusRepository : IStatusRepository
         await EnsureModuleColumnAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(name)) return null;
 
-        var existing = await _context.Statuses
+        return await _context.Statuses
             .FirstOrDefaultAsync(x => x.StatusName.ToLower() == name.Trim().ToLower() && !x.IsDeleted, cancellationToken);
-        if (existing != null) return existing;
-
-        try
-        {
-            var newStatus = new Status
-            {
-                StatusId = Guid.NewGuid(),
-                StatusName = name.Trim(),
-                Module = "Contributions",
-                IsActive = true,
-                IsDeleted = false,
-                CreatedAt = DateTime.UtcNow,
-                CreatedOn = DateTime.UtcNow
-            };
-            await _context.Statuses.AddAsync(newStatus, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
-            return newStatus;
-        }
-        catch
-        {
-            return await _context.Statuses
-                .FirstOrDefaultAsync(x => x.StatusName.ToLower() == name.Trim().ToLower() && !x.IsDeleted, cancellationToken);
-        }
     }
 
     public async Task<Status?> GetByNameAndModuleAsync(string name, string? module, CancellationToken cancellationToken = default)
     {
         await EnsureModuleColumnAsync(cancellationToken);
-        var query = _context.Statuses.Where(x => x.StatusName.ToLower() == name.ToLower() && !x.IsDeleted);
+        var query = _context.Statuses.Where(x => x.StatusName.ToLower() == name.ToLower());
         if (!string.IsNullOrWhiteSpace(module))
         {
             query = query.Where(x => x.Module != null && x.Module.ToLower() == module.ToLower());
