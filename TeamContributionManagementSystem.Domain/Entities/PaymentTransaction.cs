@@ -61,7 +61,7 @@ public class PaymentTransaction
     [NotMapped]
     public string Status
     {
-        get => !string.IsNullOrWhiteSpace(_status) ? _status : (StatusItem != null ? StatusItem.StatusName : string.Empty);
+        get => !string.IsNullOrWhiteSpace(_status) ? _status : (StatusItem != null ? StatusItem.StatusName : (!string.IsNullOrWhiteSpace(VerifiedBy) ? "Verified" : "Pending"));
         set => _status = value;
     }
 

@@ -454,13 +454,24 @@ public class PaymentTransactionService : IPaymentTransactionService
             var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Payments.NotFound);
 
-            entity.Status = request.Status.Trim();
+            var reqStatus = request.Status?.Trim() ?? string.Empty;
+            if (string.Equals(reqStatus, "Paid", StringComparison.OrdinalIgnoreCase))
+            {
+                reqStatus = CommonConstants.PaymentStatuses.Verified;
+            }
+            entity.Status = string.IsNullOrWhiteSpace(reqStatus) ? CommonConstants.PaymentStatuses.Verified : reqStatus;
+
             if (_statusRepository != null)
             {
                 var matchedStatus = await _statusRepository.GetByNameAsync(entity.Status, cancellationToken);
+                if (matchedStatus == null && string.Equals(entity.Status, CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedStatus = await _statusRepository.GetByNameAsync("Paid", cancellationToken);
+                }
                 if (matchedStatus != null)
                 {
                     entity.StatusId = matchedStatus.StatusId;
+                    entity.StatusItem = matchedStatus;
                 }
             }
 

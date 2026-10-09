@@ -74,7 +74,7 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
                     PaymentDate = x.PaymentDate,
                     PaymentMode = x.PaymentModeItem != null ? x.PaymentModeItem.PaymentModeName : string.Empty,
                     Utr = x.Utr,
-                    Status = x.StatusItem != null ? x.StatusItem.StatusName : string.Empty,
+                    Status = x.StatusItem != null ? x.StatusItem.StatusName : (!string.IsNullOrWhiteSpace(x.VerifiedBy) ? CommonConstants.PaymentStatuses.Verified : CommonConstants.PaymentStatuses.Pending),
                     VerifiedBy = x.VerifiedBy,
                     VerifiedOn = x.VerifiedOn,
                     Notes = x.Notes,
