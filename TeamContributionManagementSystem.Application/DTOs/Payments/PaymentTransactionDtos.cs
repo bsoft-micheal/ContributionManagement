@@ -23,8 +23,27 @@ public class PaymentTransactionDto
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
+    public string? ParentTxnNumber { get; set; }
+    public Guid? TransactionGroupId { get; set; }
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
+}
+
+public class PaymentSplitItemDto
+{
+    [Required]
+    [MaxLength(50)]
+    public string Mode { get; set; } = string.Empty;
+
+    [Required]
+    [Range(0.01, 10000000)]
+    public decimal Amount { get; set; }
+
+    [MaxLength(100)]
+    public string? Utr { get; set; }
+
+    [MaxLength(1000)]
+    public string? Notes { get; set; }
 }
 
 public class CreatePaymentTransactionRequestDto
@@ -108,6 +127,7 @@ public class SubmitPaymentProofDto
     public decimal? CashAmount { get; set; }
     public decimal? UpiAmount { get; set; }
     public string? PaymentScope { get; set; }
+    public List<PaymentSplitItemDto>? Splits { get; set; } = new();
 }
 
 public class ArrearItemDto

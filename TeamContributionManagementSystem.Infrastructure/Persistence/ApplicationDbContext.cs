@@ -326,7 +326,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.VerifiedBy).HasMaxLength(150);
             entity.Property(x => x.Notes).HasMaxLength(1000);
             entity.Property(x => x.Screenshot).HasColumnType("text");
+            entity.Property(x => x.ParentTxnNumber).HasMaxLength(50);
             entity.HasIndex(x => x.TxnNumber).IsUnique();
+            entity.HasIndex(x => x.TransactionGroupId);
             entity.HasOne(x => x.User)
                 .WithMany()
                 .HasForeignKey(x => x.UserId)

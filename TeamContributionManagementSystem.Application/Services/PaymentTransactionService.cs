@@ -130,9 +130,7 @@ public class PaymentTransactionService : IPaymentTransactionService
     {
         try
         {
-            var all = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
-            var nextNum = 1250 + all.Count + 1;
-            var txnNumber = $"{CommonConstants.Defaults.TxnPrefix}{nextNum:D6}";
+            var txnNumber = await _transactionRepository.GetNextTxnNumberAsync(cancellationToken);
 
             var status = request.Status?.Trim();
             if (string.IsNullOrWhiteSpace(status) && _statusRepository != null)
@@ -226,9 +224,43 @@ public class PaymentTransactionService : IPaymentTransactionService
     {
         try
         {
-            var all = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
-            var nextNum = 1250 + all.Count + 1;
-            var txnNumber = $"{CommonConstants.Defaults.TxnPrefix}{nextNum:D6}";
+            if (request.Amount <= 0)
+            {
+                throw new ArgumentException("Contribution amount must be greater than zero.");
+            }
+
+            var hasSplits = request.Splits != null && request.Splits.Count > 1;
+
+            if (hasSplits)
+            {
+                var splitTotal = request.Splits!.Sum(s => s.Amount);
+                if (Math.Abs(splitTotal - request.Amount) > 0.01m)
+                {
+                    throw new ArgumentException($"Split amounts total (₹{splitTotal:N2}) does not match the submitted total (₹{request.Amount:N2}).");
+                }
+
+                foreach (var split in request.Splits!)
+                {
+                    if (split.Amount <= 0)
+                    {
+                        throw new ArgumentException("Each split payment amount must be greater than zero.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(split.Mode))
+                    {
+                        throw new ArgumentException("Payment mode is required for all split rows.");
+                    }
+
+                    var isCash = split.Mode.Trim().Contains("Cash", StringComparison.OrdinalIgnoreCase);
+                    if (!isCash)
+                    {
+                        if (string.IsNullOrWhiteSpace(split.Utr) || split.Utr.Trim().Length < 6)
+                        {
+                            throw new ArgumentException($"A valid UTR / reference number (at least 6 characters) is required for digital payment mode '{split.Mode}'.");
+                        }
+                    }
+                }
+            }
 
             // Resolve EventId — verify event exists in DB before setting FK to prevent constraint violation
             Guid? resolvedEventId = null;
@@ -272,28 +304,13 @@ public class PaymentTransactionService : IPaymentTransactionService
                 }
             }
 
-            // Resolve PaymentModeId
-            Guid? resolvedPaymentModeId = null;
-            var paymentModeName = string.IsNullOrWhiteSpace(request.PaymentMode) ? CommonConstants.PaymentModes.Upi : request.PaymentMode.Trim();
-            if (_paymentModeRepository != null && !string.IsNullOrWhiteSpace(paymentModeName))
-            {
-                var matchedPm = await _paymentModeRepository.GetByNameAsync(paymentModeName, cancellationToken);
-                resolvedPaymentModeId = matchedPm?.PaymentModeId;
-            }
-
             // Resolve StatusId for Pending
             Guid? resolvedStatusId = null;
+            Status? pendingStatus = null;
             if (_statusRepository != null)
             {
-                var matchedSt = await _statusRepository.GetByNameAsync(CommonConstants.PaymentStatuses.Pending, cancellationToken);
-                resolvedStatusId = matchedSt?.StatusId;
-            }
-
-            // Safe length bounds to strictly respect PostgreSQL database column constraints
-            var safeUtr = request.Utr?.Trim();
-            if (!string.IsNullOrEmpty(safeUtr) && safeUtr.Length > 95)
-            {
-                safeUtr = safeUtr.Substring(0, 92) + "...";
+                pendingStatus = await _statusRepository.GetByNameAsync(CommonConstants.PaymentStatuses.Pending, cancellationToken);
+                resolvedStatusId = pendingStatus?.StatusId;
             }
 
             var safeNotes = request.Notes?.Trim();
@@ -307,42 +324,138 @@ public class PaymentTransactionService : IPaymentTransactionService
                 safeNotes = safeNotes.Substring(0, 985) + "...";
             }
 
-            if (paymentModeName.Length > 50)
+            // Concurrency-safe base transaction number generation (Requirement 5)
+            var baseTxn = await _transactionRepository.GetNextTxnNumberAsync(cancellationToken);
+            var savedScreenshot = await SaveScreenshotAsync(request.Screenshot, baseTxn, cancellationToken);
+
+            var createdEntities = new List<PaymentTransaction>();
+
+            if (hasSplits)
             {
-                paymentModeName = paymentModeName.Substring(0, 50);
+                // Requirement 4: One logical payment group, separate child transaction rows. No additional master row.
+                var groupId = Guid.NewGuid();
+                int index = 1;
+
+                foreach (var split in request.Splits!)
+                {
+                    var splitModeName = split.Mode.Trim();
+                    Guid? splitModeId = null;
+                    if (_paymentModeRepository != null)
+                    {
+                        var matchedPm = await _paymentModeRepository.GetByNameAsync(splitModeName, cancellationToken);
+                        splitModeId = matchedPm?.PaymentModeId;
+                    }
+
+                    var isCash = splitModeName.Contains("Cash", StringComparison.OrdinalIgnoreCase);
+                    var childUtr = isCash ? null : split.Utr?.Trim();
+                    if (!string.IsNullOrEmpty(childUtr) && childUtr.Length > 95)
+                    {
+                        childUtr = childUtr.Substring(0, 92) + "...";
+                    }
+
+                    var childNotes = isCash && !string.IsNullOrWhiteSpace(split.Notes)
+                        ? (string.IsNullOrWhiteSpace(safeNotes) ? $"[Cash Note: {split.Notes.Trim()}]" : $"{safeNotes} [Cash Note: {split.Notes.Trim()}]")
+                        : safeNotes;
+                    if (!string.IsNullOrEmpty(childNotes) && childNotes.Length > 990)
+                    {
+                        childNotes = childNotes.Substring(0, 985) + "...";
+                    }
+
+                    var childEntity = new PaymentTransaction
+                    {
+                        TransactionId = Guid.NewGuid(),
+                        TxnNumber = $"{baseTxn}-{index}",
+                        ParentTxnNumber = baseTxn,
+                        TransactionGroupId = groupId,
+                        MemberName = resolvedMemberName.Length > 150 ? resolvedMemberName.Substring(0, 150) : resolvedMemberName,
+                        EventName = resolvedEventName.Length > 200 ? resolvedEventName.Substring(0, 200) : resolvedEventName,
+                        UserId = resolvedUserId,
+                        EventId = resolvedEventId,
+                        PaymentModeId = splitModeId,
+                        StatusId = resolvedStatusId,
+                        StatusItem = pendingStatus,
+                        Amount = split.Amount,
+                        PaymentDate = request.PaymentDate != default ? request.PaymentDate : DateTime.UtcNow,
+                        PaymentMode = splitModeName.Length > 50 ? splitModeName.Substring(0, 50) : splitModeName,
+                        Utr = childUtr,
+                        Status = CommonConstants.PaymentStatuses.Pending,
+                        Notes = childNotes,
+                        Screenshot = savedScreenshot,
+                        IsActive = true,
+                        IsDeleted = false,
+                        CreatedBy = resolvedUserId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _transactionRepository.AddAsync(childEntity, cancellationToken);
+                    createdEntities.Add(childEntity);
+                    index++;
+                }
+
+                // Synchronize contribution for the group atomically (Requirement 8 & 9)
+                await SyncContributionForTransactionGroupAsync(createdEntities, cancellationToken);
+            }
+            else
+            {
+                // Single-mode payment (Requirement 12: preserve single-mode payments and backward compatibility)
+                var singleMode = request.Splits != null && request.Splits.Count == 1 ? request.Splits[0].Mode : request.PaymentMode;
+                var singleUtr = request.Splits != null && request.Splits.Count == 1 ? request.Splits[0].Utr : request.Utr;
+                var paymentModeName = string.IsNullOrWhiteSpace(singleMode) ? CommonConstants.PaymentModes.Upi : singleMode.Trim();
+                
+                Guid? resolvedPaymentModeId = null;
+                if (_paymentModeRepository != null && !string.IsNullOrWhiteSpace(paymentModeName))
+                {
+                    var matchedPm = await _paymentModeRepository.GetByNameAsync(paymentModeName, cancellationToken);
+                    resolvedPaymentModeId = matchedPm?.PaymentModeId;
+                }
+
+                var isCash = paymentModeName.Contains("Cash", StringComparison.OrdinalIgnoreCase);
+                var safeUtr = isCash ? null : singleUtr?.Trim();
+                if (!string.IsNullOrEmpty(safeUtr) && safeUtr.Length > 95)
+                {
+                    safeUtr = safeUtr.Substring(0, 92) + "...";
+                }
+
+                var entity = new PaymentTransaction
+                {
+                    TransactionId = Guid.NewGuid(),
+                    TxnNumber = baseTxn,
+                    ParentTxnNumber = null,
+                    TransactionGroupId = null,
+                    MemberName = resolvedMemberName.Length > 150 ? resolvedMemberName.Substring(0, 150) : resolvedMemberName,
+                    EventName = resolvedEventName.Length > 200 ? resolvedEventName.Substring(0, 200) : resolvedEventName,
+                    UserId = resolvedUserId,
+                    EventId = resolvedEventId,
+                    PaymentModeId = resolvedPaymentModeId,
+                    StatusId = resolvedStatusId,
+                    StatusItem = pendingStatus,
+                    Amount = request.Amount,
+                    PaymentDate = request.PaymentDate != default ? request.PaymentDate : DateTime.UtcNow,
+                    PaymentMode = paymentModeName.Length > 50 ? paymentModeName.Substring(0, 50) : paymentModeName,
+                    Utr = safeUtr,
+                    Status = CommonConstants.PaymentStatuses.Pending,
+                    Notes = safeNotes,
+                    Screenshot = savedScreenshot,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedBy = resolvedUserId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _transactionRepository.AddAsync(entity, cancellationToken);
+                createdEntities.Add(entity);
+
+                await SyncContributionForTransactionGroupAsync(createdEntities, cancellationToken);
             }
 
-            var entity = new PaymentTransaction
-            {
-                TransactionId = Guid.NewGuid(),
-                TxnNumber = txnNumber,
-                MemberName = resolvedMemberName.Length > 150 ? resolvedMemberName.Substring(0, 150) : resolvedMemberName,
-                EventName = resolvedEventName.Length > 200 ? resolvedEventName.Substring(0, 200) : resolvedEventName,
-                UserId = resolvedUserId,
-                EventId = resolvedEventId,
-                PaymentModeId = resolvedPaymentModeId,
-                StatusId = resolvedStatusId,
-                Amount = request.Amount,
-                PaymentDate = request.PaymentDate != default ? request.PaymentDate : DateTime.UtcNow,
-                PaymentMode = paymentModeName,
-                Utr = safeUtr,
-                Status = CommonConstants.PaymentStatuses.Pending,
-                Notes = safeNotes,
-                Screenshot = await SaveScreenshotAsync(request.Screenshot, txnNumber, cancellationToken),
-                IsActive = true,
-                IsDeleted = false,
-                CreatedBy = resolvedUserId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _transactionRepository.AddAsync(entity, cancellationToken);
-            await SyncContributionFromTransactionAsync(entity, cancellationToken);
+            // Requirement 6: Save child rows atomically using Unit of Work
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(CommonLogMessages.Payments.PaymentProofSubmitted,
-                txnNumber, resolvedMemberName, resolvedEventName, request.Amount, request.Utr);
+                baseTxn, resolvedMemberName, resolvedEventName, request.Amount, request.Utr);
 
-            return _mapper.Map<PaymentTransactionDto>(entity);
+            var primaryDto = _mapper.Map<PaymentTransactionDto>(createdEntities.First());
+            return primaryDto;
         }
         catch (Exception ex)
         {
@@ -457,35 +570,60 @@ public class PaymentTransactionService : IPaymentTransactionService
             {
                 reqStatus = CommonConstants.PaymentStatuses.Verified;
             }
-            entity.Status = string.IsNullOrWhiteSpace(reqStatus) ? CommonConstants.PaymentStatuses.Verified : reqStatus;
+            var targetStatus = string.IsNullOrWhiteSpace(reqStatus) ? CommonConstants.PaymentStatuses.Verified : reqStatus;
 
+            Guid? statusIdToAssign = null;
+            Status? matchedStatus = null;
             if (_statusRepository != null)
             {
-                var matchedStatus = await _statusRepository.GetByNameAsync(entity.Status, cancellationToken);
-                if (matchedStatus == null && string.Equals(entity.Status, CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase))
+                matchedStatus = await _statusRepository.GetByNameAsync(targetStatus, cancellationToken);
+                if (matchedStatus == null && string.Equals(targetStatus, CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase))
                 {
                     matchedStatus = await _statusRepository.GetByNameAsync("Paid", cancellationToken);
                 }
-                if (matchedStatus != null)
+                statusIdToAssign = matchedStatus?.StatusId;
+            }
+
+            var verifierName = string.IsNullOrWhiteSpace(request.VerifiedBy) ? (string.IsNullOrWhiteSpace(user) ? null : user.Trim()) : request.VerifiedBy.Trim();
+            var verifiedTime = DateTime.UtcNow;
+            var modifiedByUser = CommonMethods.ParseNullableGuid(verifierName) ?? CommonMethods.ParseNullableGuid(user);
+
+            // Requirement 7: Verifying or rejecting any child updates the entire group consistently
+            List<PaymentTransaction> affectedTransactions;
+            if (entity.TransactionGroupId.HasValue && entity.TransactionGroupId.Value != Guid.Empty)
+            {
+                affectedTransactions = await _transactionRepository.GetByGroupIdAsync(entity.TransactionGroupId.Value, cancellationToken);
+                if (affectedTransactions.Count == 0)
                 {
-                    entity.StatusId = matchedStatus.StatusId;
-                    entity.StatusItem = matchedStatus;
+                    affectedTransactions = new List<PaymentTransaction> { entity };
                 }
             }
-
-            entity.VerifiedBy = string.IsNullOrWhiteSpace(request.VerifiedBy) ? (string.IsNullOrWhiteSpace(user) ? null : user.Trim()) : request.VerifiedBy.Trim();
-            entity.VerifiedOn = DateTime.UtcNow;
-
-            if (!string.IsNullOrWhiteSpace(request.Notes))
+            else
             {
-                entity.Notes = request.Notes.Trim();
+                affectedTransactions = new List<PaymentTransaction> { entity };
             }
 
-            entity.ModifiedBy = CommonMethods.ParseNullableGuid(entity.VerifiedBy) ?? CommonMethods.ParseNullableGuid(user);
-            entity.ModifiedOn = DateTime.UtcNow;
+            foreach (var txn in affectedTransactions)
+            {
+                txn.Status = targetStatus;
+                if (statusIdToAssign.HasValue)
+                {
+                    txn.StatusId = statusIdToAssign.Value;
+                    txn.StatusItem = matchedStatus;
+                }
+                txn.VerifiedBy = verifierName;
+                txn.VerifiedOn = verifiedTime;
+                if (!string.IsNullOrWhiteSpace(request.Notes))
+                {
+                    txn.Notes = request.Notes.Trim();
+                }
+                txn.ModifiedBy = modifiedByUser;
+                txn.ModifiedOn = verifiedTime;
+                _transactionRepository.Update(txn);
+            }
 
-            _transactionRepository.Update(entity);
-            await SyncContributionFromTransactionAsync(entity, cancellationToken);
+            // Requirement 8 & 9: Aggregate synchronization and idempotency
+            await SyncContributionForTransactionGroupAsync(affectedTransactions, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             return _mapper.Map<PaymentTransactionDto>(entity);
@@ -541,24 +679,33 @@ public class PaymentTransactionService : IPaymentTransactionService
         }
     }
 
-    private async Task SyncContributionFromTransactionAsync(PaymentTransaction entity, CancellationToken cancellationToken)
+    private Task SyncContributionFromTransactionAsync(PaymentTransaction entity, CancellationToken cancellationToken)
     {
+        return SyncContributionForTransactionGroupAsync(new List<PaymentTransaction> { entity }, cancellationToken);
+    }
+
+    private async Task SyncContributionForTransactionGroupAsync(List<PaymentTransaction> groupEntities, CancellationToken cancellationToken)
+    {
+        if (groupEntities == null || groupEntities.Count == 0) return;
+
         try
         {
+            var primary = groupEntities.First();
+
             Contribution? match = null;
-            if (entity.EventId.HasValue && entity.UserId.HasValue)
+            if (primary.EventId.HasValue && primary.UserId.HasValue)
             {
-                match = await _contributionRepository.GetByEventAndMemberAsync(entity.EventId.Value, entity.UserId.Value, cancellationToken);
+                match = await _contributionRepository.GetByEventAndMemberAsync(primary.EventId.Value, primary.UserId.Value, cancellationToken);
             }
 
-            if (match == null && !string.IsNullOrWhiteSpace(entity.MemberName) && !string.IsNullOrWhiteSpace(entity.EventName))
+            if (match == null && !string.IsNullOrWhiteSpace(primary.MemberName) && !string.IsNullOrWhiteSpace(primary.EventName))
             {
                 var allContributions = await _contributionRepository.GetAllAsync(cancellationToken);
                 var matchDto = allContributions.FirstOrDefault(c =>
                     !string.IsNullOrWhiteSpace(c.MemberName) &&
-                    c.MemberName.Trim().Equals(entity.MemberName.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                    c.MemberName.Trim().Equals(primary.MemberName.Trim(), StringComparison.OrdinalIgnoreCase) &&
                     !string.IsNullOrWhiteSpace(c.EventName) &&
-                    c.EventName.Trim().Equals(entity.EventName.Trim(), StringComparison.OrdinalIgnoreCase));
+                    c.EventName.Trim().Equals(primary.EventName.Trim(), StringComparison.OrdinalIgnoreCase));
 
                 if (matchDto != null)
                 {
@@ -566,26 +713,18 @@ public class PaymentTransactionService : IPaymentTransactionService
                 }
             }
 
-            var isVerified = entity.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase) ||
-                             entity.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
-                             entity.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
-                             entity.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase);
+            // Check if all items in the group are verified/paid
+            var isAllVerified = groupEntities.All(t =>
+                t.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase) ||
+                t.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                t.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
+                t.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase));
 
-            var isPaymentMade = isVerified || entity.Amount > 0;
-            string targetStatusName = "Paid";
-            if (entity.Status.Equals("Verified", StringComparison.OrdinalIgnoreCase))
-            {
-                targetStatusName = "Verified";
-            }
-            else if (entity.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase))
-            {
-                targetStatusName = "Closed";
-            }
-            else if (!isPaymentMade)
-            {
-                targetStatusName = "Pending";
-            }
+            var isAnyRejected = groupEntities.Any(t =>
+                t.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase));
 
+            // Status determination
+            string targetStatusName = isAllVerified ? "Verified" : (isAnyRejected ? "Rejected" : "Pending");
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
@@ -597,159 +736,84 @@ public class PaymentTransactionService : IPaymentTransactionService
                 statusIdToAssign = st?.StatusId;
             }
 
+            // Calculate aggregate group amounts (Requirement 8)
+            decimal totalCash = groupEntities
+                .Where(t => (t.PaymentMode ?? "").Contains("Cash", StringComparison.OrdinalIgnoreCase))
+                .Sum(t => t.Amount);
+
+            decimal totalUpi = groupEntities
+                .Where(t => !(t.PaymentMode ?? "").Contains("Cash", StringComparison.OrdinalIgnoreCase))
+                .Sum(t => t.Amount);
+
+            PaymentMode modeEnum;
+            if (groupEntities.Count > 1 || (totalCash > 0 && totalUpi > 0))
+            {
+                modeEnum = PaymentMode.Split;
+            }
+            else if (totalCash > 0)
+            {
+                modeEnum = PaymentMode.Cash;
+            }
+            else
+            {
+                modeEnum = PaymentMode.Upi;
+            }
+
             if (match != null)
             {
                 if (statusIdToAssign.HasValue) match.StatusId = statusIdToAssign.Value;
-                if (entity.PaymentModeId.HasValue) match.PaymentModeId = entity.PaymentModeId.Value;
-                match.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
+                if (primary.PaymentModeId.HasValue) match.PaymentModeId = primary.PaymentModeId.Value;
+                match.PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow;
+                match.PaymentMode = modeEnum;
 
-                var modeLower = (entity.PaymentMode ?? "").ToLowerInvariant();
-                var isSplit = modeLower.Contains("split");
-                var isCash = string.Equals(entity.PaymentMode, "Cash", StringComparison.OrdinalIgnoreCase);
-
-                if (isSplit)
+                // Ensure pending or rejected payments do not mark contribution as paid (Requirement 8 & 9)
+                if (isAllVerified)
                 {
-                    match.PaymentMode = PaymentMode.Split;
-                    decimal cashPart = 0;
-                    decimal upiPart = 0;
-                    if (!string.IsNullOrWhiteSpace(entity.Notes) && entity.Notes.Contains("Cash:"))
-                    {
-                        var parts = entity.Notes.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var part in parts)
-                        {
-                            if (part.Contains("Cash:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var numStr = System.Text.RegularExpressions.Regex.Match(part, @"\d+(\.\d+)?").Value;
-                                if (decimal.TryParse(numStr, out var cVal)) cashPart += cVal;
-                            }
-                            else
-                            {
-                                var numStr = System.Text.RegularExpressions.Regex.Match(part, @"\d+(\.\d+)?").Value;
-                                if (decimal.TryParse(numStr, out var uVal)) upiPart += uVal;
-                            }
-                        }
-                    }
-                    if (cashPart == 0 && upiPart == 0) upiPart = entity.Amount;
-                    match.CashAmount = cashPart;
-                    match.UpiAmount = upiPart;
-                }
-                else if (isCash)
-                {
-                    match.CashAmount = entity.Amount;
-                    match.UpiAmount = 0;
-                    match.PaymentMode = PaymentMode.Cash;
+                    match.PaymentStatus = PaymentStatus.Paid;
+                    match.CashAmount = totalCash;
+                    match.UpiAmount = totalUpi;
                 }
                 else
                 {
-                    match.UpiAmount = entity.Amount;
-                    match.CashAmount = 0;
-                    if (Enum.TryParse<PaymentMode>(entity.PaymentMode, true, out var parsedMode))
+                    match.PaymentStatus = PaymentStatus.Pending;
+                    if (isAnyRejected)
                     {
-                        match.PaymentMode = parsedMode;
-                    }
-                    else
-                    {
-                        match.PaymentMode = PaymentMode.Upi;
+                        match.CashAmount = 0;
+                        match.UpiAmount = 0;
                     }
                 }
 
-                match.PaymentStatus = isPaymentMade ? PaymentStatus.Paid : PaymentStatus.Pending;
-                match.ModifiedBy = entity.ModifiedBy ?? entity.CreatedBy;
+                match.ModifiedBy = primary.ModifiedBy ?? primary.CreatedBy;
                 match.ModifiedOn = DateTime.UtcNow;
                 _contributionRepository.Update(match);
-                _logger.LogInformation(CommonLogMessages.Payments.ContributionSyncSuccess, match.ContributionId, targetStatusName, entity.MemberName, entity.EventName);
+                _logger.LogInformation("Synchronized contribution {ContributionId} for transaction group: Status={Status}, Total={Amount}",
+                    match.ContributionId, targetStatusName, totalCash + totalUpi);
             }
-            else if (entity.EventId.HasValue && entity.UserId.HasValue)
+            else if (primary.EventId.HasValue && primary.UserId.HasValue)
             {
-                var modeLower = (entity.PaymentMode ?? "").ToLowerInvariant();
-                var isSplit = modeLower.Contains("split");
-                var isCash = string.Equals(entity.PaymentMode, "Cash", StringComparison.OrdinalIgnoreCase);
-
-                decimal cashAmount = isCash ? entity.Amount : 0;
-                decimal upiAmount = (!isCash && !isSplit) ? entity.Amount : 0;
-                var modeEnum = PaymentMode.Upi;
-
-                if (isSplit)
-                {
-                    modeEnum = PaymentMode.Split;
-                    if (!string.IsNullOrWhiteSpace(entity.Notes) && entity.Notes.Contains("Cash:"))
-                    {
-                        var parts = entity.Notes.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var part in parts)
-                        {
-                            if (part.Contains("Cash:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var numStr = System.Text.RegularExpressions.Regex.Match(part, @"\d+(\.\d+)?").Value;
-                                if (decimal.TryParse(numStr, out var cVal)) cashAmount += cVal;
-                            }
-                            else
-                            {
-                                var numStr = System.Text.RegularExpressions.Regex.Match(part, @"\d+(\.\d+)?").Value;
-                                if (decimal.TryParse(numStr, out var uVal)) upiAmount += uVal;
-                            }
-                        }
-                    }
-                    if (cashAmount == 0 && upiAmount == 0) upiAmount = entity.Amount;
-                }
-                else if (isCash)
-                {
-                    modeEnum = PaymentMode.Cash;
-                }
-                else if (Enum.TryParse<PaymentMode>(entity.PaymentMode, true, out var parsed))
-                {
-                    modeEnum = parsed;
-                }
-
                 var newContrib = new Contribution
                 {
                     ContributionId = Guid.NewGuid(),
-                    EventId = entity.EventId.Value,
-                    UserId = entity.UserId.Value,
-                    Amount = entity.Amount,
+                    EventId = primary.EventId.Value,
+                    UserId = primary.UserId.Value,
+                    Amount = totalCash + totalUpi,
                     StatusId = statusIdToAssign,
-                    PaymentModeId = entity.PaymentModeId,
-                    PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow,
-                    CashAmount = cashAmount,
-                    UpiAmount = upiAmount,
-                    PaymentStatus = isPaymentMade ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    PaymentModeId = primary.PaymentModeId,
+                    PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow,
+                    CashAmount = isAllVerified ? totalCash : 0,
+                    UpiAmount = isAllVerified ? totalUpi : 0,
+                    PaymentStatus = isAllVerified ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentMode = modeEnum,
-                    CreatedBy = entity.CreatedBy,
+                    CreatedBy = primary.CreatedBy,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _contributionRepository.AddAsync(newContrib, cancellationToken);
-                _logger.LogInformation("Created and synchronized new contribution record for {Member} - {Event}", entity.MemberName, entity.EventName);
-            }
-
-            // If payment scope covers All Outstanding or arrears, synchronize other event contributions for this member
-            var isAllOutstanding = !string.IsNullOrWhiteSpace(entity.Notes) && 
-                (entity.Notes.Contains("Scope: All", StringComparison.OrdinalIgnoreCase) || 
-                 entity.Notes.Contains("All Outstanding", StringComparison.OrdinalIgnoreCase) ||
-                 entity.Notes.Contains("alloutstanding", StringComparison.OrdinalIgnoreCase));
-
-            if (isAllOutstanding && entity.UserId.HasValue)
-            {
-                var allContribs = await _contributionRepository.GetAllAsync(cancellationToken);
-                var memberOtherEvents = allContribs.Where(c => c.MemberId == entity.UserId.Value && (match == null || c.ContributionId != match.ContributionId)).ToList();
-                foreach (var other in memberOtherEvents)
-                {
-                    var otherEntity = await _contributionRepository.GetByEventAndMemberAsync(other.EventId, other.MemberId, cancellationToken);
-                    if (otherEntity != null)
-                    {
-                        if (statusIdToAssign.HasValue) otherEntity.StatusId = statusIdToAssign.Value;
-                        if (entity.PaymentModeId.HasValue) otherEntity.PaymentModeId = entity.PaymentModeId.Value;
-                        otherEntity.PaymentDate = entity.PaymentDate != default ? entity.PaymentDate : DateTime.UtcNow;
-                        otherEntity.PaymentMode = match != null ? match.PaymentMode : (entity.PaymentMode.Contains("Cash", StringComparison.OrdinalIgnoreCase) ? PaymentMode.Cash : PaymentMode.Upi);
-                        otherEntity.PaymentStatus = isPaymentMade ? PaymentStatus.Paid : PaymentStatus.Pending;
-                        otherEntity.ModifiedBy = entity.ModifiedBy ?? entity.CreatedBy;
-                        otherEntity.ModifiedOn = DateTime.UtcNow;
-                        _contributionRepository.Update(otherEntity);
-                    }
-                }
+                _logger.LogInformation("Created new contribution for member {Member} and event {Event}", primary.MemberName, primary.EventName);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to synchronize contribution record for payment transaction: {TxnNumber}", entity.TxnNumber);
+            _logger.LogWarning(ex, "Failed to synchronize contribution record for transaction group");
         }
     }
 

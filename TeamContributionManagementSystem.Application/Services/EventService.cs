@@ -30,6 +30,7 @@ public class EventService : IEventService
     private readonly ILogger<EventService> _logger;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly ICurrentUserService? _currentUserService;
+    private readonly IStatusRepository? _statusRepository;
 
     public EventService(
         IEventRepository eventRepository,
@@ -45,7 +46,8 @@ public class EventService : IEventService
         IEmailService emailService,
         ILogger<EventService> logger,
         IServiceScopeFactory serviceScopeFactory,
-        ICurrentUserService? currentUserService = null)
+        ICurrentUserService? currentUserService = null,
+        IStatusRepository? statusRepository = null)
     {
         _eventRepository = eventRepository;
         _eventTypeRepository = eventTypeRepository;
@@ -61,6 +63,7 @@ public class EventService : IEventService
         _logger = logger;
         _serviceScopeFactory = serviceScopeFactory;
         _currentUserService = currentUserService;
+        _statusRepository = statusRepository;
     }
 
     public async Task<IReadOnlyCollection<EventSummaryDto>> GetAllAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
@@ -322,6 +325,13 @@ public class EventService : IEventService
 
             var creatorDisplayName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName;
 
+            Guid? pendingStatusId = null;
+            if (_statusRepository != null)
+            {
+                var pendingStatus = await _statusRepository.GetByNameAsync(CommonConstants.PaymentStatuses.Pending, cancellationToken);
+                pendingStatusId = pendingStatus?.StatusId;
+            }
+
             var contributions = members.Select(member => new Contribution
             {
                 ContributionId = Guid.NewGuid(),
@@ -329,8 +339,13 @@ public class EventService : IEventService
                 UserId = member.MemberId,
                 MemberId = member.MemberId,
                 Amount = memberAmounts.TryGetValue(member.MemberId, out var amount) ? amount : 0m,
+                StatusId = pendingStatusId,
                 PaymentStatus = PaymentStatus.Pending,
                 PaymentMode = PaymentMode.None,
+                PaymentModeId = null,
+                PaymentDate = null,
+                CashAmount = null,
+                UpiAmount = null,
                 IsActive = true,
                 IsDeleted = false,
                 CreatedBy = user.UserId,
@@ -953,6 +968,13 @@ public class EventService : IEventService
                 }
             }
 
+            Guid? pendingStatusId = null;
+            if (_statusRepository != null)
+            {
+                var pendingStatus = await _statusRepository.GetByNameAsync(CommonConstants.PaymentStatuses.Pending, cancellationToken);
+                pendingStatusId = pendingStatus?.StatusId;
+            }
+
             // Update or Add contributions for requested participants
             foreach (var memberId in newParticipantIds)
             {
@@ -983,8 +1005,13 @@ public class EventService : IEventService
                         EventId = eventItem.EventId,
                         UserId = memberId,
                         Amount = amount,
+                        StatusId = pendingStatusId,
                         PaymentStatus = PaymentStatus.Pending,
                         PaymentMode = PaymentMode.None,
+                        PaymentModeId = null,
+                        PaymentDate = null,
+                        CashAmount = null,
+                        UpiAmount = null,
                         IsActive = true,
                         IsDeleted = false,
                         CreatedAt = DateTime.UtcNow

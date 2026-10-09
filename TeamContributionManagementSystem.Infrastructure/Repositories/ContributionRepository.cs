@@ -230,6 +230,9 @@ public class ContributionRepository : IContributionRepository
                         var baseAmount = ev.BaseAmount;
                         var perMemberAmount = participantUserIds.Count > 0 ? Math.Round(baseAmount / participantUserIds.Count, 2) : 0m;
 
+                        var pendingStatus = await _context.Statuses.FirstOrDefaultAsync(s => s.StatusName.ToLower() == "pending", cancellationToken);
+                        var pendingStatusId = pendingStatus?.StatusId;
+
                         var newContribs = new List<Contribution>();
                         foreach (var uid in participantUserIds)
                         {
@@ -239,8 +242,13 @@ public class ContributionRepository : IContributionRepository
                                 EventId = ev.EventId,
                                 UserId = uid,
                                 Amount = perMemberAmount,
+                                StatusId = pendingStatusId,
                                 PaymentStatus = PaymentStatus.Pending,
                                 PaymentMode = PaymentMode.None,
+                                PaymentModeId = null,
+                                PaymentDate = null,
+                                CashAmount = null,
+                                UpiAmount = null,
                                 IsActive = true,
                                 IsDeleted = false,
                                 CreatedBy = ev.CreatedBy,
