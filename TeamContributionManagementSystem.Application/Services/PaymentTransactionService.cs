@@ -357,8 +357,6 @@ public class PaymentTransactionService : IPaymentTransactionService
         {
             var result = new PaymentContextDto();
 
-            result.QrReceiverName = CommonConstants.Defaults.DefaultPayeeName;
-            result.QrUpiId = CommonConstants.Defaults.DefaultUpiId;
             result.QrImage = string.Empty;
 
             Event? ev = null;

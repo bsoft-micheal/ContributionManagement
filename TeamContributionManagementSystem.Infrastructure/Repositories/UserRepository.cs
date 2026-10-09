@@ -185,7 +185,7 @@ public class UserRepository : IUserRepository
             var users = userEntities
                 .Select(x =>
                 {
-                    var assignedRoles = x.UserRoles?.Where(ur => ur.Role != null).ToList() ?? new List<AppUserRole>();
+                    var assignedRoles = x.UserRoles?.Where(ur => ur.Role != null && !ur.Role.IsDeleted).ToList() ?? new List<AppUserRole>();
                     var primaryRoleNames = assignedRoles.Where(ur => ur.IsPrimary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                     var secondaryRoleNames = assignedRoles.Where(ur => ur.IsSecondary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                     var allRoleNames = assignedRoles.Where(ur => ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName)).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
