@@ -250,6 +250,11 @@ public class EventService : IEventService
     {
         try
         {
+            if (request.EventDate.Date < DateTime.Today)
+            {
+                throw new InvalidOperationException(CommonMessages.Events.PastDateNotAllowed);
+            }
+
             var user = await _userRepository.GetByIdAsync(createdByUserId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 

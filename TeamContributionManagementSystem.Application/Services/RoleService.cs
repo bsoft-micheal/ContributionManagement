@@ -118,22 +118,13 @@ public class RoleService : IRoleService
             var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Roles.NotFound);
 
-            if (await _roleRepository.HasMembersAsync(roleId, cancellationToken))
+            var nameLower = role.RoleName.Trim().ToLower();
+            if (nameLower == "admin" || nameLower == "member")
             {
-                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
+                throw new InvalidOperationException("Core system roles (Admin and Member) cannot be deleted.");
             }
 
-            if (await _roleRepository.HasUsersAsync(roleId, role.RoleName, cancellationToken))
-            {
-                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
-            }
-
-            if (await _roleRepository.HasRoleRightsAsync(role.RoleName, cancellationToken))
-            {
-                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
-            }
-
-            _roleRepository.Delete(role);
+            await _roleRepository.DeleteRoleWithAssignmentsAsync(roleId, role.RoleName, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)

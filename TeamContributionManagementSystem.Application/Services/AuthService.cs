@@ -366,7 +366,7 @@ public class AuthService : IAuthService
         }
 
         var member = await _memberRepository.GetByEmailAsync(user.Email, cancellationToken);
-        var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+        var activeUserRoles = user.UserRoles?.Where(ur => ur.Role != null && !ur.Role.IsDeleted).ToList() ?? new List<AppUserRole>();
         var primaryRoleNames = activeUserRoles.Where(ur => ur.IsPrimary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var secondaryRoleNames = activeUserRoles.Where(ur => ur.IsSecondary && ur.Role != null).Select(ur => ur.Role!.RoleName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var roleNames = primaryRoleNames.Concat(secondaryRoleNames).Concat(activeUserRoles.Select(ur => ur.Role?.RoleName)).Where(r => !string.IsNullOrEmpty(r)).Select(r => r!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -595,7 +595,7 @@ public class AuthService : IAuthService
                 throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
             }
 
-            var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+            var activeUserRoles = user.UserRoles?.Where(ur => ur.Role != null && !ur.Role.IsDeleted).ToList() ?? new List<AppUserRole>();
             AppUserRole? matchedRoleMapping = null;
 
             if (request.RoleId.HasValue && request.RoleId.Value != Guid.Empty)
