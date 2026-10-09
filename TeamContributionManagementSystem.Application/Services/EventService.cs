@@ -1085,16 +1085,16 @@ public class EventService : IEventService
     {
         var overrideLookup = (overrides ?? Array.Empty<ContributionOverrideDto>())
             .GroupBy(x => x.MemberId)
-            .ToDictionary(x => x.Key, x => Math.Round(x.Last().Amount, 0, MidpointRounding.AwayFromZero));
+            .ToDictionary(x => x.Key, x => Math.Round(x.Last().Amount, 2, MidpointRounding.AwayFromZero));
 
         bool hasTenureRule = eventType.HasTenureRule;
         decimal thresholdYears = eventType.TenureThresholdYears > 0 ? eventType.TenureThresholdYears : 1.0m;
         decimal newEntrantRatio = (eventType.NewEntrantSharePercentage > 0 ? eventType.NewEntrantSharePercentage : 50.0m) / 100.0m;
         decimal standardRatio = (eventType.StandardSharePercentage > 0 ? eventType.StandardSharePercentage : 100.0m) / 100.0m;
 
-        decimal totalBaseInteger = Math.Round(baseAmount, 0, MidpointRounding.AwayFromZero);
+        decimal totalBaseDecimal = Math.Round(baseAmount, 2, MidpointRounding.AwayFromZero);
         decimal overrideSum = overrideLookup.Values.Sum();
-        decimal splitPool = Math.Max(0m, totalBaseInteger - overrideSum);
+        decimal splitPool = Math.Max(0m, totalBaseDecimal - overrideSum);
 
         var nonOverrideMembers = members.Where(m => !overrideLookup.ContainsKey(m.MemberId)).ToList();
         var result = new Dictionary<Guid, decimal>();
@@ -1137,13 +1137,13 @@ public class EventService : IEventService
                     double tenureYears = tenureDays / 365.25;
                     bool isNewEntrant = tenureYears < (double)thresholdYears;
                     decimal shareRatio = isNewEntrant ? newEntrantRatio : standardRatio;
-                    result[member.MemberId] = Math.Round(standardShare * shareRatio, 0, MidpointRounding.AwayFromZero);
+                    result[member.MemberId] = Math.Round(standardShare * shareRatio, 2, MidpointRounding.AwayFromZero);
                 }
             }
             else
             {
                 decimal rawPerPerson = splitPool / nonOverrideMembers.Count;
-                decimal roundedPerPerson = Math.Round(rawPerPerson, 0, MidpointRounding.AwayFromZero);
+                decimal roundedPerPerson = Math.Round(rawPerPerson, 2, MidpointRounding.AwayFromZero);
 
                 foreach (var member in nonOverrideMembers)
                 {
