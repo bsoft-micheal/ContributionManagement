@@ -162,7 +162,29 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(CommonRoles.Policies.MobileAppAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireAssertion(context =>
+        {
+            var user = context.User;
+            if (user?.Identity?.IsAuthenticated != true)
+            {
+                return false;
+            }
+
+            // Extract the active / effective role claim from JWT
+            var activeRole = user.FindFirst("activeRole")?.Value
+                ?? user.FindFirst("role")?.Value
+                ?? user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            // Exclusion-based logic: Deny Admin only, allow all existing and future non-Admin roles
+            return !string.Equals(activeRole, CommonRoles.RoleCodes.Admin, StringComparison.OrdinalIgnoreCase);
+        });
+    });
+});
 
 var app = builder.Build();
 
