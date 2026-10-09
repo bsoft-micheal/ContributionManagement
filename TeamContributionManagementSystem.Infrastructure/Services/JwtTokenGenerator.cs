@@ -63,7 +63,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             .Distinct()
             .ToList();
 
-        var activeUserRoles = user.UserRoles?.ToList() ?? new List<AppUserRole>();
+        var activeUserRoles = user.UserRoles?.Where(ur => ur.Role != null && !ur.Role.IsDeleted).ToList() ?? new List<AppUserRole>();
         var primaryRolesList = activeUserRoles
             .Where(ur => ur.IsPrimary && ur.Role != null && !string.IsNullOrWhiteSpace(ur.Role.RoleName))
             .Select(ur => ur.Role!.RoleName)

@@ -14,6 +14,7 @@ public interface IRoleRepository
     Task AddAsync(Role role, CancellationToken cancellationToken = default);
     void Update(Role role);
     void Delete(Role role);
+    Task DeleteRoleWithAssignmentsAsync(Guid roleId, string roleName, CancellationToken cancellationToken = default);
 
     // Standardized naming
     Task<List<RoleDto>> GetAllRoleAsync(CancellationToken cancellationToken = default) => GetAllAsync(cancellationToken);

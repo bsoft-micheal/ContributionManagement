@@ -69,6 +69,7 @@ public static class CommonMessages
         public const string InactiveEventType = "Inactive event types cannot be used.";
         public const string AtLeastOneParticipantRequired = "At least one participant is required.";
         public const string ParticipantsNotFound = "One or more participants could not be found.";
+        public const string PastDateNotAllowed = "Cannot create an event for a past date.";
     }
 
     public static class Members

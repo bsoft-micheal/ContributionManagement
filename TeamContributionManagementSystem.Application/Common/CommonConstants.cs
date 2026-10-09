@@ -205,8 +205,6 @@ public static class CommonConstants
         public const string TxnPrefix = "TXN";
         public const string TicketPrefix = "TKT";
         public const string BirthdayMemberPrefix = "birthday-member:";
-        public const string DefaultPayeeName = "Daniel A";
-        public const string DefaultUpiId = "danielrobertanto604@okicici";
         public const string DefaultFrontendUrl = "http://localhost:5173";
         public const string Localhost = "localhost";
         public const string DefaultQrSize = "260x260";
