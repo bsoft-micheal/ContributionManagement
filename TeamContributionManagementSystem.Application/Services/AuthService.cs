@@ -120,12 +120,12 @@ public class AuthService : IAuthService
                     primaryRoleName = user.Role.ToString();
                 }
 
-                bool isAllowedPrimaryRole = string.Equals(primaryRoleName, "Member", StringComparison.OrdinalIgnoreCase) ||
-                                            string.Equals(primaryRoleName, "Organizer", StringComparison.OrdinalIgnoreCase);
+                // Exclusion-based check: Deny Admin only, allow all existing and future non-Admin roles
+                bool isRestrictedAdminRole = string.Equals(primaryRoleName, CommonRoles.RoleCodes.Admin, StringComparison.OrdinalIgnoreCase);
 
-                if (!isAllowedPrimaryRole)
+                if (isRestrictedAdminRole)
                 {
-                    _logger.LogWarning("Mobile login rejected for user {Email}. Primary role is '{Role}', expected 'Member' or 'Organizer'.", request.Email, primaryRoleName ?? "None");
+                    _logger.LogWarning("Mobile login rejected for user {Email}. Effective role is '{Role}'. Admin role is not permitted in Mobile App.", request.Email, primaryRoleName ?? "None");
                     throw new InvalidOperationException(CommonMessages.Auth.MobileAdminLoginNotAllowed);
                 }
             }
@@ -187,12 +187,12 @@ public class AuthService : IAuthService
                     primaryRoleName = user.Role.ToString();
                 }
 
-                bool isAllowedPrimaryRole = string.Equals(primaryRoleName, "Member", StringComparison.OrdinalIgnoreCase) ||
-                                            string.Equals(primaryRoleName, "Organizer", StringComparison.OrdinalIgnoreCase);
+                // Exclusion-based check: Deny Admin only, allow all existing and future non-Admin roles
+                bool isRestrictedAdminRole = string.Equals(primaryRoleName, CommonRoles.RoleCodes.Admin, StringComparison.OrdinalIgnoreCase);
 
-                if (!isAllowedPrimaryRole)
+                if (isRestrictedAdminRole)
                 {
-                    _logger.LogWarning("Mobile 2FA verification rejected for user {Email}. Primary role is '{Role}', expected 'Member' or 'Organizer'.", request.Email, primaryRoleName ?? "None");
+                    _logger.LogWarning("Mobile 2FA verification rejected for user {Email}. Effective role is '{Role}'. Admin role is not permitted in Mobile App.", request.Email, primaryRoleName ?? "None");
                     throw new InvalidOperationException(CommonMessages.Auth.MobileAdminLoginNotAllowed);
                 }
             }
@@ -624,10 +624,10 @@ public class AuthService : IAuthService
             bool isMobileSwitch = request.IsFromMobile || (request.DeviceInfo != null && request.DeviceInfo.DeviceType == 2);
             if (isMobileSwitch)
             {
-                bool isAllowedMobileRole = string.Equals(targetRoleName, "Member", StringComparison.OrdinalIgnoreCase) ||
-                                           string.Equals(targetRoleName, "Organizer", StringComparison.OrdinalIgnoreCase);
+                // Exclusion-based check: Deny Admin only, allow all existing and future non-Admin roles
+                bool isRestrictedAdminRole = string.Equals(targetRoleName, CommonRoles.RoleCodes.Admin, StringComparison.OrdinalIgnoreCase);
 
-                if (!isAllowedMobileRole)
+                if (isRestrictedAdminRole)
                 {
                     _logger.LogWarning("Mobile role switch rejected for user {Email}. Target role '{Role}' is not allowed in Mobile App.", user.Email, targetRoleName);
                     throw new InvalidOperationException(CommonMessages.Auth.MobileAdminRoleSwitchNotAllowed);
