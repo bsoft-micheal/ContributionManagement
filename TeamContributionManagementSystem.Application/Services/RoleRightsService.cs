@@ -13,16 +13,19 @@ public class RoleRightsService : IRoleRightsService
 {
     private readonly ILogger<RoleRightsService> _logger;
     private readonly IRoleRightRepository _roleRightRepository;
+    private readonly IRoleRepository _roleRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
     public RoleRightsService(ILogger<RoleRightsService> logger, 
         IRoleRightRepository roleRightRepository,
+        IRoleRepository roleRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper)
     {
         _logger = logger;
         _roleRightRepository = roleRightRepository;
+        _roleRepository = roleRepository;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
     }
@@ -78,11 +81,10 @@ public class RoleRightsService : IRoleRightsService
             Guid targetRoleId = request.RoleId ?? Guid.Empty;
             if (targetRoleId == Guid.Empty)
             {
-                var roleRights = await _roleRightRepository.GetByRoleNameAsync(request.RoleName, cancellationToken);
-                var first = roleRights.FirstOrDefault();
-                if (first != null && first.RoleId != Guid.Empty)
+                var role = await _roleRepository.GetByNameAsync(request.RoleName, cancellationToken);
+                if (role != null)
                 {
-                    targetRoleId = first.RoleId;
+                    targetRoleId = role.RoleId;
                 }
             }
 
