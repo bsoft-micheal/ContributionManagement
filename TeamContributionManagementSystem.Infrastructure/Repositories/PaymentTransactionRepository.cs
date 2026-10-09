@@ -79,6 +79,8 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
                     VerifiedOn = x.VerifiedOn,
                     Notes = x.Notes,
                     Screenshot = x.Screenshot,
+                    ParentTxnNumber = x.ParentTxnNumber,
+                    TransactionGroupId = x.TransactionGroupId,
                     IsActive = x.IsActive,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
@@ -165,6 +167,80 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Delete));
             throw;
+        }
+    }
+
+    public async Task<List<PaymentTransaction>> GetByGroupIdAsync(Guid groupId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.PaymentTransactions
+                .Include(x => x.User)
+                .Include(x => x.Event)
+                .Include(x => x.PaymentModeItem)
+                .Include(x => x.StatusItem)
+                .Where(x => x.TransactionGroupId == groupId && !x.IsDeleted)
+                .OrderBy(x => x.TxnNumber)
+                .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByGroupIdAsync));
+            throw;
+        }
+    }
+
+    public async Task<string> GetNextTxnNumberAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            const string sql = @"
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE sequencename = 'payment_txn_number_seq') THEN
+                        CREATE SEQUENCE payment_txn_number_seq START WITH 1250 INCREMENT BY 1;
+                        PERFORM setval('payment_txn_number_seq', 
+                            GREATEST(
+                                COALESCE((SELECT MAX(CAST(SUBSTRING(REGEXP_REPLACE(txn_number, '^TXN0*', '') FROM '^[0-9]+') AS INTEGER)) 
+                                          FROM payment_transactions 
+                                          WHERE txn_number LIKE 'TXN%'), 1250), 
+                                1250
+                            )
+                        );
+                    END IF;
+                END $$;
+                SELECT nextval('payment_txn_number_seq')::bigint;";
+
+            var connection = _context.Database.GetDbConnection();
+            if (connection.State != System.Data.ConnectionState.Open)
+            {
+                await connection.OpenAsync(cancellationToken);
+            }
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            var valObj = await cmd.ExecuteScalarAsync(cancellationToken);
+            long nextVal = Convert.ToInt64(valObj);
+            return $"{CommonConstants.Defaults.TxnPrefix}{nextVal:D6}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating next transaction number via sequence. Falling back to query.");
+            var maxNum = await _context.PaymentTransactions
+                .Where(x => x.TxnNumber.StartsWith("TXN"))
+                .Select(x => x.TxnNumber)
+                .ToListAsync(cancellationToken);
+
+            long highest = 1250;
+            foreach (var txn in maxNum)
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(txn, @"TXN0*(\d+)");
+                if (match.Success && long.TryParse(match.Groups[1].Value, out var n))
+                {
+                    if (n > highest) highest = n;
+                }
+            }
+            return $"{CommonConstants.Defaults.TxnPrefix}{(highest + 1):D6}";
         }
     }
 }

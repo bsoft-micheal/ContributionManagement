@@ -6,6 +6,8 @@ public class PaymentTransaction
 {
     public Guid TransactionId { get; set; }
     public string TxnNumber { get; set; } = string.Empty;
+    public string? ParentTxnNumber { get; set; }
+    public Guid? TransactionGroupId { get; set; }
 
     // Foreign Keys to normalized tables (live DB columns)
     public Guid? UserId { get; set; }

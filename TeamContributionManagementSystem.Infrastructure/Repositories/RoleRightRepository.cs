@@ -39,6 +39,7 @@ public class RoleRightRepository : IRoleRightRepository
             foreach (var role in roles)
             {
                 var roleFeatures = rightsByRoleAndFeature.TryGetValue(role.RoleId, out var map) ? map : new Dictionary<int, RoleRight>();
+                if (roleFeatures.Count == 0) continue;
                 result.AddRange(BuildRightsFromNavigation(role.RoleId, role.RoleName, navMenus, allMenuMap, roleFeatures));
             }
 
@@ -60,8 +61,12 @@ public class RoleRightRepository : IRoleRightRepository
 
             var navMenus = await _context.NavigationMenus.ToListAsync(cancellationToken);
             var rights = await _context.RoleRights.Where(x => x.RoleId == roleId).ToListAsync(cancellationToken);
-            var rightsByFeature = rights.Where(x => x.FeatureID > 0).ToDictionary(x => x.FeatureID);
+            if (rights.Count == 0)
+            {
+                return new List<RoleRightDto>();
+            }
 
+            var rightsByFeature = rights.Where(x => x.FeatureID > 0).ToDictionary(x => x.FeatureID);
             var allMenuMap = navMenus.ToDictionary(m => m.FeatureID);
 
             return BuildRightsFromNavigation(roleId, roleName, navMenus, allMenuMap, rightsByFeature);
