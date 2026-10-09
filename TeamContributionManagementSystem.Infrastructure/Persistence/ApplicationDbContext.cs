@@ -548,6 +548,17 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         var currentUserId = _currentUserService?.UserId;
         var now = DateTime.UtcNow;
 
+        foreach (var entry in ChangeTracker.Entries<AppUserRole>().ToList())
+        {
+            if (entry.State == EntityState.Modified || entry.State == EntityState.Unchanged)
+            {
+                if (entry.Entity.UserId == Guid.Empty || (entry.Entity.User != null && !entry.Entity.User.UserRoles.Contains(entry.Entity)))
+                {
+                    entry.State = EntityState.Deleted;
+                }
+            }
+        }
+
         foreach (var entry in ChangeTracker.Entries())
         {
             if (entry.State == EntityState.Added)
