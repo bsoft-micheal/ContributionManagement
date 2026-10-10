@@ -76,6 +76,7 @@ public class EventRepository : IEventRepository
 
             var results = await query
                 .OrderByDescending(x => x.EventDate)
+                .ThenByDescending(x => x.CreatedAt)
                 .Select(x => new EventSummaryDto
                 {
                     EventId = x.EventId,
@@ -326,12 +327,36 @@ public class EventRepository : IEventRepository
         }
     }
 
-    public async Task<Event?> GetByNameAsync(string eventName, CancellationToken cancellationToken = default)
+    public Task<Event?> GetByNameAsync(string eventName, CancellationToken cancellationToken = default)
+        => GetByNameAsync(eventName, null, cancellationToken);
+
+    public async Task<Event?> GetByNameAsync(string eventName, string? category, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _context.Events
-                .FirstOrDefaultAsync(x => x.EventName.ToLower() == eventName.Trim().ToLower() && !x.IsDeleted, cancellationToken);
+            var query = _context.Events
+                .Include(x => x.EventType)
+                .Where(x => x.EventName.ToLower() == eventName.Trim().ToLower() && !x.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                var catTrim = category.Trim().ToLower();
+                var categoryFiltered = query.Where(x => x.EventType != null && x.EventType.EventTypeName.ToLower() == catTrim);
+                var matchedWithCategory = await categoryFiltered
+                    .OrderByDescending(x => x.EventDate)
+                    .ThenByDescending(x => x.CreatedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (matchedWithCategory != null)
+                {
+                    return matchedWithCategory;
+                }
+            }
+
+            return await query
+                .OrderByDescending(x => x.EventDate)
+                .ThenByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
         }
         catch (Exception ex)
         {

@@ -25,6 +25,8 @@ public class ExpenseDto
 
 public class CreateExpenseRequestDto
 {
+    public Guid? EventId { get; set; }
+
     [Required]
     [MaxLength(200)]
     public string EventName { get; set; } = string.Empty;

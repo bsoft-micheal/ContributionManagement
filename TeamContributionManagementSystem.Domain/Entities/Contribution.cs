@@ -47,8 +47,14 @@ public class Contribution
         get
         {
             if (_paymentStatus.HasValue) return _paymentStatus.Value;
-            if (StatusItem != null && StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase))
+            if (StatusItem != null && (
+                StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                StatusItem.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                StatusItem.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
+                StatusItem.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase)))
+            {
                 return PaymentStatus.Paid;
+            }
             return PaymentStatus.Pending;
         }
         set => _paymentStatus = value;

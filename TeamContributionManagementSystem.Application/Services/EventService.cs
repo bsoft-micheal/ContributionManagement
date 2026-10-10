@@ -412,6 +412,13 @@ public class EventService : IEventService
         HashSet<Guid> exemptCelebrantIds,
         IEnumerable<(Guid MemberId, string? Name, string? Email, decimal ContributionAmount)> participants)
     {
+        // Strip internal <!--contrib:{...}--> metadata that is stored alongside the
+        // user-facing description text. This must never appear in sent emails.
+        eventDescription = System.Text.RegularExpressions.Regex
+            .Replace(eventDescription ?? string.Empty, @"<!--contrib:[\s\S]*?-->", string.Empty,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Trim();
+
         var particularContributors = participants
             .Where(m => !string.IsNullOrWhiteSpace(m.Email))
             .Select(m => new

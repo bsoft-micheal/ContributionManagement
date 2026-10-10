@@ -723,8 +723,12 @@ public class PaymentTransactionService : IPaymentTransactionService
             var isAnyRejected = groupEntities.Any(t =>
                 t.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase));
 
+            var isExplicitlyVerified = groupEntities.Any(t =>
+                t.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrWhiteSpace(t.VerifiedBy));
+
             // Status determination
-            string targetStatusName = isAllVerified ? "Verified" : (isAnyRejected ? "Rejected" : "Pending");
+            string targetStatusName = isExplicitlyVerified ? "Verified" : (isAllVerified ? "Paid" : (isAnyRejected ? "Rejected" : "Pending"));
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
@@ -732,6 +736,10 @@ public class PaymentTransactionService : IPaymentTransactionService
                 if (st == null && targetStatusName == "Verified")
                 {
                     st = await _statusRepository.GetByNameAsync("Paid", cancellationToken);
+                }
+                else if (st == null && targetStatusName == "Paid")
+                {
+                    st = await _statusRepository.GetByNameAsync("Verified", cancellationToken);
                 }
                 statusIdToAssign = st?.StatusId;
             }
@@ -780,6 +788,11 @@ public class PaymentTransactionService : IPaymentTransactionService
                     {
                         match.CashAmount = 0;
                         match.UpiAmount = 0;
+                    }
+                    else
+                    {
+                        if (totalCash > 0) match.CashAmount = totalCash;
+                        if (totalUpi > 0) match.UpiAmount = totalUpi;
                     }
                 }
 
