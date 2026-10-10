@@ -166,10 +166,10 @@ public class SystemSettingService : ISystemSettingService
                         x => x.EventTypeName,
                         x => new
                         {
-                            receiverName = x.ReceiverName,
-                            upiId = x.UpiId,
-                            qrMode = x.QrMode,
-                            qrImage = x.QrImageUrl,
+                            receiverName = x.QrMode.Equals("uploaded", StringComparison.OrdinalIgnoreCase) ? (string?)null : x.ReceiverName,
+                            upiId = x.QrMode.Equals("uploaded", StringComparison.OrdinalIgnoreCase) ? (string?)null : x.UpiId,
+                            qrMode = x.QrMode.Equals("uploaded", StringComparison.OrdinalIgnoreCase) ? "uploaded" : "generated",
+                            qrImage = x.QrMode.Equals("uploaded", StringComparison.OrdinalIgnoreCase) ? x.QrImageUrl : null,
                             isConfigured = x.IsConfigured
                         },
                         StringComparer.OrdinalIgnoreCase);
