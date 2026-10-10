@@ -27,22 +27,22 @@ public class StatusService : IStatusService
         _logger = logger;
     }
 
-    public async Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly = null, string? module = null, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    {
+        return GetAllStatusAsync(activeOnly, null, cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly, string? module, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _repository.GetAllAsync(activeOnly, cancellationToken);
+            return await _repository.GetAllAsync(activeOnly, module, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllStatusAsync));
             throw;
         }
-    }
-
-    public Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly, CancellationToken cancellationToken)
-    {
-        return GetAllStatusAsync(activeOnly, null, cancellationToken);
     }
 
     public async Task<IReadOnlyCollection<string>> GetAllModuleAsync(CancellationToken cancellationToken = default)

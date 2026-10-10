@@ -4,8 +4,8 @@ namespace TeamContributionManagementSystem.Application.Interfaces.Services;
 
 public interface IStatusService
 {
-    Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly = null, string? module = null, CancellationToken cancellationToken = default);
-    Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<StatusDto>> GetAllStatusAsync(bool? activeOnly, string? module, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<string>> GetAllModuleAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default);
     Task<StatusDto?> GetStatusAsyncById(Guid id, CancellationToken cancellationToken = default);
