@@ -92,6 +92,12 @@ public class ReportService : IReportService
             }).OrderByDescending(x => x.EventDate).ToList();
 
             var eventLookup = events.ToDictionary(e => e.EventId, e => e.EventDate);
+            var eventTypeNameLookup = events.Where(e => !string.IsNullOrWhiteSpace(e.EventTypeName))
+                .GroupBy(e => e.EventId)
+                .ToDictionary(g => g.Key, g => g.First().EventTypeName);
+            var eventNameLookup = events.Where(e => !string.IsNullOrWhiteSpace(e.EventName))
+                .GroupBy(e => e.EventId)
+                .ToDictionary(g => g.Key, g => g.First().EventName);
 
             // 2. Member Contributions History Report
             var memberHistory = contributions
@@ -108,12 +114,14 @@ public class ReportService : IReportService
                     {
                         var isPaid = c.PaymentStatus == PaymentStatus.Paid;
                         var evDate = eventLookup.TryGetValue(c.EventId, out var ed) ? ed : (c.CreatedAt ?? DateTime.MinValue);
+                        var evName = !string.IsNullOrWhiteSpace(c.EventName) ? c.EventName : (eventNameLookup.TryGetValue(c.EventId, out var en) ? en : "Event");
+                        var evType = !string.IsNullOrWhiteSpace(c.CategoryName) ? c.CategoryName : (eventTypeNameLookup.TryGetValue(c.EventId, out var et) ? et : "General");
                         return new MemberEventDetailDto
                         {
                             ContributionId = c.ContributionId,
                             EventId = c.EventId,
-                            EventName = c.EventName,
-                            CategoryName = c.CategoryName,
+                            EventName = evName,
+                            CategoryName = evType,
                             EventDate = evDate,
                             ExpectedAmount = c.Amount,
                             PaidAmount = isPaid ? c.Amount : 0m,

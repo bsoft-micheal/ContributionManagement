@@ -67,7 +67,7 @@ public class ExpenseService : IExpenseService
     {
         try
         {
-            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventName, request.Amount, null, cancellationToken);
+            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, request.Amount, null, cancellationToken);
 
             var attachment = !string.IsNullOrWhiteSpace(request.FileData)
                 ? request.FileData.Trim()
@@ -129,7 +129,7 @@ public class ExpenseService : IExpenseService
             var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
 
-            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventName, request.Amount, expenseId, cancellationToken);
+            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, request.Amount, expenseId, cancellationToken);
 
             var attachment = !string.IsNullOrWhiteSpace(request.FileData)
                 ? request.FileData.Trim()
@@ -176,11 +176,27 @@ public class ExpenseService : IExpenseService
         }
     }
 
-    private async Task ValidateExpenseAmountAgainstEventBudgetAsync(string eventName, decimal requestedAmount, Guid? currentExpenseId, CancellationToken cancellationToken)
+    private async Task ValidateExpenseAmountAgainstEventBudgetAsync(
+        Guid? eventId,
+        string eventName,
+        string? category,
+        decimal requestedAmount,
+        Guid? currentExpenseId,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(eventName)) return;
+        if (string.IsNullOrWhiteSpace(eventName) && (!eventId.HasValue || eventId.Value == Guid.Empty)) return;
 
-        var eventItem = await _eventRepository.GetByNameAsync(eventName.Trim(), cancellationToken);
+        Event? eventItem = null;
+        if (eventId.HasValue && eventId.Value != Guid.Empty)
+        {
+            eventItem = await _eventRepository.GetByIdAsync(eventId.Value, cancellationToken);
+        }
+
+        if (eventItem == null && !string.IsNullOrWhiteSpace(eventName))
+        {
+            eventItem = await _eventRepository.GetByNameAsync(eventName.Trim(), category?.Trim(), cancellationToken);
+        }
+
         if (eventItem == null) return;
 
         var eventDetails = await _eventRepository.GetByIdWithDetailsAsync(eventItem.EventId, cancellationToken);
@@ -192,7 +208,7 @@ public class ExpenseService : IExpenseService
             .Sum(e => e.Amount);
 
         var remainingBudget = expectedAmount - spentAmount;
-        if (requestedAmount > remainingBudget)
+        if (expectedAmount > 0 && requestedAmount > remainingBudget)
         {
             throw new InvalidOperationException(string.Format(
                 CommonMessages.Expenses.ExceedsExpectedBudgetFormat,
