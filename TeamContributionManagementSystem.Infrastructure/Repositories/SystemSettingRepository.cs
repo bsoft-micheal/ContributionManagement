@@ -112,29 +112,53 @@ public class SystemSettingRepository : ISystemSettingRepository
                 var item = property.Value;
                 if (item.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
 
-                string receiverName = item.TryGetProperty("receiverName", out var rn) ? rn.GetString() ?? string.Empty : string.Empty;
-                if (string.IsNullOrWhiteSpace(receiverName) && item.TryGetProperty("qrReceiverName", out var qrn))
+                string rawQrMode = item.TryGetProperty("qrMode", out var qm) ? qm.GetString() ?? "generated" : "generated";
+                bool isUploaded = rawQrMode.Equals("uploaded", StringComparison.OrdinalIgnoreCase);
+                string qrMode = isUploaded ? "uploaded" : "generated";
+
+                string receiverName = string.Empty;
+                string upiId = string.Empty;
+                string? qrImageUrl = null;
+
+                if (isUploaded)
                 {
-                    receiverName = qrn.GetString() ?? string.Empty;
+                    if (item.TryGetProperty("qrImage", out var qi) && qi.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        qrImageUrl = qi.GetString();
+                    }
+                    else if (item.TryGetProperty("qrImageUrl", out var qiu) && qiu.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        qrImageUrl = qiu.GetString();
+                    }
+                }
+                else
+                {
+                    if (item.TryGetProperty("receiverName", out var rn) && rn.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        receiverName = rn.GetString() ?? string.Empty;
+                    }
+                    if (string.IsNullOrWhiteSpace(receiverName) && item.TryGetProperty("qrReceiverName", out var qrn) && qrn.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        receiverName = qrn.GetString() ?? string.Empty;
+                    }
+
+                    if (item.TryGetProperty("upiId", out var ui) && ui.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        upiId = ui.GetString() ?? string.Empty;
+                    }
+                    if (string.IsNullOrWhiteSpace(upiId) && item.TryGetProperty("qrUpiId", out var qui) && qui.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        upiId = qui.GetString() ?? string.Empty;
+                    }
                 }
 
-                string upiId = item.TryGetProperty("upiId", out var ui) ? ui.GetString() ?? string.Empty : string.Empty;
-                if (string.IsNullOrWhiteSpace(upiId) && item.TryGetProperty("qrUpiId", out var qui))
-                {
-                    upiId = qui.GetString() ?? string.Empty;
-                }
+                bool isConfigured = isUploaded
+                    ? !string.IsNullOrWhiteSpace(qrImageUrl)
+                    : (!string.IsNullOrWhiteSpace(upiId) && !string.IsNullOrWhiteSpace(receiverName));
 
-                string qrMode = item.TryGetProperty("qrMode", out var qm) ? qm.GetString() ?? "generated" : "generated";
-                string? qrImageUrl = item.TryGetProperty("qrImage", out var qi) ? qi.GetString() : null;
-                if (string.IsNullOrWhiteSpace(qrImageUrl) && item.TryGetProperty("qrImageUrl", out var qiu))
-                {
-                    qrImageUrl = qiu.GetString();
-                }
-
-                bool isConfigured = !string.IsNullOrWhiteSpace(upiId) && !string.IsNullOrWhiteSpace(receiverName);
                 if (item.TryGetProperty("isConfigured", out var ic) && ic.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
                 {
-                    isConfigured = ic.GetBoolean();
+                    isConfigured = ic.GetBoolean() && isConfigured;
                 }
 
                 var matchedEventType = eventTypes.FirstOrDefault(e => e.EventTypeName.Equals(eventTypeName, StringComparison.OrdinalIgnoreCase));
