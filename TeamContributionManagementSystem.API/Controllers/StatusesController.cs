@@ -28,9 +28,12 @@ public class StatusesController : ControllerBase
     /// </summary>
     [HttpGet(CommonRoutes.Statuses.GetAll)]
     [ActionName(nameof(GetAllStatusAsync))]
-    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<StatusDto>>>> GetAllStatusAsync([FromQuery] bool? activeOnly, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<StatusDto>>>> GetAllStatusAsync(
+        [FromQuery] bool? activeOnly,
+        [FromQuery] string? module,
+        CancellationToken cancellationToken)
     {
-        var result = await _statusService.GetAllStatusAsync(activeOnly, null, cancellationToken);
+        var result = await _statusService.GetAllStatusAsync(activeOnly, module, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<StatusDto>>.SuccessResult(result, CommonMessages.Statuses.GetAllSuccess, CommonStatusCodes.Status200OK));
     }
 

@@ -6,7 +6,7 @@ namespace TeamContributionManagementSystem.Application.Interfaces.Repositories;
 public interface IStatusRepository
 {
     Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default);
-    Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly, string? module, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly, string? module, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<string>> GetAllModuleAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default);
     Task<Status?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);

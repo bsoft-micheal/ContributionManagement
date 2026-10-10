@@ -125,12 +125,18 @@ public class StatusRepository : IStatusRepository
                           SELECT gen_random_uuid(), 'Rejected', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                           WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(TRIM(status_name)) = 'rejected' AND is_deleted = false);
 
-                          -- 4. Drop legacy module column and constraints if present
+                          -- 4. Ensure module and module_id columns exist and composite unique index exists
+                          ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS module VARCHAR(100) NOT NULL DEFAULT 'General';
+                          ALTER TABLE IF EXISTS statuses ADD COLUMN IF NOT EXISTS module_id INTEGER;
                           ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS statuses_status_name_key;
                           ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS statuses_status_name_unique;
                           ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS uq_statuses_status_name;
-                          ALTER TABLE IF EXISTS statuses DROP CONSTRAINT IF EXISTS uq_statuses_status_name_module;
-                          ALTER TABLE IF EXISTS statuses DROP COLUMN IF EXISTS module;
+                          DROP INDEX IF EXISTS ix_statuses_status_name;
+                          DROP INDEX IF EXISTS uq_statuses_status_name;
+
+                          CREATE UNIQUE INDEX IF NOT EXISTS uq_statuses_status_name_module 
+                          ON statuses (LOWER(TRIM(status_name)), LOWER(TRIM(module))) 
+                          WHERE is_deleted = false;
 
                       END $$;",
                     cancellationToken);
@@ -147,7 +153,12 @@ public class StatusRepository : IStatusRepository
         }
     }
 
-    public async Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
+    {
+        return GetAllAsync(activeOnly, null, cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly, string? module, CancellationToken cancellationToken = default)
     {
         await EnsureCommonStatusesMigrationAsync(cancellationToken);
 
@@ -158,6 +169,12 @@ public class StatusRepository : IStatusRepository
         if (activeOnly.HasValue && activeOnly.Value)
         {
             query = query.Where(x => x.IsActive);
+        }
+
+        if (!string.IsNullOrWhiteSpace(module))
+        {
+            var cleanModule = module.Trim().ToLower();
+            query = query.Where(x => x.Module.ToLower() == cleanModule);
         }
 
         var usedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -208,6 +225,8 @@ public class StatusRepository : IStatusRepository
             {
                 StatusId = x.StatusId,
                 StatusName = x.StatusName,
+                Module = x.Module,
+                ModuleId = x.ModuleId,
                 IsActive = x.IsActive,
                 CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                 CreatedAt = x.CreatedAt,
@@ -235,14 +254,15 @@ public class StatusRepository : IStatusRepository
         return items;
     }
 
-    public Task<IReadOnlyCollection<StatusDto>> GetAllAsync(bool? activeOnly, string? module, CancellationToken cancellationToken)
-    {
-        return GetAllAsync(activeOnly, cancellationToken);
-    }
-
     public async Task<IReadOnlyCollection<string>> GetAllModuleAsync(CancellationToken cancellationToken = default)
     {
-        return new List<string>();
+        await EnsureCommonStatusesMigrationAsync(cancellationToken);
+        return await _context.Statuses
+            .Where(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.Module))
+            .Select(x => x.Module)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyCollection<string>> GetModulesAsync(CancellationToken cancellationToken = default)
@@ -268,7 +288,17 @@ public class StatusRepository : IStatusRepository
 
     public async Task<Status?> GetByNameAndModuleAsync(string name, string? module, CancellationToken cancellationToken = default)
     {
-        return await GetByNameAsync(name, cancellationToken);
+        await EnsureCommonStatusesMigrationAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
+        var cleanName = name.Trim().ToLower();
+        var query = _context.Statuses.Where(x => x.StatusName.ToLower() == cleanName && !x.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(module))
+        {
+            var cleanModule = module.Trim().ToLower();
+            query = query.Where(x => x.Module.ToLower() == cleanModule);
+        }
+        return await query.FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<bool> IsInUseAsync(string statusName, CancellationToken cancellationToken = default)
