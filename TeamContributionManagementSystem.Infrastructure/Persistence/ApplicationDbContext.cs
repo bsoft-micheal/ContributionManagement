@@ -525,25 +525,101 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyAuditInformation();
-        return await base.SaveChangesAsync(cancellationToken);
+        try
+        {
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            foreach (var entry in ex.Entries)
+            {
+                var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
+                if (databaseValues == null)
+                {
+                    entry.State = EntityState.Detached;
+                }
+                else
+                {
+                    entry.OriginalValues.SetValues(databaseValues);
+                }
+            }
+            return await base.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ApplyAuditInformation();
-        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            foreach (var entry in ex.Entries)
+            {
+                var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
+                if (databaseValues == null)
+                {
+                    entry.State = EntityState.Detached;
+                }
+                else
+                {
+                    entry.OriginalValues.SetValues(databaseValues);
+                }
+            }
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
     }
 
     public override int SaveChanges()
     {
         ApplyAuditInformation();
-        return base.SaveChanges();
+        try
+        {
+            return base.SaveChanges();
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            foreach (var entry in ex.Entries)
+            {
+                var databaseValues = entry.GetDatabaseValues();
+                if (databaseValues == null)
+                {
+                    entry.State = EntityState.Detached;
+                }
+                else
+                {
+                    entry.OriginalValues.SetValues(databaseValues);
+                }
+            }
+            return base.SaveChanges();
+        }
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ApplyAuditInformation();
-        return base.SaveChanges(acceptAllChangesOnSuccess);
+        try
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            foreach (var entry in ex.Entries)
+            {
+                var databaseValues = entry.GetDatabaseValues();
+                if (databaseValues == null)
+                {
+                    entry.State = EntityState.Detached;
+                }
+                else
+                {
+                    entry.OriginalValues.SetValues(databaseValues);
+                }
+            }
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
     }
 
     private void ApplyAuditInformation()
@@ -556,7 +632,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             if (entry.State == EntityState.Modified || entry.State == EntityState.Unchanged)
             {
-                if (entry.Entity.UserId == Guid.Empty || (entry.Entity.User != null && !entry.Entity.User.UserRoles.Contains(entry.Entity)))
+                if (entry.Entity.UserId == Guid.Empty || (entry.Entity.User != null && !entry.Entity.User.UserRoles.Any(ur => ur.UserId == entry.Entity.UserId && ur.RoleId == entry.Entity.RoleId)))
                 {
                     entry.State = EntityState.Deleted;
                 }

@@ -38,19 +38,58 @@ public class EventRepository : IEventRepository
             }
 
             var paymentTxnEventNames = new List<string>();
+            var paymentTxnEventIds = new List<Guid>();
+            var contribPaidEventIds = new List<Guid>();
             var expenseEventNames = new List<string>();
             var photoEventNames = new List<string>();
 
             try
             {
-                paymentTxnEventNames = await _context.PaymentTransactions
-                    .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
-                    .Select(x => x.Event!.EventName.ToLower())
+                var paymentTxns = await _context.PaymentTransactions
+                    .Where(x => !x.IsDeleted && (
+                        (x.StatusItem != null && (
+                            x.StatusItem.StatusName.ToLower() == "paid" ||
+                            x.StatusItem.StatusName.ToLower() == "verified" ||
+                            x.StatusItem.StatusName.ToLower() == "approved" ||
+                            x.StatusItem.StatusName.ToLower() == "completed"
+                        )) ||
+                        !string.IsNullOrEmpty(x.VerifiedBy) ||
+                        x.VerifiedOn != null ||
+                        x.Amount > 0
+                    ) && x.Amount > 0)
+                    .Select(x => new {
+                        EventId = x.EventId,
+                        EventName = x.Event != null ? x.Event.EventName.ToLower() : null
+                    })
+                    .ToListAsync(cancellationToken);
+
+                paymentTxnEventIds = paymentTxns.Where(p => p.EventId.HasValue).Select(p => p.EventId!.Value).Distinct().ToList();
+                paymentTxnEventNames = paymentTxns.Where(p => !string.IsNullOrEmpty(p.EventName)).Select(p => p.EventName!).Distinct().ToList();
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load payment transaction event names."); }
+
+            try
+            {
+                contribPaidEventIds = await _context.Contributions
+                    .Where(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0) ||
+                        (c.StatusItem != null && (
+                            c.StatusItem.StatusName.ToLower().Contains("paid") ||
+                            c.StatusItem.StatusName.ToLower().Contains("verif") ||
+                            c.StatusItem.StatusName.ToLower().Contains("approv") ||
+                            c.StatusItem.StatusName.ToLower() == "closed" ||
+                            c.StatusItem.StatusName.ToLower() == "completed"
+                        ))
+                    ))
+                    .Select(c => c.EventId)
                     .Distinct()
                     .ToListAsync(cancellationToken);
             }
             catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load payment transaction event names."); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load contributions paid event ids."); }
 
             try
             {
@@ -90,8 +129,25 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
-                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid")),
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || (c.StatusItem.StatusName.ToLower() != "paid" && c.StatusItem.StatusName.ToLower() != "verified" && c.StatusItem.StatusName.ToLower() != "closed" && c.StatusItem.StatusName.ToLower() != "completed")) && c.PaymentDate == null && (!c.CashAmount.HasValue || c.CashAmount.Value <= 0) && (!c.UpiAmount.HasValue || c.UpiAmount.Value <= 0)),
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -118,8 +174,14 @@ public class EventRepository : IEventRepository
             foreach (var r in results)
             {
                 var cleanName = r.EventName.Trim().ToLower();
-                r.IsReferred = r.TotalPaidAmount > 0
-                    || paymentTxnEventNames.Contains(cleanName)
+                bool hasPaymentTxn = paymentTxnEventIds.Contains(r.EventId) || paymentTxnEventNames.Contains(cleanName);
+                bool hasPaidContrib = contribPaidEventIds.Contains(r.EventId);
+                r.HasPaidContributions = r.HasPaidContributions || hasPaidContrib || hasPaymentTxn || r.TotalPaidAmount > 0 || r.PaidContributionsCount > 0;
+                if (r.HasPaidContributions && r.PaidContributionsCount == 0)
+                {
+                    r.PaidContributionsCount = 1;
+                }
+                r.IsReferred = r.HasPaidContributions
                     || expenseEventNames.Contains(cleanName)
                     || photoEventNames.Contains(cleanName);
             }
@@ -159,7 +221,7 @@ public class EventRepository : IEventRepository
                 query = query.Where(x => x.EventDate.Year == year.Value);
             }
 
-            return await query
+            var results = await query
                 .OrderByDescending(x => x.EventDate)
                 .Select(x => new EventSummaryDto
                 {
@@ -173,8 +235,25 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId) > 0 ? 1 : (x.Participants.Count(p => !p.IsDeleted && p.UserId == memberId) > 0 ? 1 : 0),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId).Sum(c => (decimal?)c.Amount) ?? 0m,
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
-                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid")),
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId && (c.StatusItem == null || (c.StatusItem.StatusName.ToLower() != "paid" && c.StatusItem.StatusName.ToLower() != "verified" && c.StatusItem.StatusName.ToLower() != "closed" && c.StatusItem.StatusName.ToLower() != "completed")) && c.PaymentDate == null && (!c.CashAmount.HasValue || c.CashAmount.Value <= 0) && (!c.UpiAmount.HasValue || c.UpiAmount.Value <= 0)),
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -197,6 +276,17 @@ public class EventRepository : IEventRepository
                     }).ToList()
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var r in results)
+            {
+                r.HasPaidContributions = r.HasPaidContributions || r.TotalPaidAmount > 0 || r.PaidContributionsCount > 0;
+                if (r.HasPaidContributions && r.PaidContributionsCount == 0)
+                {
+                    r.PaidContributionsCount = 1;
+                }
+            }
+
+            return results;
         }
         catch (Exception ex)
         {
@@ -216,7 +306,16 @@ public class EventRepository : IEventRepository
             try
             {
                 paymentTxnEventNames = await _context.PaymentTransactions
-                    .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
+                    .Where(x => !x.IsDeleted && (
+                        (x.StatusItem != null && (
+                            x.StatusItem.StatusName.ToLower() == "paid" ||
+                            x.StatusItem.StatusName.ToLower() == "verified" ||
+                            x.StatusItem.StatusName.ToLower() == "approved" ||
+                            x.StatusItem.StatusName.ToLower() == "completed"
+                        )) ||
+                        !string.IsNullOrEmpty(x.VerifiedBy) ||
+                        x.VerifiedOn != null
+                    ) && x.Amount > 0 && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
                     .Select(x => x.Event!.EventName.ToLower())
                     .Distinct()
                     .ToListAsync(cancellationToken);
@@ -263,8 +362,25 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
-                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || c.StatusItem.StatusName.ToLower() != "paid")),
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (c.StatusItem == null || (c.StatusItem.StatusName.ToLower() != "paid" && c.StatusItem.StatusName.ToLower() != "verified" && c.StatusItem.StatusName.ToLower() != "closed" && c.StatusItem.StatusName.ToLower() != "completed")) && c.PaymentDate == null && (!c.CashAmount.HasValue || c.CashAmount.Value <= 0) && (!c.UpiAmount.HasValue || c.UpiAmount.Value <= 0)),
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -317,6 +433,9 @@ public class EventRepository : IEventRepository
         {
             return await _context.Events
                 .Include(x => x.Contributions)
+                    .ThenInclude(c => c.StatusItem)
+                .Include(x => x.Contributions)
+                    .ThenInclude(c => c.PaymentModeItem)
                 .Include(x => x.Participants)
                 .FirstOrDefaultAsync(x => x.EventId == eventId && !x.IsDeleted, cancellationToken);
         }
@@ -369,7 +488,7 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            return await _context.Events
+            var details = await _context.Events
                 .Where(x => x.EventId == eventId && !x.IsDeleted)
                 .Select(x => new EventDetailsDto
                 {
@@ -384,7 +503,24 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
                     TotalExpectedAmount = Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid").Sum(c => (decimal?)c.Amount) ?? 0m,
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -414,7 +550,8 @@ public class EventRepository : IEventRepository
                         MemberId = c.UserId,
                         MemberName = c.User != null ? c.User.FullName : (c.Member != null ? c.Member.Name : string.Empty),
                         Amount = c.Amount,
-                        PaymentStatus = (c.StatusItem != null && c.StatusItem.StatusName.ToLower() == "paid") ? PaymentStatus.Paid : PaymentStatus.Pending,
+                        PaymentStatus = (c.PaymentDate != null || (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) || (c.CashAmount.HasValue && c.CashAmount.Value > 0) || (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                        StatusName = c.StatusItem != null ? c.StatusItem.StatusName : (c.PaymentDate != null ? "Paid" : "Pending"),
                         PaymentDate = c.PaymentDate,
                         PaymentMode = c.PaymentModeItem != null
                             ? (c.PaymentModeItem.IsCash ? PaymentMode.Cash : (c.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
@@ -427,6 +564,34 @@ public class EventRepository : IEventRepository
                     }).ToList()
                 })
                 .FirstOrDefaultAsync(cancellationToken);
+
+            if (details != null)
+            {
+                var cleanName = details.EventName.Trim().ToLower();
+                var hasTxn = await _context.PaymentTransactions.AnyAsync(x => !x.IsDeleted && x.Amount > 0 &&
+                    (x.EventId == details.EventId || (x.Event != null && x.Event.EventId == details.EventId)), cancellationToken);
+
+                var hasContrib = details.Contributions.Any(c =>
+                    c.PaymentDate != null ||
+                    (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                    (c.UpiAmount.HasValue && c.UpiAmount.Value > 0) ||
+                    (!string.IsNullOrEmpty(c.StatusName) && (
+                        c.StatusName.ToLower().Contains("paid") ||
+                        c.StatusName.ToLower().Contains("verif") ||
+                        c.StatusName.ToLower().Contains("approv") ||
+                        c.StatusName.ToLower() == "closed" ||
+                        c.StatusName.ToLower() == "completed"
+                    ))
+                );
+
+                details.HasPaidContributions = details.HasPaidContributions || hasTxn || hasContrib || details.TotalPaidAmount > 0 || details.PaidContributionsCount > 0;
+                if (details.HasPaidContributions && details.PaidContributionsCount == 0)
+                {
+                    details.PaidContributionsCount = 1;
+                }
+            }
+
+            return details;
         }
         catch (Exception ex)
         {
@@ -460,8 +625,34 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            return await _context.Contributions.AnyAsync(x => x.EventId == eventId && !x.IsDeleted &&
-                ((x.StatusItem != null && x.StatusItem.StatusName.ToLower() == "paid") || (x.Amount > 0 && (x.CashAmount > 0 || x.UpiAmount > 0))), cancellationToken);
+            var eventEntity = await _context.Events.AsNoTracking().FirstOrDefaultAsync(e => e.EventId == eventId, cancellationToken);
+            var cleanName = eventEntity?.EventName?.Trim().ToLower();
+
+            var hasPaidContrib = await _context.Contributions.AnyAsync(x => x.EventId == eventId && !x.IsDeleted &&
+                (
+                    x.PaymentDate != null ||
+                    (x.StatusItem != null && (
+                        x.StatusItem.StatusName.ToLower().Contains("paid") ||
+                        x.StatusItem.StatusName.ToLower().Contains("verif") ||
+                        x.StatusItem.StatusName.ToLower().Contains("approv") ||
+                        x.StatusItem.StatusName.ToLower() == "closed" ||
+                        x.StatusItem.StatusName.ToLower() == "completed"
+                    )) ||
+                    (x.CashAmount.HasValue && x.CashAmount.Value > 0) ||
+                    (x.UpiAmount.HasValue && x.UpiAmount.Value > 0)
+                ), cancellationToken);
+
+            if (hasPaidContrib) return true;
+
+            var hasPaymentTxn = await _context.PaymentTransactions
+                .AnyAsync(x => !x.IsDeleted && x.Amount > 0 &&
+                    (
+                        x.EventId == eventId ||
+                        (x.Event != null && x.Event.EventId == eventId) ||
+                        (cleanName != null && x.Event != null && x.Event.EventName.ToLower() == cleanName)
+                    ), cancellationToken);
+
+            return hasPaymentTxn;
         }
         catch (Exception ex)
         {
