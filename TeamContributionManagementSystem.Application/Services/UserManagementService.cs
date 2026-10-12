@@ -981,7 +981,7 @@ public class UserManagementService : IUserManagementService
             var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
-            if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+            if (string.IsNullOrEmpty(user.PasswordHash) || !_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
             {
                 throw new InvalidOperationException("Current password is incorrect.");
             }

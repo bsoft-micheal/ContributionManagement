@@ -14,6 +14,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using TeamContributionManagementSystem.API.Filters;
 using TeamContributionManagementSystem.API.Middleware;
+using TeamContributionManagementSystem.API.RateLimiting;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Infrastructure;
@@ -90,6 +91,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 builder.Services.AddApplicationAndInfrastructure(builder.Configuration);
+builder.Services.AddApiRateLimiting(builder.Configuration);
 
 // Configure Hangfire with PostgreSQL persistent storage
 var connString = builder.Configuration.GetConnectionString("ConnString")
@@ -199,6 +201,7 @@ app.UseStaticFiles();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors(CommonConstants.CorsPolicies.FrontendPolicy);
 app.UseAuthentication();
+app.UseApiRateLimiting();
 app.UseAuthorization();
 
 // Configure secured Hangfire Dashboard
