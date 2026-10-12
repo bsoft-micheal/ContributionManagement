@@ -33,6 +33,7 @@ public class AuthController : ControllerBase
     /// <returns>An ApiResponse containing AuthResponseDto.</returns>
     [AllowAnonymous]
     [HttpPost(CommonRoutes.Auth.Login)]
+    [HttpPost("login")]
     [ActionName(nameof(LoginAsync))]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginAsync([FromBody] LoginRequestDto request, CancellationToken cancellationToken)
     {
@@ -55,6 +56,7 @@ public class AuthController : ControllerBase
     /// <returns>An ApiResponse containing AuthResponseDto upon successful verification.</returns>
     [AllowAnonymous]
     [HttpPost(CommonRoutes.Auth.Verify2Fa)]
+    [HttpPost("verify-2fa")]
     [ActionName(nameof(VerifyTwoFactorAsync))]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> VerifyTwoFactorAsync([FromBody] VerifyTwoFactorRequestDto request, CancellationToken cancellationToken)
     {

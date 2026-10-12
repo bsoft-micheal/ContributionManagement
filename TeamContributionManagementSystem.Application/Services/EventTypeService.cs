@@ -55,7 +55,7 @@ public class EventTypeService : IEventTypeService
 
                     var firstAdmin = users.FirstOrDefault(u => 
                         string.Equals(u.RoleName, "admin", StringComparison.OrdinalIgnoreCase) ||
-                        (u.RoleNames != null && u.RoleNames.Any(r => string.Equals(r, "admin", StringComparison.OrdinalIgnoreCase))));
+                        (u.Roles != null && u.Roles.Any(r => string.Equals(r, "admin", StringComparison.OrdinalIgnoreCase))));
                     adminFallback = !string.IsNullOrWhiteSpace(firstAdmin?.FullName) 
                         ? firstAdmin.FullName 
                         : (!string.IsNullOrWhiteSpace(firstAdmin?.Username) ? firstAdmin.Username : "Admin");
@@ -137,7 +137,7 @@ public class EventTypeService : IEventTypeService
 
                 var firstAdmin = users.FirstOrDefault(u => 
                     string.Equals(u.RoleName, "admin", StringComparison.OrdinalIgnoreCase) ||
-                    (u.RoleNames != null && u.RoleNames.Any(r => string.Equals(r, "admin", StringComparison.OrdinalIgnoreCase))));
+                    (u.Roles != null && u.Roles.Any(r => string.Equals(r, "admin", StringComparison.OrdinalIgnoreCase))));
                 var adminFallback = !string.IsNullOrWhiteSpace(firstAdmin?.FullName) 
                     ? firstAdmin.FullName 
                     : (!string.IsNullOrWhiteSpace(firstAdmin?.Username) ? firstAdmin.Username : "Admin");

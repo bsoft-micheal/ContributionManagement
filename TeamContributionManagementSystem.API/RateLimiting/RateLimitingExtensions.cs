@@ -151,7 +151,7 @@ public static class RateLimitingExtensions
 
                 // If an endpoint has an explicit [EnableRateLimiting] attribute, the named policy handles it
                 var endpoint = httpContext.GetEndpoint();
-                if (endpoint?.Metadata.GetMetadata<EnableRateLimitingAttribute>() != null)
+                if (endpoint != null && endpoint.Metadata.GetMetadata<EnableRateLimitingAttribute>() != null)
                 {
                     return RateLimitPartition.GetNoLimiter("endpoint_policy_handled");
                 }
@@ -280,7 +280,7 @@ public static class RateLimitingExtensions
             var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
                 ?? user.FindFirst("userId")?.Value
                 ?? user.FindFirst(ClaimTypes.Name)?.Value
-                ?? user.Identity.Name;
+                ?? user.Identity?.Name;
 
             if (!string.IsNullOrWhiteSpace(userId))
             {
@@ -325,7 +325,7 @@ public static class RateLimitingExtensions
 
         // 3. Explicit [DisableRateLimiting] attribute
         var endpoint = context.GetEndpoint();
-        if (endpoint?.Metadata.GetMetadata<DisableRateLimitingAttribute>() != null)
+        if (endpoint != null && endpoint.Metadata.GetMetadata<DisableRateLimitingAttribute>() != null)
         {
             return true;
         }

@@ -98,7 +98,7 @@ public class AuthService : IAuthService
                 throw new InvalidOperationException(CommonMessages.Auth.AccountDeactivated);
             }
 
-            if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+            if (string.IsNullOrEmpty(user.PasswordHash) || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
             {
                 _logger.LogWarning(CommonLogMessages.Auth.LoginFailed, identifier, "Incorrect password");
                 throw new InvalidOperationException("Incorrect password. Please try again.");
