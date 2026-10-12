@@ -5,6 +5,7 @@ using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
 using TeamContributionManagementSystem.Application.DTOs.Users;
+using TeamContributionManagementSystem.Application.Exceptions;
 using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -154,6 +155,21 @@ public class SupportTicketService : ISupportTicketService
     {
         try
         {
+            if (!string.IsNullOrWhiteSpace(request.MemberName) && !string.IsNullOrWhiteSpace(request.Description))
+            {
+                var existingTickets = await _ticketRepository.GetAllAsync(cancellationToken: cancellationToken);
+                var recentDup = existingTickets.FirstOrDefault(t =>
+                    string.Equals(t.MemberName, request.MemberName.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(t.Description, request.Description.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                    t.CreatedOn.HasValue &&
+                    Math.Abs((DateTime.UtcNow - t.CreatedOn.Value).TotalSeconds) < 5);
+
+                if (recentDup != null)
+                {
+                    throw new AlreadyProcessedException("This action has already been completed.");
+                }
+            }
+
             var ticketNo = await _ticketRepository.GenerateNextTicketNoAsync(cancellationToken);
 
             var ticketType = request.TicketType?.Trim();
@@ -313,8 +329,24 @@ public class SupportTicketService : ISupportTicketService
     {
         try
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.SupportTickets.NotFound);
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken);
+            if (ticket == null)
+            {
+                var existingAny = await _ticketRepository.GetByIdWithDeletedAsync(ticketId, cancellationToken);
+                if (existingAny != null && existingAny.IsDeleted)
+                {
+                    throw new RecordDeletedException();
+                }
+                throw new RecordDeletedException();
+            }
+
+            if (request.ModifiedOn.HasValue && ticket.ModifiedOn.HasValue)
+            {
+                if (Math.Abs((ticket.ModifiedOn.Value - request.ModifiedOn.Value).TotalSeconds) > 1)
+                {
+                    throw new RecordModifiedException();
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(request.MemberName))
             {
@@ -419,6 +451,10 @@ public class SupportTicketService : ISupportTicketService
 
             return _mapper.Map<SupportTicketDto>(ticket);
         }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(UpdateAsync));
@@ -430,8 +466,24 @@ public class SupportTicketService : ISupportTicketService
     {
         try
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.SupportTickets.NotFound);
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken);
+            if (ticket == null)
+            {
+                var existingAny = await _ticketRepository.GetByIdWithDeletedAsync(ticketId, cancellationToken);
+                if (existingAny != null && existingAny.IsDeleted)
+                {
+                    throw new RecordDeletedException();
+                }
+                throw new RecordDeletedException();
+            }
+
+            if (request.ModifiedOn.HasValue && ticket.ModifiedOn.HasValue)
+            {
+                if (Math.Abs((ticket.ModifiedOn.Value - request.ModifiedOn.Value).TotalSeconds) > 1)
+                {
+                    throw new RecordModifiedException();
+                }
+            }
 
             var timestamp = DateTime.UtcNow.ToString("dd MMM yyyy, hh:mm tt");
             var sender = string.IsNullOrWhiteSpace(user) ? (string.IsNullOrWhiteSpace(ticket.MemberName) ? "User" : ticket.MemberName) : user.Trim();
@@ -464,6 +516,10 @@ public class SupportTicketService : ISupportTicketService
 
             return _mapper.Map<SupportTicketDto>(ticket);
         }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(ReplyAsync));
@@ -475,13 +531,25 @@ public class SupportTicketService : ISupportTicketService
     {
         try
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.SupportTickets.NotFound);
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId, cancellationToken);
+            if (ticket == null)
+            {
+                var existingAny = await _ticketRepository.GetByIdWithDeletedAsync(ticketId, cancellationToken);
+                if (existingAny != null && existingAny.IsDeleted)
+                {
+                    throw new RecordDeletedException();
+                }
+                throw new RecordDeletedException();
+            }
 
             _ticketRepository.Delete(ticket);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(CommonLogMessages.SupportTickets.TicketDeleted, ticketId);
+        }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

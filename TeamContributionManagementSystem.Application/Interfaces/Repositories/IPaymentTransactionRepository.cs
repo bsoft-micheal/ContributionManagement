@@ -7,6 +7,7 @@ public interface IPaymentTransactionRepository
 {
     Task<List<PaymentTransactionDto>> GetAllAsync(string? eventName = null, string? mode = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default);
     Task<PaymentTransaction?> GetByIdAsync(Guid transactionId, CancellationToken cancellationToken = default);
+    Task<PaymentTransaction?> GetByIdWithDeletedAsync(Guid transactionId, CancellationToken cancellationToken = default);
     Task AddAsync(PaymentTransaction transaction, CancellationToken cancellationToken = default);
     void Update(PaymentTransaction transaction);
     void Delete(PaymentTransaction transaction);

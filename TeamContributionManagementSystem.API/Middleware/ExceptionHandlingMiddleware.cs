@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.Exceptions;
 
 namespace TeamContributionManagementSystem.API.Middleware;
 
@@ -48,6 +49,39 @@ public class ExceptionHandlingMiddleware
                 data = valEx.Errors?.Select(e => new { e.PropertyName, e.ErrorMessage })
             };
         }
+        else if (exception is RecordDeletedException delEx)
+        {
+            statusCode = HttpStatusCode.NotFound;
+            payload = new
+            {
+                success = false,
+                statusCode = (int)statusCode,
+                message = !string.IsNullOrWhiteSpace(delEx.Message) ? delEx.Message : "This record no longer exists. Please refresh the page.",
+                data = (object?)null
+            };
+        }
+        else if (exception is RecordModifiedException modEx)
+        {
+            statusCode = HttpStatusCode.Conflict;
+            payload = new
+            {
+                success = false,
+                statusCode = (int)statusCode,
+                message = !string.IsNullOrWhiteSpace(modEx.Message) ? modEx.Message : "This record was updated by another user. Please refresh and try again.",
+                data = (object?)null
+            };
+        }
+        else if (exception is AlreadyProcessedException procEx)
+        {
+            statusCode = HttpStatusCode.Conflict;
+            payload = new
+            {
+                success = false,
+                statusCode = (int)statusCode,
+                message = !string.IsNullOrWhiteSpace(procEx.Message) ? procEx.Message : "This action has already been completed.",
+                data = (object?)null
+            };
+        }
         else if (exception is Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
         {
             statusCode = HttpStatusCode.Conflict;
@@ -55,7 +89,18 @@ public class ExceptionHandlingMiddleware
             {
                 success = false,
                 statusCode = (int)statusCode,
-                message = "The record was modified or deleted by another operation. Please refresh the page and try again.",
+                message = "This record was updated by another user. Please refresh and try again.",
+                data = (object?)null
+            };
+        }
+        else if (exception is KeyNotFoundException knfEx)
+        {
+            statusCode = HttpStatusCode.NotFound;
+            payload = new
+            {
+                success = false,
+                statusCode = (int)statusCode,
+                message = "This record no longer exists. Please refresh the page.",
                 data = (object?)null
             };
         }

@@ -97,6 +97,8 @@ public class UpdateSupportTicketRequestDto
 
     [MaxLength(2000)]
     public string? ResolutionNotes { get; set; }
+
+    public DateTime? ModifiedOn { get; set; }
 }
 
 public class ReplyTicketRequestDto
@@ -107,4 +109,6 @@ public class ReplyTicketRequestDto
 
     [MaxLength(50)]
     public string? Status { get; set; }
+
+    public DateTime? ModifiedOn { get; set; }
 }

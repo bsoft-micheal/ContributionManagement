@@ -7,6 +7,7 @@ public interface IExpenseRepository
 {
     Task<List<ExpenseDto>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default);
     Task<Expense?> GetByIdAsync(Guid expenseId, CancellationToken cancellationToken = default);
+    Task<Expense?> GetByIdWithDeletedAsync(Guid expenseId, CancellationToken cancellationToken = default);
     Task AddAsync(Expense expense, CancellationToken cancellationToken = default);
     void Update(Expense expense);
     void Delete(Expense expense);

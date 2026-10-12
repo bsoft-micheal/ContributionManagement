@@ -90,6 +90,8 @@ public class VerifyPaymentRequestDto
 
     [MaxLength(1000)]
     public string? Notes { get; set; }
+
+    public DateTime? ModifiedOn { get; set; }
 }
 
 public class SubmitPaymentProofDto

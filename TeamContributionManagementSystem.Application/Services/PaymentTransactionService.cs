@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Payments;
+using TeamContributionManagementSystem.Application.Exceptions;
 using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -130,6 +131,18 @@ public class PaymentTransactionService : IPaymentTransactionService
     {
         try
         {
+            if (!string.IsNullOrWhiteSpace(request.Utr))
+            {
+                var existingTxns = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
+                var dup = existingTxns.FirstOrDefault(t =>
+                    !string.IsNullOrWhiteSpace(t.Utr) &&
+                    string.Equals(t.Utr, request.Utr.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (dup != null)
+                {
+                    throw new AlreadyProcessedException("This action has already been completed.");
+                }
+            }
+
             var txnNumber = await _transactionRepository.GetNextTxnNumberAsync(cancellationToken);
 
             var status = request.Status?.Trim();
@@ -227,6 +240,30 @@ public class PaymentTransactionService : IPaymentTransactionService
             if (request.Amount <= 0)
             {
                 throw new ArgumentException("Contribution amount must be greater than zero.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Utr))
+            {
+                var existingTxns = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
+                var dup = existingTxns.FirstOrDefault(t =>
+                    !string.IsNullOrWhiteSpace(t.Utr) &&
+                    string.Equals(t.Utr, request.Utr.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (dup != null)
+                {
+                    throw new AlreadyProcessedException("This action has already been completed.");
+                }
+            }
+
+            var existingAll = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
+            var rapidDup = existingAll.FirstOrDefault(t =>
+                string.Equals(t.MemberName, request.MemberName?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(t.EventName, request.EventName?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                t.Amount == request.Amount &&
+                t.CreatedAt.HasValue &&
+                Math.Abs((DateTime.UtcNow - t.CreatedAt.Value).TotalSeconds) < 5);
+            if (rapidDup != null)
+            {
+                throw new AlreadyProcessedException("This action has already been completed.");
             }
 
             var hasSplits = request.Splits != null && request.Splits.Count > 1;
@@ -562,8 +599,16 @@ public class PaymentTransactionService : IPaymentTransactionService
     {
         try
         {
-            var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Payments.NotFound);
+            var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken);
+            if (entity == null)
+            {
+                var existingAny = await _transactionRepository.GetByIdWithDeletedAsync(transactionId, cancellationToken);
+                if (existingAny != null && existingAny.IsDeleted)
+                {
+                    throw new RecordDeletedException();
+                }
+                throw new RecordDeletedException();
+            }
 
             var reqStatus = request.Status?.Trim() ?? string.Empty;
             if (string.Equals(reqStatus, "Paid", StringComparison.OrdinalIgnoreCase))
@@ -571,6 +616,19 @@ public class PaymentTransactionService : IPaymentTransactionService
                 reqStatus = CommonConstants.PaymentStatuses.Verified;
             }
             var targetStatus = string.IsNullOrWhiteSpace(reqStatus) ? CommonConstants.PaymentStatuses.Verified : reqStatus;
+
+            if (string.Equals(entity.Status, targetStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new AlreadyProcessedException("This action has already been completed.");
+            }
+
+            if (request.ModifiedOn.HasValue && entity.ModifiedOn.HasValue)
+            {
+                if (Math.Abs((entity.ModifiedOn.Value - request.ModifiedOn.Value).TotalSeconds) > 1)
+                {
+                    throw new RecordModifiedException();
+                }
+            }
 
             Guid? statusIdToAssign = null;
             Status? matchedStatus = null;
@@ -628,6 +686,10 @@ public class PaymentTransactionService : IPaymentTransactionService
 
             return _mapper.Map<PaymentTransactionDto>(entity);
         }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(VerifyAsync));
@@ -639,8 +701,16 @@ public class PaymentTransactionService : IPaymentTransactionService
     {
         try
         {
-            var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Payments.NotFound);
+            var entity = await _transactionRepository.GetByIdAsync(transactionId, cancellationToken);
+            if (entity == null)
+            {
+                var existingAny = await _transactionRepository.GetByIdWithDeletedAsync(transactionId, cancellationToken);
+                if (existingAny != null && existingAny.IsDeleted)
+                {
+                    throw new RecordDeletedException();
+                }
+                throw new RecordDeletedException();
+            }
 
             _transactionRepository.Delete(entity);
 
@@ -671,6 +741,10 @@ public class PaymentTransactionService : IPaymentTransactionService
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

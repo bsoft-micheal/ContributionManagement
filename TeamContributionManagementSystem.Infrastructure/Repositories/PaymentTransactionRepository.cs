@@ -129,6 +129,23 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         }
     }
 
+    public async Task<PaymentTransaction?> GetByIdWithDeletedAsync(Guid transactionId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.PaymentTransactions
+                .Include(x => x.Event)
+                .Include(x => x.PaymentModeItem)
+                .Include(x => x.StatusItem)
+                .FirstOrDefaultAsync(x => x.TransactionId == transactionId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdWithDeletedAsync));
+            throw;
+        }
+    }
+
     public async Task AddAsync(PaymentTransaction transaction, CancellationToken cancellationToken = default)
     {
         try
