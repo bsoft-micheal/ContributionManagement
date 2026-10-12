@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.DTOs.Users;
@@ -14,6 +15,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiVersion("1.0")]
 [ApiController]
 [Route(CommonRoutes.Auth.Base)]
+[EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;

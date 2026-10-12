@@ -22,6 +22,12 @@ public static class CommonMessages
         public const string DeleteFailure = "Unable to delete the record. Please try again.";
     }
 
+    public static class RateLimiting
+    {
+        public const string TooManyRequests = "Too many requests. Please try again later.";
+        public const string TooManyRequestsFormat = "Too many requests. Please try again after {0} seconds.";
+    }
+
     public static class Validation
     {
         public const string ValidationFailed = "Validation failed.";

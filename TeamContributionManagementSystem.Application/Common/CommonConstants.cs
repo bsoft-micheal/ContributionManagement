@@ -251,4 +251,13 @@ public static class CommonConstants
         public const string UpiContributionNotePrefix = "Contribution for ";
         public const string PasswordResetSubject = "Password Reset OTP - Team Contribution Management System";
     }
+
+    public static class RateLimitPolicies
+    {
+        public const string Auth = "AuthPolicy";
+        public const string General = "GeneralPolicy";
+        public const string Crud = "CrudPolicy";
+        public const string Reports = "ReportsPolicy";
+        public const string ImportExport = "ImportExportPolicy";
+    }
 }

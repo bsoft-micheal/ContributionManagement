@@ -14,5 +14,6 @@ public static class CommonStatusCodes
     public const int Status403Forbidden = 403;
     public const int Status404NotFound = 404;
     public const int Status409Conflict = 409;
+    public const int Status429TooManyRequests = 429;
     public const int Status500InternalServerError = 500;
 }
