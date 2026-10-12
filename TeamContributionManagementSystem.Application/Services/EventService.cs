@@ -847,18 +847,23 @@ public class EventService : IEventService
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
             // Disallow editing if any payments have been recorded for this event
-            var hasPaidContributions = eventItem.Contributions.Any(c =>
-                !c.IsDeleted && (
-                    c.PaymentDate != null ||
-                    c.PaymentStatus == PaymentStatus.Paid ||
-                    (c.StatusItem != null && c.StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase)) ||
-                    (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                    (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                ));
+            var hasPaidContributions = await _eventRepository.HasPaidContributionsAsync(eventId, cancellationToken)
+                || eventItem.Contributions.Any(c =>
+                    !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        c.PaymentStatus == PaymentStatus.Paid ||
+                        (c.StatusItem != null && (
+                            c.StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                            c.StatusItem.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                            c.StatusItem.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
+                            c.StatusItem.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    ));
 
             if (hasPaidContributions)
             {
-                throw new InvalidOperationException("Cannot edit this event because contributions have already been paid by members.");
+                throw new InvalidOperationException(CommonMessages.Events.CannotEditPaidEvent);
             }
 
             var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
@@ -1071,6 +1076,25 @@ public class EventService : IEventService
         {
             var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
+
+            var hasPaidContributions = await _eventRepository.HasPaidContributionsAsync(eventId, cancellationToken)
+                || (eventItem.Contributions != null && eventItem.Contributions.Any(c =>
+                    !c.IsDeleted && (
+                        c.PaymentDate != null ||
+                        c.PaymentStatus == PaymentStatus.Paid ||
+                        (c.StatusItem != null && (
+                            c.StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                            c.StatusItem.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                            c.StatusItem.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
+                            c.StatusItem.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))) ||
+                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
+                    )));
+
+            if (hasPaidContributions)
+            {
+                throw new InvalidOperationException(CommonMessages.Events.CannotDeletePaidEvent);
+            }
 
             eventItem.IsDeleted = true;
             eventItem.ModifiedOn = DateTime.UtcNow;

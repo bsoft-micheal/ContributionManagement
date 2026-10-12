@@ -19,6 +19,8 @@ public class EventSummaryDto
     public decimal TotalExpectedAmount { get; set; }
     public decimal TotalPaidAmount { get; set; }
     public int PendingContributionsCount { get; set; }
+    public int PaidContributionsCount { get; set; }
+    public bool HasPaidContributions { get; set; }
     public decimal CollectedAmount { get; set; }
     public decimal PendingAmount { get; set; }
     public decimal ExpenseAmount { get; set; }

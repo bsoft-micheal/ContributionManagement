@@ -124,6 +124,12 @@ public class RoleService : IRoleService
                 throw new InvalidOperationException("Core system roles (Admin and Member) cannot be deleted.");
             }
 
+            var hasUsers = await _roleRepository.HasUsersAsync(roleId, role.RoleName, cancellationToken);
+            if (hasUsers)
+            {
+                throw new InvalidOperationException(CommonMessages.General.RecordInUse);
+            }
+
             await _roleRepository.DeleteRoleWithAssignmentsAsync(roleId, role.RoleName, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }

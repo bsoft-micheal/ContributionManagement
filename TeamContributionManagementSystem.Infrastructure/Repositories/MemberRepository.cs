@@ -137,6 +137,7 @@ public class MemberRepository : IMemberRepository
         {
             var ids = memberIds.ToList();
             var users = await _context.Users
+                .AsNoTracking()
                 .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(x => x.WorkTypeNavigation)
                 .Where(x => ids.Contains(x.UserId) && !x.IsDeleted)
@@ -176,6 +177,7 @@ public class MemberRepository : IMemberRepository
         try
         {
             var user = await _context.Users
+                .AsNoTracking()
                 .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(x => x.WorkTypeNavigation)
                 .FirstOrDefaultAsync(x => x.UserId == memberId && !x.IsDeleted, cancellationToken);
