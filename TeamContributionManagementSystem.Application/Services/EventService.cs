@@ -2,6 +2,7 @@ using System.Text.Json;
 using AutoMapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using QRCoder;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.Members;
@@ -614,6 +615,82 @@ public class EventService : IEventService
                     }
                 }
 
+                // Resolve Payment QR config for this event type
+                string effectiveReceiverName = orgName;
+                string effectiveUpiId = "danielrobertanto604@okicici";
+                string qrMode = "generated";
+                string? uploadedQrImage = null;
+
+                if (systemSettings?.PaymentQrConfigs != null)
+                {
+                    try
+                    {
+                        var json = systemSettings.PaymentQrConfigs is string s
+                            ? s
+                            : System.Text.Json.JsonSerializer.Serialize(systemSettings.PaymentQrConfigs);
+                        using var doc = System.Text.Json.JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+                        var typeKey = (eventTypeName ?? string.Empty).Trim().ToLowerInvariant();
+                        var idKey = eventTypeId.ToString().ToLowerInvariant();
+
+                        System.Text.Json.JsonElement matchedElem = default;
+                        bool found = false;
+
+                        // 1. Try match by Id or exact event name
+                        if (root.TryGetProperty(idKey, out matchedElem) || root.TryGetProperty(typeKey, out matchedElem))
+                        {
+                            found = true;
+                        }
+
+                        // 2. Try loose property matching
+                        if (!found)
+                        {
+                            foreach (var prop in root.EnumerateObject())
+                            {
+                                var pName = prop.Name.Trim().ToLowerInvariant();
+                                if (pName == typeKey || (!string.IsNullOrWhiteSpace(typeKey) && (typeKey.Contains(pName) || pName.Contains(typeKey))))
+                                {
+                                    matchedElem = prop.Value;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // 3. Fallback to "all"
+                        if (!found && root.TryGetProperty("all", out matchedElem))
+                        {
+                            found = true;
+                        }
+
+                        if (found && matchedElem.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            var upi = matchedElem.TryGetProperty("upiId", out var u) ? u.GetString() : null;
+                            var rec = matchedElem.TryGetProperty("receiverName", out var r) ? r.GetString() : null;
+                            var mode = matchedElem.TryGetProperty("qrMode", out var m) ? m.GetString() : "generated";
+                            var img = matchedElem.TryGetProperty("qrImage", out var qi) ? qi.GetString() : null;
+                            if (!string.IsNullOrWhiteSpace(upi)) effectiveUpiId = upi.Trim();
+                            if (!string.IsNullOrWhiteSpace(rec)) effectiveReceiverName = rec.Trim();
+                            if (!string.IsNullOrWhiteSpace(mode)) qrMode = mode.Trim();
+                            uploadedQrImage = img;
+                        }
+                    }
+                    catch { }
+                }
+
+                // If uploaded image mode is configured but no data URI is in settings, try reading wwwroot gpay image
+                if (string.IsNullOrWhiteSpace(uploadedQrImage) && !string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+                {
+                    try
+                    {
+                        var bytes = File.ReadAllBytes(gpayImagePath);
+                        var ext = Path.GetExtension(gpayImagePath).TrimStart('.').ToLowerInvariant();
+                        var mime = ext == "jpg" || ext == "jpeg" ? "image/jpeg" : "image/png";
+                        uploadedQrImage = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+                    }
+                    catch { }
+                }
+
                 foreach (var contributor in particularContributors)
                 {
                     try
@@ -663,6 +740,69 @@ public class EventService : IEventService
                         var frontendBaseUrl = "http://localhost:5173";
                         var portalContributionUrl = $"{frontendBaseUrl}/contributions";
 
+                        // Generate Dynamic UPI QR Image for Contributor
+                        var upiPaymentUri = $"upi://pay?pa={Uri.EscapeDataString(effectiveUpiId)}&pn={Uri.EscapeDataString(effectiveReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString($"Contribution for {safeEventName}")}";
+
+                        var qrContentId = $"qr_{Guid.NewGuid():N}";
+                        var tempDir = Path.Combine(Path.GetTempPath(), "ContributionManagement_EmailQr");
+                        Directory.CreateDirectory(tempDir);
+                        InlineEmailImage? inlineImage = null;
+
+                        if (qrMode.Equals("uploaded", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(uploadedQrImage))
+                        {
+                            var rawImg = uploadedQrImage.Trim();
+                            if (rawImg.StartsWith("data:image", StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    var commaIdx = rawImg.IndexOf(',');
+                                    var base64 = commaIdx >= 0 ? rawImg.Substring(commaIdx + 1) : rawImg;
+                                    var imgBytes = Convert.FromBase64String(base64);
+                                    var ext = rawImg.Contains("jpeg", StringComparison.OrdinalIgnoreCase) || rawImg.Contains("jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
+                                    var mediaType = ext == "jpg" ? "image/jpeg" : "image/png";
+                                    var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.{ext}");
+                                    await File.WriteAllBytesAsync(tempFilePath, imgBytes, CancellationToken.None);
+                                    inlineImage = new InlineEmailImage(qrContentId, tempFilePath, mediaType);
+                                }
+                                catch { }
+                            }
+                        }
+
+                        if (inlineImage == null)
+                        {
+                            using var qrGenerator = new QRCodeGenerator();
+                            using var qrCodeData = qrGenerator.CreateQrCode(upiPaymentUri, QRCodeGenerator.ECCLevel.Q);
+                            using var qrCode = new PngByteQRCode(qrCodeData);
+                            var qrBytes = qrCode.GetGraphic(20);
+                            var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.png");
+                            await File.WriteAllBytesAsync(tempFilePath, qrBytes, CancellationToken.None);
+                            inlineImage = new InlineEmailImage(qrContentId, tempFilePath, "image/png");
+                        }
+
+                        var qrCodeCardHtml = $@"
+                <div class=""qr-section"">
+                    <div style=""font-size: 13px; font-weight: 700; color: #4a3f6b; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;"">
+                        Scan QR to Pay via Any UPI App (GPay / PhonePe / Paytm)
+                    </div>
+                    <div class=""qr-wrapper"">
+                        <img src=""cid:{qrContentId}"" alt=""UPI Payment QR Code"" />
+                    </div>
+                    <div class=""upi-details"">
+                        <div><strong>Payee Name:</strong> {effectiveReceiverName}</div>
+                        <div style=""margin-top: 4px;""><strong>UPI ID:</strong> {effectiveUpiId}</div>
+                        <div style=""margin-top: 6px; font-size: 12px; color: #7c3aed; font-weight: 600;"">
+                            Amount is pre-filled automatically when scanned ({formattedAmount})
+                        </div>
+                    </div>
+                    <div style=""text-align: center; margin-top: 14px;"">
+                        <a href=""{upiPaymentUri}"" class=""btn-pay"">
+                            Pay {formattedAmount} via UPI
+                        </a>
+                    </div>
+                </div>";
+
+                        bool qrInCustomDesc = (configuredDescription ?? string.Empty).Contains("{qrCode}", StringComparison.OrdinalIgnoreCase);
+
                         var interpolated = (configuredDescription ?? string.Empty)
                             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
@@ -671,13 +811,15 @@ public class EventService : IEventService
                             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
                             .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{paymentLink}", portalContributionUrl, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{qrCode}", string.Empty, StringComparison.OrdinalIgnoreCase);
+                            .Replace("{qrCode}", qrCodeCardHtml, StringComparison.OrdinalIgnoreCase);
 
                         var formattedText = interpolated
                             .Replace("\r\n", "<br />")
                             .Replace("\n", "<br />");
 
                         string customMessageHtml = $@"<div style=""font-size: 15px; line-height: 1.7; color: #334155; margin-bottom: 24px;"">{formattedText}</div>";
+
+                        string standaloneQrBlock = qrInCustomDesc ? string.Empty : qrCodeCardHtml;
 
                         var emailBody = $@"
 <!DOCTYPE html>
@@ -754,6 +896,50 @@ public class EventService : IEventService
             border-radius: 6px;
             display: inline-block;
         }}
+        .qr-section {{
+            text-align: center;
+            background: #faf5ff;
+            border: 1px solid #e9d5ff;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 25px;
+        }}
+        .qr-wrapper {{
+            display: inline-block;
+            padding: 12px;
+            background: #ffffff;
+            border-radius: 12px;
+            border: 2px solid #7c3aed;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.12);
+            margin-bottom: 12px;
+        }}
+        .qr-wrapper img {{
+            display: block;
+            width: 220px;
+            height: 220px;
+            border-radius: 6px;
+            margin: 0 auto;
+        }}
+        .upi-details {{
+            font-size: 13px;
+            color: #4b5563;
+        }}
+        .upi-details strong {{
+            color: #312e81;
+        }}
+        .btn-pay {{
+            display: inline-block;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 12px 28px;
+            font-size: 15px;
+            font-weight: 700;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 14px;
+            box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+        }}
         .btn-portal {{
             display: inline-block;
             background: linear-gradient(135deg, #4a3f6b 0%, #2d2550 100%);
@@ -808,6 +994,8 @@ public class EventService : IEventService
                 </div>
             </div>
 
+            {standaloneQrBlock}
+
             <div style=""text-align: center; margin: 30px 0 10px 0;"">
                 <a href=""{portalContributionUrl}"" target=""_blank"" class=""btn-portal"">
                     Go to Contribution Page &amp; Pay
@@ -821,7 +1009,7 @@ public class EventService : IEventService
 </body>
 </html>";
 
-                        await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, null, CancellationToken.None);
+                        await scopedEmailService.SendEmailAsync(contributor.Email, emailSubject, emailBody, inlineImage != null ? new[] { inlineImage } : null, CancellationToken.None);
                         scopedLogger.LogInformation(CommonLogMessages.Events.EmailSentSuccess, contributor.Email, safeEventName);
                         await Task.Delay(100);
                     }
@@ -1133,7 +1321,6 @@ public class EventService : IEventService
             throw;
         }
     }
-
     /// <summary>
     /// Computes contribution amounts for members based on dynamic event type tenure rules and custom overrides.
     /// </summary>
@@ -1143,6 +1330,21 @@ public class EventService : IEventService
         decimal baseAmount,
         IReadOnlyCollection<Member> members,
         IReadOnlyCollection<ContributionOverrideDto> overrides)
+    {
+        var details = CalculateDetailedMemberContributions(eventType, eventDate, baseAmount, members, overrides);
+        return details.ToDictionary(x => x.MemberId, x => x.Amount);
+    }
+
+    /// <summary>
+    /// Core calculation engine returning detailed breakdown per member.
+    /// Used identically for both pre-submission preview and final event creation.
+    /// </summary>
+    private static List<MemberContributionCalculationResult> CalculateDetailedMemberContributions(
+        EventType eventType,
+        DateTime eventDate,
+        decimal baseAmount,
+        IReadOnlyCollection<Member> members,
+        IReadOnlyCollection<ContributionOverrideDto>? overrides)
     {
         var overrideLookup = (overrides ?? Array.Empty<ContributionOverrideDto>())
             .GroupBy(x => x.MemberId)
@@ -1158,13 +1360,25 @@ public class EventService : IEventService
         decimal splitPool = Math.Max(0m, totalBaseDecimal - overrideSum);
 
         var nonOverrideMembers = members.Where(m => !overrideLookup.ContainsKey(m.MemberId)).ToList();
-        var result = new Dictionary<Guid, decimal>();
+        var results = new List<MemberContributionCalculationResult>();
+
+        decimal baseStandardAmount = members.Count > 0 ? Math.Round(totalBaseDecimal / members.Count, 2, MidpointRounding.AwayFromZero) : 0m;
 
         foreach (var member in members)
         {
             if (overrideLookup.TryGetValue(member.MemberId, out var customAmount))
             {
-                result[member.MemberId] = customAmount;
+                double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
+                decimal tenureYears = Math.Max(0m, Math.Round((decimal)(tenureDays / 365.25), 1, MidpointRounding.AwayFromZero));
+
+                results.Add(new MemberContributionCalculationResult
+                {
+                    MemberId = member.MemberId,
+                    Amount = customAmount,
+                    CompletedYears = tenureYears,
+                    SharePercentage = 100m,
+                    StandardAmount = baseStandardAmount
+                });
             }
         }
 
@@ -1172,65 +1386,247 @@ public class EventService : IEventService
         {
             if (hasTenureRule)
             {
-                int fullShareCount = 0;
-                int halfShareCount = 0;
-
-                foreach (var member in nonOverrideMembers)
+                var dynamicTiers = new List<(decimal Years, decimal ShareRatio)>();
+                if (!string.IsNullOrWhiteSpace(eventType.RuleDescription))
                 {
-                    double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
-                    double tenureYears = tenureDays / 365.25;
-                    if (tenureYears < (double)thresholdYears)
+                    try
                     {
-                        halfShareCount++;
+                        using var doc = System.Text.Json.JsonDocument.Parse(eventType.RuleDescription);
+                        if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var item in doc.RootElement.EnumerateArray())
+                            {
+                                decimal y = 0;
+                                decimal s = 0;
+                                if (item.TryGetProperty("years", out var yp)) y = yp.GetDecimal();
+                                else if (item.TryGetProperty("y", out var yps)) y = yps.GetDecimal();
+
+                                if (item.TryGetProperty("share", out var sp)) s = sp.GetDecimal();
+                                else if (item.TryGetProperty("s", out var sps)) s = sps.GetDecimal();
+
+                                if (y > 0 && s > 0)
+                                {
+                                    dynamicTiers.Add((y, s / 100.0m));
+                                }
+                            }
+                        }
                     }
-                    else
+                    catch
                     {
-                        fullShareCount++;
+                        // Fallback to legacy single threshold rule if RuleDescription is not JSON
                     }
                 }
 
-                decimal divisor = (fullShareCount * standardRatio + halfShareCount * newEntrantRatio);
-                decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
+                if (dynamicTiers.Count == 0)
+                {
+                    dynamicTiers.Add((thresholdYears, newEntrantRatio));
+                }
 
+                dynamicTiers = dynamicTiers.OrderBy(t => t.Years).ToList();
+
+                var memberRatios = new Dictionary<Guid, (decimal Ratio, decimal Years)>();
                 foreach (var member in nonOverrideMembers)
                 {
                     double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
-                    double tenureYears = tenureDays / 365.25;
-                    bool isNewEntrant = tenureYears < (double)thresholdYears;
-                    decimal shareRatio = isNewEntrant ? newEntrantRatio : standardRatio;
-                    result[member.MemberId] = Math.Round(standardShare * shareRatio, 2, MidpointRounding.AwayFromZero);
+                    decimal tenureYears = Math.Max(0m, Math.Round((decimal)(tenureDays / 365.25), 1, MidpointRounding.AwayFromZero));
+
+                    decimal assignedRatio = standardRatio;
+                    foreach (var tier in dynamicTiers)
+                    {
+                        if (tenureYears < tier.Years)
+                        {
+                            assignedRatio = tier.ShareRatio;
+                            break;
+                        }
+                    }
+
+                    memberRatios[member.MemberId] = (assignedRatio, tenureYears);
+                }
+
+                decimal divisor = memberRatios.Values.Sum(x => x.Ratio);
+                decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
+                baseStandardAmount = Math.Round(standardShare, 2, MidpointRounding.AwayFromZero);
+
+                var tempAmounts = new Dictionary<Guid, decimal>();
+                foreach (var member in nonOverrideMembers)
+                {
+                    var (shareRatio, _) = memberRatios[member.MemberId];
+                    tempAmounts[member.MemberId] = Math.Round(standardShare * shareRatio, 2, MidpointRounding.AwayFromZero);
+                }
+
+                // Distribute integer remainder (+1/-1 rupees) so sum of member amounts equals splitPool
+                decimal nonOverrideSum = tempAmounts.Values.Sum();
+                decimal remainder = splitPool - nonOverrideSum;
+                if (remainder != 0)
+                {
+                    int step = remainder > 0 ? 1 : -1;
+                    int remainingAdjustment = (int)Math.Abs(remainder);
+                    for (int i = 0; i < nonOverrideMembers.Count && remainingAdjustment > 0; i++)
+                    {
+                        var mId = nonOverrideMembers[i].MemberId;
+                        tempAmounts[mId] += step;
+                        remainingAdjustment--;
+                    }
+                }
+
+                foreach (var member in nonOverrideMembers)
+                {
+                    var (shareRatio, tenureYears) = memberRatios[member.MemberId];
+                    results.Add(new MemberContributionCalculationResult
+                    {
+                        MemberId = member.MemberId,
+                        Amount = tempAmounts[member.MemberId],
+                        CompletedYears = tenureYears,
+                        SharePercentage = Math.Round(shareRatio * 100m, 1),
+                        StandardAmount = baseStandardAmount
+                    });
                 }
             }
             else
             {
                 decimal rawPerPerson = splitPool / nonOverrideMembers.Count;
                 decimal roundedPerPerson = Math.Round(rawPerPerson, 2, MidpointRounding.AwayFromZero);
+                baseStandardAmount = roundedPerPerson;
+
+                var tempAmounts = new Dictionary<Guid, decimal>();
+                foreach (var member in nonOverrideMembers)
+                {
+                    tempAmounts[member.MemberId] = roundedPerPerson;
+                }
+
+                decimal nonOverrideSum = tempAmounts.Values.Sum();
+                decimal remainder = splitPool - nonOverrideSum;
+                if (remainder != 0)
+                {
+                    int step = remainder > 0 ? 1 : -1;
+                    int remainingAdjustment = (int)Math.Abs(remainder);
+                    for (int i = 0; i < nonOverrideMembers.Count && remainingAdjustment > 0; i++)
+                    {
+                        var mId = nonOverrideMembers[i].MemberId;
+                        tempAmounts[mId] += step;
+                        remainingAdjustment--;
+                    }
+                }
 
                 foreach (var member in nonOverrideMembers)
                 {
-                    result[member.MemberId] = roundedPerPerson;
-                }
-            }
+                    double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
+                    decimal tenureYears = Math.Max(0m, Math.Round((decimal)(tenureDays / 365.25), 1, MidpointRounding.AwayFromZero));
 
-            // Distribute integer remainder (+1/-1 rupees) so sum of member amounts equals splitPool
-            decimal nonOverrideSum = nonOverrideMembers.Sum(m => result[m.MemberId]);
-            decimal remainder = splitPool - nonOverrideSum;
-
-            if (remainder != 0)
-            {
-                int step = remainder > 0 ? 1 : -1;
-                int remainingAdjustment = (int)Math.Abs(remainder);
-
-                for (int i = 0; i < nonOverrideMembers.Count && remainingAdjustment > 0; i++)
-                {
-                    var mId = nonOverrideMembers[i].MemberId;
-                    result[mId] += step;
-                    remainingAdjustment--;
+                    results.Add(new MemberContributionCalculationResult
+                    {
+                        MemberId = member.MemberId,
+                        Amount = tempAmounts[member.MemberId],
+                        CompletedYears = tenureYears,
+                        SharePercentage = 100m,
+                        StandardAmount = baseStandardAmount
+                    });
                 }
             }
         }
 
-        return result;
+        return results;
+    }
+
+    public async Task<EventContributionPreviewResponseDto> CalculateContributionPreviewAsync(
+        EventContributionPreviewRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var targetTypeId = request.EventTypeId != Guid.Empty
+                ? request.EventTypeId
+                : (request.EventTypeIds != null && request.EventTypeIds.Count > 0 ? request.EventTypeIds[0] : Guid.Empty);
+
+            var eventType = targetTypeId != Guid.Empty
+                ? await _eventTypeRepository.GetByIdAsync(targetTypeId, cancellationToken)
+                : null;
+
+            if (eventType == null)
+            {
+                throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
+            }
+
+            var participantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
+            if (participantIds.Count == 0)
+            {
+                return new EventContributionPreviewResponseDto
+                {
+                    TotalMembers = 0,
+                    EligibleContributors = 0,
+                    PlannedBudget = request.BaseAmount,
+                    ExpectedCollection = 0m,
+                    StandardContributionAmount = 0m,
+                    Members = Array.Empty<EventContributionPreviewMemberDto>()
+                };
+            }
+
+            var members = await _memberRepository.GetByIdsAsync(participantIds, cancellationToken);
+            if (members.Count == 0)
+            {
+                return new EventContributionPreviewResponseDto
+                {
+                    TotalMembers = 0,
+                    EligibleContributors = 0,
+                    PlannedBudget = request.BaseAmount,
+                    ExpectedCollection = 0m,
+                    StandardContributionAmount = 0m,
+                    Members = Array.Empty<EventContributionPreviewMemberDto>()
+                };
+            }
+
+            var memberLookup = members.ToDictionary(m => m.MemberId);
+            var detailedCalculations = CalculateDetailedMemberContributions(
+                eventType,
+                request.EventDate.Date,
+                request.BaseAmount,
+                members,
+                request.ContributionOverrides);
+
+            var previewMembers = new List<EventContributionPreviewMemberDto>();
+            foreach (var calc in detailedCalculations)
+            {
+                if (memberLookup.TryGetValue(calc.MemberId, out var mem))
+                {
+                    previewMembers.Add(new EventContributionPreviewMemberDto
+                    {
+                        UserId = mem.MemberId,
+                        MemberId = mem.MemberId,
+                        MemberName = mem.Name ?? string.Empty,
+                        WorkType = !string.IsNullOrWhiteSpace(mem.WorkType) ? mem.WorkType : "Office",
+                        CompletedYears = calc.CompletedYears,
+                        SharePercentage = calc.SharePercentage,
+                        StandardAmount = calc.StandardAmount,
+                        ContributionAmount = calc.Amount
+                    });
+                }
+            }
+
+            // Keep same order as participantIds requested
+            var orderedPreview = (request.ParticipantIds != null ? request.ParticipantIds : participantIds)
+                .Select(id => previewMembers.FirstOrDefault(m => m.MemberId == id))
+                .Where(m => m != null)
+                .Select(m => m!)
+                .ToList();
+
+            decimal totalCalculated = orderedPreview.Count > 0 ? orderedPreview.Sum(m => m.ContributionAmount) : 0m;
+            decimal standardAmt = orderedPreview.Count > 0 ? orderedPreview.Max(m => m.StandardAmount) : 0m;
+
+            return new EventContributionPreviewResponseDto
+            {
+                TotalMembers = members != null ? members.Count : 0,
+                EligibleContributors = orderedPreview.Count,
+                PlannedBudget = Math.Round(request.BaseAmount, 2, MidpointRounding.AwayFromZero),
+                ExpectedCollection = totalCalculated,
+                StandardContributionAmount = standardAmt,
+                Members = orderedPreview
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CalculateContributionPreviewAsync));
+            throw;
+        }
     }
 
     private static string? ResolveGpayImagePath()
