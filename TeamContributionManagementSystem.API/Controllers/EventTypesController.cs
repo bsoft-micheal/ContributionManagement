@@ -44,7 +44,7 @@ public class EventTypesController : ControllerBase
     [ActionName(nameof(SaveEventTypeAsync))]
     public async Task<ActionResult<ApiResponse<EventTypeDto>>> SaveEventTypeAsync([FromBody] CreateEventTypeRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var currentUser = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _eventTypeService.SaveEventTypeAsync(request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<EventTypeDto>.SuccessResult(result, CommonMessages.EventTypes.SaveSuccess, CommonStatusCodes.Status201Created));
     }
@@ -60,7 +60,7 @@ public class EventTypesController : ControllerBase
     [ActionName(nameof(UpdateEventTypeAsyncById))]
     public async Task<ActionResult<ApiResponse<EventTypeDto>>> UpdateEventTypeAsyncById(Guid id, [FromBody] UpdateEventTypeRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+        var currentUser = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
         var result = await _eventTypeService.UpdateEventTypeAsyncById(id, request, currentUser, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<EventTypeDto>.SuccessResult(result, CommonMessages.EventTypes.UpdateSuccess, CommonStatusCodes.Status200OK));
     }

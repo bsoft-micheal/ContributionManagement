@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Members;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -64,6 +65,7 @@ public class MembersController : ControllerBase
     /// <param name="jsonElement">A JSON array containing member details.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [Authorize(Roles = CommonRoles.Admin)]
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.ImportExport)]
     [HttpPost(CommonRoutes.Members.SaveBulk)]
     [ActionName(nameof(SaveBulkMemberAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<MemberDto>>>> SaveBulkMemberAsync([FromBody] System.Text.Json.JsonElement jsonElement, CancellationToken cancellationToken)

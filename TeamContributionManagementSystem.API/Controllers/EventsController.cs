@@ -126,4 +126,25 @@ public class EventsController : ControllerBase
             "Event contribution reminder job successfully enqueued.",
             CommonStatusCodes.Status200OK));
     }
+
+    /// <summary>
+    /// Previews individual member contributions based on service years tenure rules and event amount before event creation.
+    /// </summary>
+    /// <param name="request">Preview parameters including event type, date, amount, and participants.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpPost(CommonRoutes.Events.PreviewContributions)]
+    [HttpPost("contribution-preview")]
+    [ActionName(nameof(PreviewContributionsAsync))]
+    public async Task<ActionResult<ApiResponse<EventContributionPreviewResponseDto>>> PreviewContributionsAsync(
+        [FromBody] EventContributionPreviewRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _eventService.PreviewContributionAsync(request, cancellationToken);
+        return StatusCode(
+            CommonStatusCodes.Status200OK,
+            ApiResponse<EventContributionPreviewResponseDto>.SuccessResult(
+                result,
+                CommonMessages.Events.PreviewSuccess,
+                CommonStatusCodes.Status200OK));
+    }
 }

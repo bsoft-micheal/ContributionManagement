@@ -296,9 +296,9 @@ public class ContributionReminderJobService : IContributionReminderJobService
         SystemSettingsDto? systemSettings,
         CancellationToken cancellationToken)
     {
-        var memberName = !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.Username;
-        var recipientEmail = user.Email;
-        var eventName = eventItem.EventName;
+        var memberName = !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : (user.Username ?? "Member");
+        var recipientEmail = user.Email ?? string.Empty;
+        var eventName = eventItem.EventName ?? "Event";
         var eventTypeName = eventItem.EventType?.EventTypeName ?? "Event";
         var eventDate = eventItem.EventDate;
         var pendingAmount = contribution.Amount;
@@ -316,7 +316,143 @@ public class ContributionReminderJobService : IContributionReminderJobService
         var frontendBaseUrl = _configuration["Cors:AllowedOrigins:0"] ?? CommonConstants.Defaults.DefaultFrontendUrl;
         var portalPaymentUrl = $"{frontendBaseUrl}/contributions";
 
-        var (resolvedSubject, resolvedDescription) = ResolveEmailTemplate(
+        // 1. Resolve Payment QR Setting for this Event Type
+        EventTypePaymentSetting? paymentSetting = null;
+        try
+        {
+            if (eventItem.EventTypeId != Guid.Empty)
+            {
+                paymentSetting = await _context.EventTypePaymentSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.EventTypeId == eventItem.EventTypeId, cancellationToken);
+            }
+
+            if (paymentSetting == null && !string.IsNullOrWhiteSpace(eventTypeName))
+            {
+                paymentSetting = await _context.EventTypePaymentSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.EventTypeName.ToLower() == eventTypeName.ToLower(), cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to query EventTypePaymentSettings for event {EventName}", eventName);
+        }
+
+        if (paymentSetting == null && systemSettings?.PaymentQrConfigs != null)
+        {
+            try
+            {
+                var json = systemSettings.PaymentQrConfigs is string s
+                    ? s
+                    : System.Text.Json.JsonSerializer.Serialize(systemSettings.PaymentQrConfigs);
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                var key = eventTypeName.Trim().ToLowerInvariant();
+                if (root.TryGetProperty(key, out var elem) || root.TryGetProperty("all", out elem))
+                {
+                    var upi = elem.TryGetProperty("upiId", out var u) ? u.GetString() : null;
+                    var rec = elem.TryGetProperty("receiverName", out var r) ? r.GetString() : null;
+                    var mode = elem.TryGetProperty("qrMode", out var m) ? m.GetString() : "generated";
+                    var img = elem.TryGetProperty("qrImage", out var qi) ? qi.GetString() : null;
+                    if (!string.IsNullOrWhiteSpace(upi) || !string.IsNullOrWhiteSpace(img))
+                    {
+                        paymentSetting = new EventTypePaymentSetting
+                        {
+                            EventTypeName = eventTypeName,
+                            UpiId = upi ?? string.Empty,
+                            ReceiverName = rec ?? orgName,
+                            QrMode = mode ?? "generated",
+                            QrImageUrl = img,
+                            IsConfigured = true
+                        };
+                    }
+                }
+            }
+            catch { }
+        }
+
+        var effectiveUpiId = !string.IsNullOrWhiteSpace(paymentSetting?.UpiId)
+            ? paymentSetting.UpiId
+            : "danielrobertanto604@okicici";
+        var effectiveReceiverName = !string.IsNullOrWhiteSpace(paymentSetting?.ReceiverName)
+            ? paymentSetting.ReceiverName
+            : orgName;
+        var isUploadedMode = paymentSetting?.QrMode?.Equals("uploaded", StringComparison.OrdinalIgnoreCase) == true && !string.IsNullOrWhiteSpace(paymentSetting?.QrImageUrl);
+
+        var upiPaymentUri = $"upi://pay?pa={Uri.EscapeDataString(effectiveUpiId)}&pn={Uri.EscapeDataString(effectiveReceiverName)}&am={pendingAmount:F2}&cu=INR&tn={Uri.EscapeDataString($"Contribution for {eventName}")}";
+
+        // 2. Generate or Load QR Code Image as Inline Attachment
+        var qrContentId = $"qr_{Guid.NewGuid():N}";
+        var tempDir = Path.Combine(Path.GetTempPath(), "ContributionManagement_EmailQr");
+        Directory.CreateDirectory(tempDir);
+        InlineEmailImage? inlineImage = null;
+
+        if (isUploadedMode && !string.IsNullOrWhiteSpace(paymentSetting?.QrImageUrl))
+        {
+            var rawImg = paymentSetting.QrImageUrl.Trim();
+            if (rawImg.StartsWith("data:image", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var commaIdx = rawImg.IndexOf(',');
+                    var base64 = commaIdx >= 0 ? rawImg.Substring(commaIdx + 1) : rawImg;
+                    var imgBytes = Convert.FromBase64String(base64);
+                    var ext = rawImg.Contains("jpeg", StringComparison.OrdinalIgnoreCase) || rawImg.Contains("jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
+                    var mediaType = ext == "jpg" ? "image/jpeg" : "image/png";
+                    var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.{ext}");
+                    await File.WriteAllBytesAsync(tempFilePath, imgBytes, cancellationToken);
+                    inlineImage = new InlineEmailImage(qrContentId, tempFilePath, mediaType);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode uploaded QR base64 image; falling back to dynamic generation.");
+                }
+            }
+            else
+            {
+                var localPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", rawImg.TrimStart('/', '\\'));
+                if (File.Exists(localPath))
+                {
+                    inlineImage = new InlineEmailImage(qrContentId, localPath, "image/png");
+                }
+            }
+        }
+
+        if (inlineImage == null)
+        {
+            using var qrGenerator = new QRCodeGenerator();
+            using var qrCodeData = qrGenerator.CreateQrCode(upiPaymentUri, QRCodeGenerator.ECCLevel.Q);
+            using var qrCode = new PngByteQRCode(qrCodeData);
+            var qrBytes = qrCode.GetGraphic(20);
+            var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.png");
+            await File.WriteAllBytesAsync(tempFilePath, qrBytes, cancellationToken);
+            inlineImage = new InlineEmailImage(qrContentId, tempFilePath, "image/png");
+        }
+
+        var qrCodeCardHtml = $@"
+            <div class=""qr-section"">
+                <div style=""font-size: 13.5px; font-weight: 700; color: #4b5563; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;"">
+                    Scan QR to Pay via Any UPI App (GPay / PhonePe / Paytm)
+                </div>
+                <div class=""qr-wrapper"">
+                    <img src=""cid:{qrContentId}"" alt=""UPI Payment QR Code"" />
+                </div>
+                <div class=""upi-details"">
+                    <div><strong>Payee Name:</strong> {effectiveReceiverName}</div>
+                    <div style=""margin-top: 4px;""><strong>UPI ID:</strong> {effectiveUpiId}</div>
+                    <div style=""margin-top: 6px; font-size: 12px; color: #7c3aed; font-weight: 600;"">
+                        Amount is pre-filled automatically when scanned ({formattedAmount})
+                    </div>
+                </div>
+                <div style=""text-align: center; margin-top: 14px;"">
+                    <a href=""{upiPaymentUri}"" class=""btn-pay"" style=""display: inline-block; margin: 0; padding: 10px 24px; font-size: 14px;"">
+                        Pay {formattedAmount} via UPI
+                    </a>
+                </div>
+            </div>";
+
+        var (resolvedSubject, resolvedDescription, qrEmbeddedInDesc) = ResolveEmailTemplate(
             systemSettings,
             eventTypeName,
             memberName,
@@ -324,7 +460,10 @@ public class ContributionReminderJobService : IContributionReminderJobService
             formattedAmount,
             formattedDueDate,
             orgName,
-            portalPaymentUrl);
+            portalPaymentUrl,
+            qrCodeCardHtml);
+
+        var qrSectionBlock = qrEmbeddedInDesc ? string.Empty : qrCodeCardHtml;
 
         var subject = !string.IsNullOrWhiteSpace(resolvedSubject)
             ? resolvedSubject
@@ -469,6 +608,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
             width: 220px;
             height: 220px;
             border-radius: 6px;
+            margin: 0 auto;
         }}
         .upi-details {{
             font-size: 13px;
@@ -563,6 +703,8 @@ public class ContributionReminderJobService : IContributionReminderJobService
                 </table>
             </div>
 
+            {qrSectionBlock}
+
             <div style=""text-align: center; margin: 28px 0 20px 0;"">
                 <a href=""{portalPaymentUrl}"" target=""_blank"" style=""display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff !important; text-decoration: none; padding: 14px 34px; font-size: 15px; font-weight: 700; border-radius: 10px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35); letter-spacing: 0.3px;"">
                     Go to Contribution Page &amp; Pay
@@ -591,11 +733,11 @@ public class ContributionReminderJobService : IContributionReminderJobService
             toEmail: recipientEmail,
             subject: subject,
             body: body,
-            inlineImages: null,
+            inlineImages: inlineImage != null ? new[] { inlineImage } : null,
             cancellationToken: cancellationToken);
     }
 
-    private static (string Subject, string Description) ResolveEmailTemplate(
+    private static (string Subject, string Description, bool QrEmbeddedInDesc) ResolveEmailTemplate(
         SystemSettingsDto? systemSettings,
         string categoryName,
         string memberName,
@@ -603,7 +745,8 @@ public class ContributionReminderJobService : IContributionReminderJobService
         string formattedAmount,
         string formattedDueDate,
         string orgName,
-        string portalContributionUrl)
+        string portalContributionUrl,
+        string qrCodeCardHtml = "")
     {
         string rawSubject = string.Empty;
         string rawDescription = string.Empty;
@@ -648,7 +791,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
         {
             rawDescription = !string.IsNullOrWhiteSpace(systemSettings?.EmailDescription)
                 ? systemSettings.EmailDescription
-                : "Dear {memberName},\n\nThis is a friendly reminder that your contribution of {amount} for {categoryName} is pending.\nDue Date: {dueDate}\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
+                : "Dear {memberName},\n\nThis is a friendly reminder that your contribution of {amount} for {categoryName} is pending.\nDue Date: {dueDate}\n\nPlease scan the dynamic UPI QR code below or log in to the portal to complete your contribution payment.\n\nThank you,\n{orgName}";
         }
 
         string resolvedSubject = rawSubject
@@ -659,17 +802,28 @@ public class ContributionReminderJobService : IContributionReminderJobService
             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
             .Replace("{orgName}", orgName, StringComparison.OrdinalIgnoreCase);
 
-        string resolvedDescription = rawDescription
+        bool qrEmbeddedInDesc = false;
+        string descriptionWithQr = rawDescription;
+        if (!string.IsNullOrWhiteSpace(qrCodeCardHtml) && descriptionWithQr.Contains("{qrCode}", StringComparison.OrdinalIgnoreCase))
+        {
+            descriptionWithQr = descriptionWithQr.Replace("{qrCode}", qrCodeCardHtml, StringComparison.OrdinalIgnoreCase);
+            qrEmbeddedInDesc = true;
+        }
+        else
+        {
+            descriptionWithQr = descriptionWithQr.Replace("{qrCode}", string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+
+        string resolvedDescription = descriptionWithQr
             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
             .Replace("{categoryName}", categoryName, StringComparison.OrdinalIgnoreCase)
             .Replace("{eventName}", eventName, StringComparison.OrdinalIgnoreCase)
             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
             .Replace("{orgName}", orgName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{paymentLink}", portalContributionUrl, StringComparison.OrdinalIgnoreCase)
-            .Replace("{qrCode}", string.Empty, StringComparison.OrdinalIgnoreCase);
+            .Replace("{paymentLink}", portalContributionUrl, StringComparison.OrdinalIgnoreCase);
 
-        return (resolvedSubject, resolvedDescription);
+        return (resolvedSubject, resolvedDescription, qrEmbeddedInDesc);
     }
 
     private static bool IsContributionPaid(Contribution c)

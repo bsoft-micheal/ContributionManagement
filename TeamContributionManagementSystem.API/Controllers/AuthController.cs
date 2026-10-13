@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Auth;
 using TeamContributionManagementSystem.Application.DTOs.Users;
@@ -14,6 +15,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiVersion("1.0")]
 [ApiController]
 [Route(CommonRoutes.Auth.Base)]
+[EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -31,6 +33,7 @@ public class AuthController : ControllerBase
     /// <returns>An ApiResponse containing AuthResponseDto.</returns>
     [AllowAnonymous]
     [HttpPost(CommonRoutes.Auth.Login)]
+    [HttpPost("login")]
     [ActionName(nameof(LoginAsync))]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginAsync([FromBody] LoginRequestDto request, CancellationToken cancellationToken)
     {
@@ -53,6 +56,7 @@ public class AuthController : ControllerBase
     /// <returns>An ApiResponse containing AuthResponseDto upon successful verification.</returns>
     [AllowAnonymous]
     [HttpPost(CommonRoutes.Auth.Verify2Fa)]
+    [HttpPost("verify-2fa")]
     [ActionName(nameof(VerifyTwoFactorAsync))]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> VerifyTwoFactorAsync([FromBody] VerifyTwoFactorRequestDto request, CancellationToken cancellationToken)
     {

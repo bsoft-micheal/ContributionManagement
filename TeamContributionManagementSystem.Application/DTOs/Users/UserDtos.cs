@@ -15,6 +15,7 @@ public class UserDto
     public string? Role { get; set; }
     public string? RoleName { get; set; }
     public List<string> Roles { get; set; } = new();
+    public List<string> RoleNames { get => Roles; set => Roles = value; }
     public List<string> PrimaryRoles { get; set; } = new();
     public List<string> SecondaryRoles { get; set; } = new();
     public string? SecondaryRole => SecondaryRoles.Count > 0 ? string.Join(", ", SecondaryRoles) : null;

@@ -92,3 +92,45 @@ public class CreateEventRequestDto
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
 }
+
+public class EventContributionPreviewRequestDto
+{
+    public Guid EventTypeId { get; set; }
+    public List<Guid>? EventTypeIds { get; set; }
+    public DateTime EventDate { get; set; }
+    public decimal BaseAmount { get; set; }
+    public List<Guid> ParticipantIds { get; set; } = new();
+    public List<ContributionOverrideDto>? ContributionOverrides { get; set; }
+}
+
+public class EventContributionPreviewMemberDto
+{
+    public Guid UserId { get; set; }
+    public Guid MemberId { get; set; }
+    public string MemberName { get; set; } = string.Empty;
+    public string WorkType { get; set; } = "Office";
+    public decimal CompletedYears { get; set; }
+    public decimal SharePercentage { get; set; } = 100m;
+    public decimal StandardAmount { get; set; }
+    public decimal ContributionAmount { get; set; }
+}
+
+public class EventContributionPreviewResponseDto
+{
+    public int TotalMembers { get; set; }
+    public int EligibleContributors { get; set; }
+    public decimal PlannedBudget { get; set; }
+    public decimal ExpectedCollection { get; set; }
+    public decimal StandardContributionAmount { get; set; }
+    public IReadOnlyCollection<EventContributionPreviewMemberDto> Members { get; set; } = Array.Empty<EventContributionPreviewMemberDto>();
+}
+
+public class MemberContributionCalculationResult
+{
+    public Guid MemberId { get; set; }
+    public decimal Amount { get; set; }
+    public decimal CompletedYears { get; set; }
+    public decimal SharePercentage { get; set; } = 100m;
+    public decimal StandardAmount { get; set; }
+}
+
