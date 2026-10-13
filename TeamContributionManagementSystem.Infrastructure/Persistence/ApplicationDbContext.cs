@@ -525,101 +525,25 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyAuditInformation();
-        try
-        {
-            return await base.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            foreach (var entry in ex.Entries)
-            {
-                var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
-                if (databaseValues == null)
-                {
-                    entry.State = EntityState.Detached;
-                }
-                else
-                {
-                    entry.OriginalValues.SetValues(databaseValues);
-                }
-            }
-            return await base.SaveChangesAsync(cancellationToken);
-        }
+        return await base.SaveChangesAsync(cancellationToken);
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ApplyAuditInformation();
-        try
-        {
-            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            foreach (var entry in ex.Entries)
-            {
-                var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
-                if (databaseValues == null)
-                {
-                    entry.State = EntityState.Detached;
-                }
-                else
-                {
-                    entry.OriginalValues.SetValues(databaseValues);
-                }
-            }
-            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-        }
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
     public override int SaveChanges()
     {
         ApplyAuditInformation();
-        try
-        {
-            return base.SaveChanges();
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            foreach (var entry in ex.Entries)
-            {
-                var databaseValues = entry.GetDatabaseValues();
-                if (databaseValues == null)
-                {
-                    entry.State = EntityState.Detached;
-                }
-                else
-                {
-                    entry.OriginalValues.SetValues(databaseValues);
-                }
-            }
-            return base.SaveChanges();
-        }
+        return base.SaveChanges();
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ApplyAuditInformation();
-        try
-        {
-            return base.SaveChanges(acceptAllChangesOnSuccess);
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            foreach (var entry in ex.Entries)
-            {
-                var databaseValues = entry.GetDatabaseValues();
-                if (databaseValues == null)
-                {
-                    entry.State = EntityState.Detached;
-                }
-                else
-                {
-                    entry.OriginalValues.SetValues(databaseValues);
-                }
-            }
-            return base.SaveChanges(acceptAllChangesOnSuccess);
-        }
+        return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
     private void ApplyAuditInformation()

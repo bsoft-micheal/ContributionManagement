@@ -114,6 +114,19 @@ public class ExpenseRepository : IExpenseRepository
         }
     }
 
+    public async Task<Expense?> GetByIdWithDeletedAsync(Guid expenseId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == expenseId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdWithDeletedAsync));
+            throw;
+        }
+    }
+
     public async Task AddAsync(Expense expense, CancellationToken cancellationToken = default)
     {
         try

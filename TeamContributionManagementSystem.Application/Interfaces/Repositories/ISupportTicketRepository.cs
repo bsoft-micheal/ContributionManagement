@@ -7,6 +7,7 @@ public interface ISupportTicketRepository
 {
     Task<List<SupportTicketDto>> GetAllAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default);
     Task<SupportTicket?> GetByIdAsync(Guid ticketId, CancellationToken cancellationToken = default);
+    Task<SupportTicket?> GetByIdWithDeletedAsync(Guid ticketId, CancellationToken cancellationToken = default);
     Task<SupportTicket?> GetByTicketNoAsync(string ticketNo, CancellationToken cancellationToken = default);
     Task AddAsync(SupportTicket ticket, CancellationToken cancellationToken = default);
     Task<string> GenerateNextTicketNoAsync(CancellationToken cancellationToken = default);

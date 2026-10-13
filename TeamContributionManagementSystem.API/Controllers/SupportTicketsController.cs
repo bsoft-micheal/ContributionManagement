@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.SupportTickets;
+using TeamContributionManagementSystem.Application.Exceptions;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
 namespace TeamContributionManagementSystem.API.Controllers;
@@ -34,8 +35,15 @@ public class SupportTicketsController : ControllerBase
         [FromQuery] string? priority,
         CancellationToken cancellationToken)
     {
-        var result = await _ticketService.GetAllSupportTicketAsync(status, ticketType, priority, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<SupportTicketDto>>.SuccessResult(result, CommonMessages.SupportTickets.GetAllSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var result = await _ticketService.GetAllSupportTicketAsync(status, ticketType, priority, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<SupportTicketDto>>.SuccessResult(result, CommonMessages.SupportTickets.GetAllSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<IReadOnlyCollection<SupportTicketDto>>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -45,8 +53,23 @@ public class SupportTicketsController : ControllerBase
     [ActionName(nameof(GetSupportTicketAsyncById))]
     public async Task<ActionResult<ApiResponse<SupportTicketDto>>> GetSupportTicketAsyncById(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _ticketService.GetSupportTicketAsyncById(id, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.GetByIdSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var result = await _ticketService.GetSupportTicketAsyncById(id, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.GetByIdSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (RecordDeletedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
+        catch (KeyNotFoundException)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<SupportTicketDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
+        }
+        catch (Exception)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -56,9 +79,20 @@ public class SupportTicketsController : ControllerBase
     [ActionName(nameof(SaveSupportTicketAsync))]
     public async Task<ActionResult<ApiResponse<SupportTicketDto>>> SaveSupportTicketAsync([FromBody] CreateSupportTicketRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var result = await _ticketService.SaveSupportTicketAsync(request, currentUser, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.SaveSuccess, CommonStatusCodes.Status201Created));
+        try
+        {
+            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var result = await _ticketService.SaveSupportTicketAsync(request, currentUser, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.SaveSuccess, CommonStatusCodes.Status201Created));
+        }
+        catch (AlreadyProcessedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (Exception)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -68,9 +102,32 @@ public class SupportTicketsController : ControllerBase
     [ActionName(nameof(UpdateSupportTicketAsyncById))]
     public async Task<ActionResult<ApiResponse<SupportTicketDto>>> UpdateSupportTicketAsyncById(Guid id, [FromBody] UpdateSupportTicketRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var result = await _ticketService.UpdateSupportTicketAsyncById(id, request, currentUser, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.UpdateSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var result = await _ticketService.UpdateSupportTicketAsyncById(id, request, currentUser, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.UpdateSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (RecordDeletedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
+        catch (RecordModifiedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (AlreadyProcessedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (KeyNotFoundException)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<SupportTicketDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
+        }
+        catch (Exception)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -80,9 +137,32 @@ public class SupportTicketsController : ControllerBase
     [ActionName(nameof(ReplySupportTicketAsync))]
     public async Task<ActionResult<ApiResponse<SupportTicketDto>>> ReplySupportTicketAsync(Guid id, [FromBody] ReplyTicketRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var result = await _ticketService.ReplySupportTicketAsync(id, request, currentUser, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.ReplySuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var result = await _ticketService.ReplySupportTicketAsync(id, request, currentUser, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.ReplySuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (RecordDeletedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
+        catch (RecordModifiedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (AlreadyProcessedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (KeyNotFoundException)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<SupportTicketDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
+        }
+        catch (Exception)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -92,7 +172,30 @@ public class SupportTicketsController : ControllerBase
     [ActionName(nameof(DeleteSupportTicketAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeleteSupportTicketAsyncById(Guid id, CancellationToken cancellationToken)
     {
-        await _ticketService.DeleteSupportTicketAsyncById(id, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.SupportTickets.DeleteSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            await _ticketService.DeleteSupportTicketAsyncById(id, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.SupportTickets.DeleteSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (RecordDeletedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
+        catch (RecordModifiedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (AlreadyProcessedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (KeyNotFoundException)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
+        }
+        catch (Exception)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 }

@@ -63,4 +63,5 @@ public class CreateExpenseRequestDto
 
 public class UpdateExpenseRequestDto : CreateExpenseRequestDto
 {
+    public DateTime? ModifiedOn { get; set; }
 }

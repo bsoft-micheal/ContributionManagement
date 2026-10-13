@@ -115,6 +115,25 @@ public class SupportTicketRepository : ISupportTicketRepository
         }
     }
 
+    public async Task<SupportTicket?> GetByIdWithDeletedAsync(Guid ticketId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.SupportTickets
+                .Include(x => x.User)
+                .Include(x => x.Event)
+                .Include(x => x.TicketTypeItem)
+                .Include(x => x.PriorityItem)
+                .Include(x => x.StatusItem)
+                .FirstOrDefaultAsync(x => x.TicketId == ticketId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetByIdWithDeletedAsync));
+            throw;
+        }
+    }
+
     public async Task<SupportTicket?> GetByTicketNoAsync(string ticketNo, CancellationToken cancellationToken = default)
     {
         try

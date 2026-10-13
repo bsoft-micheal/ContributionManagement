@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Expenses;
+using TeamContributionManagementSystem.Application.Exceptions;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -52,9 +53,21 @@ public class ExpenseService : IExpenseService
     {
         try
         {
-            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
+            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken);
+            if (expense == null)
+            {
+                var existingAny = await _expenseRepository.GetByIdWithDeletedAsync(expenseId, cancellationToken);
+                if (existingAny != null && existingAny.IsDeleted)
+                {
+                    throw new RecordDeletedException();
+                }
+                throw new RecordDeletedException();
+            }
             return _mapper.Map<ExpenseDto>(expense);
+        }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -67,6 +80,18 @@ public class ExpenseService : IExpenseService
     {
         try
         {
+            var existingExpenses = await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken);
+            var rapidDup = existingExpenses.FirstOrDefault(e =>
+                string.Equals(e.EventName, request.EventName.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(e.Category, request.Category.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                e.Amount == request.Amount &&
+                e.CreatedOn.HasValue &&
+                Math.Abs((DateTime.UtcNow - e.CreatedOn.Value).TotalSeconds) < 5);
+            if (rapidDup != null)
+            {
+                throw new AlreadyProcessedException("This action has already been completed.");
+            }
+
             await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, request.Amount, null, cancellationToken);
 
             var attachment = !string.IsNullOrWhiteSpace(request.FileData)
@@ -115,6 +140,10 @@ public class ExpenseService : IExpenseService
             _logger.LogInformation(CommonLogMessages.Expenses.ExpenseCreated, expense.ExpenseId, expense.Amount);
             return _mapper.Map<ExpenseDto>(expense);
         }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(CreateAsync));
@@ -126,8 +155,36 @@ public class ExpenseService : IExpenseService
     {
         try
         {
-            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
+            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken);
+            if (expense == null)
+            {
+                var existingAny = await _expenseRepository.GetByIdWithDeletedAsync(expenseId, cancellationToken);
+                if (existingAny != null && existingAny.IsDeleted)
+                {
+                    throw new RecordDeletedException();
+                }
+                throw new RecordDeletedException();
+            }
+
+            if (request.ModifiedOn.HasValue && expense.ModifiedOn.HasValue)
+            {
+                if (Math.Abs((expense.ModifiedOn.Value - request.ModifiedOn.Value).TotalSeconds) > 1)
+                {
+                    throw new RecordModifiedException();
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Status) &&
+                string.Equals(expense.Status, request.Status.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                !expense.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+            {
+                if (expense.Amount == request.Amount &&
+                    string.Equals(expense.EventName, request.EventName?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(expense.Category, request.Category?.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new AlreadyProcessedException("This action has already been completed.");
+                }
+            }
 
             await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, request.Amount, expenseId, cancellationToken);
 
@@ -168,6 +225,10 @@ public class ExpenseService : IExpenseService
 
             _logger.LogInformation(CommonLogMessages.Expenses.ExpenseUpdated, expense.ExpenseId);
             return _mapper.Map<ExpenseDto>(expense);
+        }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -222,13 +283,25 @@ public class ExpenseService : IExpenseService
     {
         try
         {
-            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken)
-                ?? throw new KeyNotFoundException(CommonMessages.Expenses.NotFound);
+            var expense = await _expenseRepository.GetByIdAsync(expenseId, cancellationToken);
+            if (expense == null)
+            {
+                var existingAny = await _expenseRepository.GetByIdWithDeletedAsync(expenseId, cancellationToken);
+                if (existingAny != null && existingAny.IsDeleted)
+                {
+                    throw new RecordDeletedException();
+                }
+                throw new RecordDeletedException();
+            }
 
             _expenseRepository.Delete(expense);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(CommonLogMessages.Expenses.ExpenseDeleted, expenseId);
+        }
+        catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

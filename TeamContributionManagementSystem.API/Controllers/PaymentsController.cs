@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Payments;
+using TeamContributionManagementSystem.Application.Exceptions;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 
 namespace TeamContributionManagementSystem.API.Controllers;
@@ -36,8 +37,15 @@ public class PaymentsController : ControllerBase
         [FromQuery] DateTime? endDate,
         CancellationToken cancellationToken)
     {
-        var result = await _transactionService.GetAllPaymentAsync(eventName, mode, status, startDate, endDate, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<PaymentTransactionDto>>.SuccessResult(result, CommonMessages.Payments.GetAllSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var result = await _transactionService.GetAllPaymentAsync(eventName, mode, status, startDate, endDate, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<PaymentTransactionDto>>.SuccessResult(result, CommonMessages.Payments.GetAllSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<IReadOnlyCollection<PaymentTransactionDto>>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -47,8 +55,23 @@ public class PaymentsController : ControllerBase
     [ActionName(nameof(GetPaymentAsyncById))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> GetPaymentAsyncById(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _transactionService.GetPaymentAsyncById(id, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.GetByIdSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var result = await _transactionService.GetPaymentAsyncById(id, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.GetByIdSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (RecordDeletedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
+        catch (KeyNotFoundException)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentTransactionDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -58,9 +81,20 @@ public class PaymentsController : ControllerBase
     [ActionName(nameof(SavePaymentAsync))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> SavePaymentAsync([FromBody] CreatePaymentTransactionRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var result = await _transactionService.SavePaymentAsync(request, currentUser, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.SaveSuccess, CommonStatusCodes.Status201Created));
+        try
+        {
+            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var result = await _transactionService.SavePaymentAsync(request, currentUser, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.SaveSuccess, CommonStatusCodes.Status201Created));
+        }
+        catch (AlreadyProcessedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -71,8 +105,19 @@ public class PaymentsController : ControllerBase
     [ActionName(nameof(SubmitPaymentProofAsync))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> SubmitPaymentProofAsync([FromBody] SubmitPaymentProofDto request, CancellationToken cancellationToken)
     {
-        var result = await _transactionService.SubmitProofAsync(request, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.SubmitProofSuccess, CommonStatusCodes.Status201Created));
+        try
+        {
+            var result = await _transactionService.SubmitProofAsync(request, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.SubmitProofSuccess, CommonStatusCodes.Status201Created));
+        }
+        catch (AlreadyProcessedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -88,12 +133,19 @@ public class PaymentsController : ControllerBase
         [FromQuery] string? memberName,
         CancellationToken cancellationToken)
     {
-        var result = await _transactionService.GetPaymentContextAsync(eventId, memberId, eventName, memberName, cancellationToken);
-        if (result == null)
+        try
         {
-            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentContextDto>.FailureResult(CommonMessages.General.NotFound, CommonStatusCodes.Status404NotFound));
+            var result = await _transactionService.GetPaymentContextAsync(eventId, memberId, eventName, memberName, cancellationToken);
+            if (result == null)
+            {
+                return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentContextDto>.FailureResult(CommonMessages.General.NotFound, CommonStatusCodes.Status404NotFound));
+            }
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentContextDto>.SuccessResult(result, CommonMessages.Payments.GetContextSuccess, CommonStatusCodes.Status200OK));
         }
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentContextDto>.SuccessResult(result, CommonMessages.Payments.GetContextSuccess, CommonStatusCodes.Status200OK));
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentContextDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -104,9 +156,32 @@ public class PaymentsController : ControllerBase
     [ActionName(nameof(VerifyPaymentAsync))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> VerifyPaymentAsync(Guid id, [FromBody] VerifyPaymentRequestDto request, CancellationToken cancellationToken)
     {
-        var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
-        var result = await _transactionService.VerifyPaymentAsync(id, request, currentUser, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.VerifySuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var result = await _transactionService.VerifyPaymentAsync(id, request, currentUser, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentTransactionDto>.SuccessResult(result, CommonMessages.Payments.VerifySuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (RecordDeletedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
+        catch (RecordModifiedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (AlreadyProcessedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (KeyNotFoundException)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentTransactionDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 
     /// <summary>
@@ -117,7 +192,30 @@ public class PaymentsController : ControllerBase
     [ActionName(nameof(DeletePaymentAsyncById))]
     public async Task<ActionResult<ApiResponse>> DeletePaymentAsyncById(Guid id, CancellationToken cancellationToken)
     {
-        await _transactionService.DeletePaymentAsyncById(id, cancellationToken);
-        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Payments.DeleteSuccess, CommonStatusCodes.Status200OK));
+        try
+        {
+            await _transactionService.DeletePaymentAsyncById(id, cancellationToken);
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.Payments.DeleteSuccess, CommonStatusCodes.Status200OK));
+        }
+        catch (RecordDeletedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
+        catch (RecordModifiedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (AlreadyProcessedException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (KeyNotFoundException)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+        }
     }
 }
