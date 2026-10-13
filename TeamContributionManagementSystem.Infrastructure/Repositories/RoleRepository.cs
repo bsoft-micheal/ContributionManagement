@@ -23,23 +23,6 @@ public class RoleRepository : IRoleRepository
     {
         try
         {
-            var memberRoleIds = await _context.UserRoles
-                .Where(ur => ur.User != null && !ur.User.IsDeleted)
-                .Select(ur => ur.RoleId)
-                .Distinct()
-                .ToListAsync(cancellationToken);
-
-            var userRoleNames = await _context.UserRoles
-                .Where(ur => ur.User != null && !ur.User.IsDeleted && ur.Role != null)
-                .Select(ur => ur.Role!.RoleName.ToLower())
-                .Distinct()
-                .ToListAsync(cancellationToken);
-
-            var roleRightNames = await _context.RoleRights
-                .Select(r => r.Role.ToString().ToLower())
-                .Distinct()
-                .ToListAsync(cancellationToken);
-
             var users = await _context.Users
                 .AsNoTracking()
                 .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })

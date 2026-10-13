@@ -357,40 +357,6 @@ public class SystemSettingService : ISystemSettingService
     private static string CleanQrAndPaymentLinks(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return text;
-
-        const string replacementText = "Please log in to the portal to view details and complete your contribution payment.";
-
-        var phrasesToClean = new[]
-        {
-            "Please scan the attached dynamic UPI QR code or click the payment link to pay:",
-            "Please scan the dynamic UPI QR code below or tap the payment link to contribute:",
-            "Please use the payment link or scan the dynamic UPI QR code:",
-            "Pay via UPI link or scan the QR code:",
-            "Please scan the QR code below or use the payment link:",
-            "Please scan the dynamic UPI QR code or use the payment link:",
-            "Please complete your payment at your earliest convenience using UPI:",
-            "Please settle this via UPI so we can finalize bookings:",
-            "Please scan the attached dynamic UPI QR code.",
-            "Please scan the dynamic UPI QR code.",
-            "Please scan the attached dynamic UPI QR code",
-            "Please scan the dynamic UPI QR code"
-        };
-
-        var cleaned = text;
-
-        foreach (var phrase in phrasesToClean)
-        {
-            cleaned = cleaned.Replace(phrase, replacementText, StringComparison.OrdinalIgnoreCase);
-        }
-
-        cleaned = cleaned
-            .Replace("{paymentLink}", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("{qrCode}", string.Empty, StringComparison.OrdinalIgnoreCase);
-
-        // Normalize 3+ escaped or raw newlines to double newlines
-        cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"(\\n){3,}", @"\n\n");
-        cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"(\r?\n){3,}", "\n\n");
-
-        return cleaned.Trim();
+        return text.Trim();
     }
 }
