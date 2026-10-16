@@ -6,6 +6,7 @@ namespace TeamContributionManagementSystem.Application.Interfaces.Repositories;
 public interface IEventRepository
 {
     Task<List<EventSummaryDto>> GetAllAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default);
+    Task<List<EventSummaryDto>> GetAllForOrganizerAsync(Guid organizerUserId, int? month = null, int? year = null, CancellationToken cancellationToken = default);
     Task<List<EventSummaryDto>> GetAllForMemberAsync(Guid memberId, int? month = null, int? year = null, CancellationToken cancellationToken = default);
     Task<List<EventSummaryDto>> GetUpcomingAsync(int count, CancellationToken cancellationToken = default);
     Task<Event?> GetByIdAsync(Guid eventId, CancellationToken cancellationToken = default);

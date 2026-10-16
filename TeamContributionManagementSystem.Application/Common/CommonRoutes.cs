@@ -30,6 +30,8 @@ public static class CommonRoutes
         public const string SendReminders = "{eventId:guid}/send-reminders";
         public const string SendRemindersAsync = "sendRemindersAsync/{eventId:guid}";
         public const string PreviewContributions = "previewContributionsAsync";
+        public const string GetAvailableAmountInHand = "getAvailableAmountInHandAsync";
+        public const string GetAvailableBalance = "getAvailableBalanceAsync";
     }
 
     public static class Members

@@ -25,6 +25,7 @@ public class SupportTicketDto
     public DateTime? CreatedOn { get; set; }
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
+    public string? VerifiedBy { get; set; }
 }
 
 public class CreateSupportTicketRequestDto

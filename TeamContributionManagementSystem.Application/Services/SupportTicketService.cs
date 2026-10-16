@@ -94,6 +94,37 @@ public class SupportTicketService : ISupportTicketService
                     (myMemberIdStr != null && string.Equals(t.CreatedBy, myMemberIdStr, StringComparison.OrdinalIgnoreCase))
                 ).ToList();
             }
+            else if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    var orgUserIdStr = orgUserId.Value.ToString();
+                    var orgUserName = _currentUserService.UserName?.Trim();
+                    var orgEmail = _currentUserService.Email?.Trim();
+
+                    return all.Where(t =>
+                        (t.EventId.HasValue && myEventIds.Contains(t.EventId.Value)) ||
+                        (!string.IsNullOrWhiteSpace(t.RelatedEvent) && myEventNames.Contains(t.RelatedEvent.Trim().ToLower())) ||
+                        (orgUserIdStr != null && string.Equals(t.MemberId, orgUserIdStr, StringComparison.OrdinalIgnoreCase)) ||
+                        (orgUserName != null && string.Equals(t.CreatedBy, orgUserName, StringComparison.OrdinalIgnoreCase)) ||
+                        (orgEmail != null && string.Equals(t.CreatedBy, orgEmail, StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+                }
+            }
             return all;
         }
         catch (Exception ex)
@@ -142,7 +173,22 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            return _mapper.Map<SupportTicketDto>(ticket);
+            var dto = _mapper.Map<SupportTicketDto>(ticket);
+            dto.VerifiedBy = !string.IsNullOrWhiteSpace(ticket.AssignedTo) ? ticket.AssignedTo : null;
+            if (ticket.ModifiedBy.HasValue && _userRepository != null)
+            {
+                var modUser = await _userRepository.GetByIdAsync(ticket.ModifiedBy.Value, cancellationToken);
+                if (modUser != null)
+                {
+                    var modName = !string.IsNullOrWhiteSpace(modUser.FullName) ? modUser.FullName : modUser.Username;
+                    dto.ModifiedBy = modName;
+                    if (string.IsNullOrWhiteSpace(dto.VerifiedBy))
+                    {
+                        dto.VerifiedBy = modName;
+                    }
+                }
+            }
+            return dto;
         }
         catch (Exception ex)
         {
@@ -493,13 +539,14 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            var timestamp = DateTime.UtcNow.ToString("dd MMM yyyy, hh:mm tt");
             var sender = !string.IsNullOrWhiteSpace(user)
                 ? user.Trim()
                 : (!string.IsNullOrWhiteSpace(_currentUserService?.UserName)
                     ? _currentUserService.UserName
                     : (string.IsNullOrWhiteSpace(ticket.MemberName) ? "Admin" : ticket.MemberName));
-            var newNote = $"[{timestamp}] {sender}: {request.Message.Trim()}";
+            var newNote = request.Message.Trim();
+
+            ticket.AssignedTo = sender;
 
             if (string.IsNullOrWhiteSpace(ticket.ResolutionNotes))
             {
