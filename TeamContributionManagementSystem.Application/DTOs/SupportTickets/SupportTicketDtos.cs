@@ -45,8 +45,9 @@ public class CreateSupportTicketRequestDto
     [MaxLength(100)]
     public string TicketType { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Description is required.")]
     [MaxLength(2000)]
-    public string? Description { get; set; }
+    public string Description { get; set; } = string.Empty;
 
     [MaxLength(50)]
     public string? Status { get; set; }
@@ -60,7 +61,6 @@ public class CreateSupportTicketRequestDto
     [MaxLength(100)]
     public string? Utr { get; set; }
 
-    [Required(ErrorMessage = "Attachment is required.")]
     public string? Attachment { get; set; }
 }
 

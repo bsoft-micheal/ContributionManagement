@@ -105,7 +105,6 @@ public class DashboardService : IDashboardService
                 var memberEventExpensesSum = memberEvents.Sum(x =>
                     allExpenses.Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase)).Sum(e => e.Amount)
                 );
-                var memberRemaining = memberEventCollectedSum - memberEventExpensesSum;
 
                 return new DashboardSummaryDto
                 {
@@ -113,16 +112,15 @@ public class DashboardService : IDashboardService
                     TotalContributions = memberEventCollectedSum,
                     PendingPayments = memberEvents.Count > 0 ? memberEventPendingCount : memberPendingContributions.Count,
                     TotalPendingAmount = memberEvents.Count > 0 ? memberEventPendingSum : memberPendingContributions.Sum(x => x.Amount),
-                    TotalExpectedAmount = memberEvents.Sum(x => x.TotalExpectedAmount),
+                    TotalExpectedAmount = memberEventCollectedSum + memberEventPendingSum,
                     TotalExpenses = memberEventExpensesSum,
-                    TotalRemainingAmount = memberRemaining,
+                    TotalRemainingAmount = 0m,
                     UpcomingEvents = memberEvents.Select(x => {
                         var overallEvent = allMonthlyEvents.FirstOrDefault(e => e.EventId == x.EventId);
                         var eventExp = allExpenses
                             .Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
                             .Sum(e => e.Amount);
                         var overallExpVal = overallEvent != null ? overallEvent.TotalExpectedAmount : x.TotalExpectedAmount;
-                        var eventRemaining = x.TotalPaidAmount - eventExp;
                         return new UpcomingEventDto
                         {
                             EventId = x.EventId,
@@ -133,10 +131,10 @@ public class DashboardService : IDashboardService
                             CollectedAmount = x.TotalPaidAmount,
                             PendingAmount = x.TotalExpectedAmount - x.TotalPaidAmount,
                             ExpenseAmount = eventExp,
-                            RemainingAmount = eventRemaining,
+                            RemainingAmount = 0m,
                             OverallExpectedAmount = overallExpVal,
                             OverallExpenseAmount = eventExp,
-                            OverallRemainingAmount = eventRemaining,
+                            OverallRemainingAmount = 0m,
                             PendingContributionsCount = x.PendingContributionsCount,
                             TotalContributionsCount = x.ParticipantCount,
                             CreatedBy = x.CreatedBy,

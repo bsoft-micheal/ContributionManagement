@@ -494,7 +494,11 @@ public class SupportTicketService : ISupportTicketService
             }
 
             var timestamp = DateTime.UtcNow.ToString("dd MMM yyyy, hh:mm tt");
-            var sender = string.IsNullOrWhiteSpace(user) ? (string.IsNullOrWhiteSpace(ticket.MemberName) ? "User" : ticket.MemberName) : user.Trim();
+            var sender = !string.IsNullOrWhiteSpace(user)
+                ? user.Trim()
+                : (!string.IsNullOrWhiteSpace(_currentUserService?.UserName)
+                    ? _currentUserService.UserName
+                    : (string.IsNullOrWhiteSpace(ticket.MemberName) ? "Admin" : ticket.MemberName));
             var newNote = $"[{timestamp}] {sender}: {request.Message.Trim()}";
 
             if (string.IsNullOrWhiteSpace(ticket.ResolutionNotes))
@@ -503,7 +507,7 @@ public class SupportTicketService : ISupportTicketService
             }
             else
             {
-                ticket.ResolutionNotes += "\n            " + newNote;
+                ticket.ResolutionNotes += "\n" + newNote;
             }
 
             if (!string.IsNullOrWhiteSpace(request.Status))
@@ -516,7 +520,8 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            ticket.ModifiedBy = CommonMethods.ParseNullableGuid(user);
+            ticket.ModifiedBy = CommonMethods.ParseNullableGuid(user)
+                ?? (_currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : null);
             ticket.ModifiedOn = DateTime.UtcNow;
 
             _ticketRepository.Update(ticket);
