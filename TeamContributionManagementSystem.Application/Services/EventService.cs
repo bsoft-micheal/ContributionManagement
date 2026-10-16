@@ -108,6 +108,10 @@ public class EventService : IEventService
                 foreach (var ev in memberEvents)
                 {
                     var overallEvent = allMonthlyEvents.FirstOrDefault(e => e.EventId == ev.EventId);
+                    if (overallEvent != null)
+                    {
+                        ev.SupportTicketRaisedCount = overallEvent.SupportTicketRaisedCount;
+                    }
                     var eventExp = allExpenses
                         .Where(e => string.Equals(e.EventName?.Trim(), ev.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
                         .Sum(e => e.Amount);
