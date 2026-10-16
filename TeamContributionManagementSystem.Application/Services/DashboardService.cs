@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Dashboard;
+using TeamContributionManagementSystem.Application.DTOs.Events;
+using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -144,9 +146,45 @@ public class DashboardService : IDashboardService
                 };
             }
 
-            // Admin / Organizer: return all users' aggregated data as currently
-            var monthlyEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
-            var pendingContributions = await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken);
+            List<EventSummaryDto> monthlyEvents;
+            List<ContributionDto> pendingContributions;
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+                else if (!string.IsNullOrWhiteSpace(_currentUserService.Email) && _memberRepository != null)
+                {
+                    var u = await _memberRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
+                    if (u != null) orgUserId = u.MemberId;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    monthlyEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, filterMonth, filterYear, cancellationToken);
+                    var orgEventIds = monthlyEvents.Select(e => e.EventId).ToHashSet();
+                    var allPending = await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken);
+                    pendingContributions = allPending.Where(p => orgEventIds.Contains(p.EventId)).ToList();
+                }
+                else
+                {
+                    monthlyEvents = new List<EventSummaryDto>();
+                    pendingContributions = new List<ContributionDto>();
+                }
+            }
+            else
+            {
+                // Admin: return all system data
+                monthlyEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
+                pendingContributions = await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken);
+            }
 
             var eventPendingSum = monthlyEvents.Sum(x => x.TotalExpectedAmount - x.TotalPaidAmount);
             var eventPendingCount = monthlyEvents.Sum(x => x.PendingContributionsCount);

@@ -11,6 +11,8 @@ public interface ICurrentUserService
     bool HasRole(string roleName);
     bool HasRoleId(Guid roleId);
     Guid? MemberId { get; }
+    bool IsAdminRole { get; }
+    bool IsOrganizerRole { get; }
     bool IsMemberRole { get; }
     bool IsMemberOnlyRole { get; }
     bool IsAuthenticated { get; }

@@ -20,6 +20,7 @@ public class ContributionService : IContributionService
     private readonly IMemberRepository? _memberRepository;
     private readonly IStatusRepository? _statusRepository;
     private readonly IPaymentModeRepository? _paymentModeRepository;
+    private readonly IEventRepository? _eventRepository;
 
     public ContributionService(
         ILogger<ContributionService> logger,
@@ -29,7 +30,8 @@ public class ContributionService : IContributionService
         ICurrentUserService? currentUserService = null,
         IMemberRepository? memberRepository = null,
         IStatusRepository? statusRepository = null,
-        IPaymentModeRepository? paymentModeRepository = null)
+        IPaymentModeRepository? paymentModeRepository = null,
+        IEventRepository? eventRepository = null)
     {
         _logger = logger;
         _contributionRepository = contributionRepository;
@@ -39,6 +41,7 @@ public class ContributionService : IContributionService
         _memberRepository = memberRepository;
         _statusRepository = statusRepository;
         _paymentModeRepository = paymentModeRepository;
+        _eventRepository = eventRepository;
     }
 
     public async Task<IReadOnlyCollection<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default)
@@ -65,6 +68,19 @@ public class ContributionService : IContributionService
                 }
                 return Array.Empty<ContributionDto>();
             }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    return all.Where(c => myEventIds.Contains(c.EventId)).ToList();
+                }
+                return Array.Empty<ContributionDto>();
+            }
+
             return all;
         }
         catch (Exception ex)
@@ -98,6 +114,21 @@ public class ContributionService : IContributionService
                 }
                 return Array.Empty<ContributionDto>();
             }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var isMyEvent = myEvents.Any(e => e.EventId == eventId);
+                    if (!isMyEvent)
+                    {
+                        return Array.Empty<ContributionDto>();
+                    }
+                }
+            }
+
             return byEvent;
         }
         catch (Exception ex)
@@ -111,6 +142,19 @@ public class ContributionService : IContributionService
     {
         try
         {
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    if (!myEvents.Any(e => e.EventId == request.EventId))
+                    {
+                        throw new UnauthorizedAccessException("You are only permitted to record payments for events you organize.");
+                    }
+                }
+            }
+
             var contribution = await _contributionRepository.GetByEventAndMemberAsync(request.EventId, request.MemberId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Contributions.NotFound);
 
@@ -343,5 +387,27 @@ public class ContributionService : IContributionService
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetMySummaryAsync));
             throw;
         }
+    }
+
+    private async Task<Guid?> GetOrganizerIdAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserService == null) return null;
+        if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+        {
+            return parsedGuid;
+        }
+        if (_currentUserService.MemberId.HasValue)
+        {
+            return _currentUserService.MemberId.Value;
+        }
+        if (!string.IsNullOrWhiteSpace(_currentUserService.Email) && _memberRepository != null)
+        {
+            var myMember = await _memberRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
+            if (myMember != null)
+            {
+                return myMember.MemberId;
+            }
+        }
+        return null;
     }
 }

@@ -80,6 +80,23 @@ public class PaymentTransactionService : IPaymentTransactionService
                 }
                 return Array.Empty<PaymentTransactionDto>();
             }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet();
+
+                    return all.Where(t =>
+                        (t.EventId.HasValue && myEventIds.Contains(t.EventId.Value)) ||
+                        (!string.IsNullOrWhiteSpace(t.EventName) && myEventNames.Contains(t.EventName.Trim().ToLower()))
+                    ).ToList();
+                }
+                return Array.Empty<PaymentTransactionDto>();
+            }
             return all;
         }
         catch (Exception ex)
@@ -116,6 +133,24 @@ public class PaymentTransactionService : IPaymentTransactionService
                 if (!isOwner)
                 {
                     throw new UnauthorizedAccessException("Access denied to requested payment transaction.");
+                }
+            }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet();
+
+                    var isMyEvent = (entity.EventId.HasValue && myEventIds.Contains(entity.EventId.Value)) ||
+                                    (!string.IsNullOrWhiteSpace(entity.EventName) && myEventNames.Contains(entity.EventName.Trim().ToLower()));
+                    if (!isMyEvent)
+                    {
+                        throw new UnauthorizedAccessException("Access denied to requested payment transaction.");
+                    }
                 }
             }
 
@@ -664,6 +699,24 @@ public class PaymentTransactionService : IPaymentTransactionService
                 throw new RecordDeletedException();
             }
 
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet();
+
+                    var isMyEvent = (entity.EventId.HasValue && myEventIds.Contains(entity.EventId.Value)) ||
+                                    (!string.IsNullOrWhiteSpace(entity.EventName) && myEventNames.Contains(entity.EventName.Trim().ToLower()));
+                    if (!isMyEvent)
+                    {
+                        throw new UnauthorizedAccessException("You are only permitted to verify payments for events you organize.");
+                    }
+                }
+            }
+
             var reqStatus = request.Status?.Trim() ?? string.Empty;
             if (string.Equals(reqStatus, "Paid", StringComparison.OrdinalIgnoreCase))
             {
@@ -968,6 +1021,28 @@ public class PaymentTransactionService : IPaymentTransactionService
         // Store screenshot/receipt data directly in the database (Base64 data URI)
         var trimmed = screenshotInput.Trim();
         return Task.FromResult<string?>(trimmed);
+    }
+
+    private async Task<Guid?> GetOrganizerIdAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserService == null) return null;
+        if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+        {
+            return parsedGuid;
+        }
+        if (_currentUserService.MemberId.HasValue)
+        {
+            return _currentUserService.MemberId.Value;
+        }
+        if (!string.IsNullOrWhiteSpace(_currentUserService.Email) && _memberRepository != null)
+        {
+            var myMember = await _memberRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
+            if (myMember != null)
+            {
+                return myMember.MemberId;
+            }
+        }
+        return null;
     }
 }
 

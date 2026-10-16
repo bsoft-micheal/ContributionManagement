@@ -129,6 +129,47 @@ public class EventService : IEventService
 
                 events = memberEvents;
             }
+            else if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+                else if (!string.IsNullOrWhiteSpace(_currentUserService.Email) && _userRepository != null)
+                {
+                    var u = await _userRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
+                    if (u != null) orgUserId = u.UserId;
+                }
+
+                if (!orgUserId.HasValue)
+                {
+                    return Array.Empty<EventSummaryDto>();
+                }
+
+                var organizerEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, month, year, cancellationToken);
+                foreach (var ev in organizerEvents)
+                {
+                    var eventExp = allExpenses
+                        .Where(e => string.Equals(e.EventName?.Trim(), ev.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
+                        .Sum(e => e.Amount);
+                    var eventRemaining = ev.TotalPaidAmount - eventExp;
+
+                    ev.CollectedAmount = ev.TotalPaidAmount;
+                    ev.PendingAmount = ev.TotalExpectedAmount - ev.TotalPaidAmount;
+                    ev.ExpenseAmount = eventExp;
+                    ev.RemainingAmount = eventRemaining;
+                    ev.OverallExpectedAmount = ev.TotalExpectedAmount;
+                    ev.OverallExpenseAmount = eventExp;
+                    ev.OverallRemainingAmount = eventRemaining;
+                }
+
+                events = organizerEvents;
+            }
             else
             {
                 var monthlyEvents = await _eventRepository.GetAllAsync(month, year, cancellationToken);
@@ -291,6 +332,25 @@ public class EventService : IEventService
                 throw new InvalidOperationException("Event cannot be saved with ₹0. Please configure budget calculation rates or enter a valid contribution amount.");
             }
 
+            decimal allocatedAmount = 0m;
+            if (request.UseAvailableBalance)
+            {
+                allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
+                    ? request.AllocatedAmount.Value
+                    : request.BaseAmount;
+
+                if (allocatedAmount > request.BaseAmount)
+                {
+                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N2}) cannot exceed the planned budget (₹{request.BaseAmount:N2}).");
+                }
+
+                var balanceInfo = await GetAvailableAmountInHandAsync(cancellationToken);
+                if (allocatedAmount > balanceInfo.AvailableAmountInHand)
+                {
+                    throw new InvalidOperationException($"The selected deduction (₹{allocatedAmount:N2}) exceeds the available Amount In Hand (₹{balanceInfo.AvailableAmountInHand:N2}).");
+                }
+            }
+
             var eventItem = new Event
             {
                 EventId = Guid.NewGuid(),
@@ -302,7 +362,9 @@ public class EventService : IEventService
                 CreatedAt = DateTime.UtcNow,
                 Description = (request.Description ?? string.Empty).Trim(),
                 Status = request.Status != 0 ? request.Status : EventStatus.Planned,
-                BaseAmount = request.BaseAmount
+                BaseAmount = request.BaseAmount,
+                UseAvailableBalance = request.UseAvailableBalance,
+                AllocatedAmount = allocatedAmount
             };
 
             foreach (var member in members)
@@ -320,10 +382,14 @@ public class EventService : IEventService
                 });
             }
 
+            var remainingBudgetToCollect = request.UseAvailableBalance
+                ? Math.Max(0m, request.BaseAmount - allocatedAmount)
+                : request.BaseAmount;
+
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
                 eventItem.EventDate,
-                request.BaseAmount,
+                remainingBudgetToCollect,
                 members,
                 request.ContributionOverrides ?? new List<ContributionOverrideDto>());
 
@@ -336,18 +402,20 @@ public class EventService : IEventService
                 pendingStatusId = pendingStatus?.StatusId;
             }
 
+            var isFullyFunded = request.UseAvailableBalance && remainingBudgetToCollect == 0m;
+
             var contributions = members.Select(member => new Contribution
             {
                 ContributionId = Guid.NewGuid(),
                 EventId = eventItem.EventId,
                 UserId = member.MemberId,
                 MemberId = member.MemberId,
-                Amount = memberAmounts.TryGetValue(member.MemberId, out var amount) ? amount : 0m,
-                StatusId = pendingStatusId,
-                PaymentStatus = PaymentStatus.Pending,
+                Amount = isFullyFunded ? 0m : (memberAmounts.TryGetValue(member.MemberId, out var amount) ? amount : 0m),
+                StatusId = isFullyFunded ? null : pendingStatusId,
+                PaymentStatus = isFullyFunded ? PaymentStatus.Paid : PaymentStatus.Pending,
                 PaymentMode = PaymentMode.None,
                 PaymentModeId = null,
-                PaymentDate = null,
+                PaymentDate = isFullyFunded ? DateTime.UtcNow : null,
                 CashAmount = null,
                 UpiAmount = null,
                 IsActive = true,
@@ -1037,6 +1105,18 @@ public class EventService : IEventService
             var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                var curUserId = _currentUserService.UserId;
+                if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
+                {
+                    if (eventItem.CreatedBy != curUserGuid && !eventItem.Participants.Any(p => p.UserId == curUserGuid))
+                    {
+                        throw new UnauthorizedAccessException("Organizers can only edit events they created or organize.");
+                    }
+                }
+            }
+
             // Disallow editing if any payments have been recorded for this event
             var hasPaidContributions = await _eventRepository.HasPaidContributionsAsync(eventId, cancellationToken)
                 || eventItem.Contributions.Any(c =>
@@ -1075,6 +1155,22 @@ public class EventService : IEventService
                 eventItem.Status = request.Status;
             }
             eventItem.BaseAmount = request.BaseAmount;
+            decimal allocatedAmount = 0m;
+            if (request.UseAvailableBalance)
+            {
+                allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
+                    ? request.AllocatedAmount.Value
+                    : request.BaseAmount;
+
+                if (allocatedAmount > request.BaseAmount)
+                {
+                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N2}) cannot exceed the planned budget (₹{request.BaseAmount:N2}).");
+                }
+            }
+
+            eventItem.BaseAmount = request.BaseAmount;
+            eventItem.UseAvailableBalance = request.UseAvailableBalance;
+            eventItem.AllocatedAmount = allocatedAmount;
             eventItem.ModifiedOn = DateTime.UtcNow;
 
             var newParticipantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
@@ -1089,10 +1185,14 @@ public class EventService : IEventService
                 throw new InvalidOperationException(CommonMessages.Events.ParticipantsNotFound);
             }
 
+            var remainingBudgetToCollect = request.UseAvailableBalance
+                ? Math.Max(0m, request.BaseAmount - allocatedAmount)
+                : request.BaseAmount;
+
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
                 eventItem.EventDate,
-                request.BaseAmount,
+                remainingBudgetToCollect,
                 members,
                 request.ContributionOverrides ?? new List<ContributionOverrideDto>());
 
@@ -1266,6 +1366,18 @@ public class EventService : IEventService
         {
             var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                var curUserId = _currentUserService.UserId;
+                if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
+                {
+                    if (eventItem.CreatedBy != curUserGuid && !eventItem.Participants.Any(p => p.UserId == curUserGuid))
+                    {
+                        throw new UnauthorizedAccessException("Organizers can only delete events they created or organize.");
+                    }
+                }
+            }
 
             var hasPaidContributions = await _eventRepository.HasPaidContributionsAsync(eventId, cancellationToken)
                 || (eventItem.Contributions != null && eventItem.Contributions.Any(c =>
@@ -1580,10 +1692,17 @@ public class EventService : IEventService
             }
 
             var memberLookup = members.ToDictionary(m => m.MemberId);
+            var allocatedAmount = request.UseAvailableBalance
+                ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? request.AllocatedAmount.Value : request.BaseAmount)
+                : 0m;
+            var remainingBudgetToCollect = request.UseAvailableBalance
+                ? Math.Max(0m, request.BaseAmount - allocatedAmount)
+                : request.BaseAmount;
+
             var detailedCalculations = CalculateDetailedMemberContributions(
                 eventType,
                 request.EventDate.Date,
-                request.BaseAmount,
+                remainingBudgetToCollect,
                 members,
                 request.ContributionOverrides);
 
@@ -1820,5 +1939,71 @@ public class EventService : IEventService
 
         // 6. Default fallback to standard templates (never null!)
         return (fallbackSubject, fallbackDesc);
+    }
+
+    public async Task<AvailableAmountInHandDto> GetAvailableAmountInHandAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // 1. Total Collections across all events
+            var allContributions = await _contributionRepository.GetAllAsync(cancellationToken);
+            var totalCollections = allContributions
+                .Where(c => c.PaymentStatus == PaymentStatus.Paid ||
+                            (!string.IsNullOrWhiteSpace(c.StatusName) && (
+                                c.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                                c.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                                c.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
+                                c.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))) ||
+                            (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                            (c.UpiAmount.HasValue && c.UpiAmount.Value > 0) ||
+                            c.PaymentDate != null)
+                .Sum(c => c.Amount);
+
+            // 2. Total Verified/Approved Expenses across all events
+            var allExpensesRaw = _expenseRepository != null
+                ? await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken)
+                : new List<TeamContributionManagementSystem.Application.DTOs.Expenses.ExpenseDto>();
+
+            var allExpenses = allExpensesRaw
+                .Where(e => !string.IsNullOrWhiteSpace(e.Status) && (
+                    e.Status.Contains("verif", StringComparison.OrdinalIgnoreCase) ||
+                    e.Status.Contains("approv", StringComparison.OrdinalIgnoreCase) ||
+                    e.Status.Equals("paid", StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            var totalExpenses = allExpenses.Sum(e => e.Amount);
+
+            // 3. Actual Amount In Hand
+            var actualAmountInHand = Math.Max(0m, totalCollections - totalExpenses);
+
+            // 4. Calculate unspent reservations for active/planned events using available balance
+            var allEvents = await _eventRepository.GetAllAsync(null, null, cancellationToken);
+            decimal totalReserved = 0m;
+
+            foreach (var ev in allEvents.Where(e => e.UseAvailableBalance && e.AllocatedAmount > 0))
+            {
+                var eventExpenses = allExpenses
+                    .Where(ex => string.Equals(ex.EventName?.Trim(), ev.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
+                    .Sum(ex => ex.Amount);
+
+                // Unspent reservation is remaining allocated budget not yet consumed by actual expenses
+                var unspentReservation = Math.Max(0m, ev.AllocatedAmount - eventExpenses);
+                totalReserved += unspentReservation;
+            }
+
+            var availableAmountInHand = Math.Max(0m, actualAmountInHand - totalReserved);
+
+            return new AvailableAmountInHandDto
+            {
+                ActualAmountInHand = Math.Round(actualAmountInHand, 2),
+                TotalReservedAmount = Math.Round(totalReserved, 2),
+                AvailableAmountInHand = Math.Round(availableAmountInHand, 2)
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAvailableAmountInHandAsync));
+            throw;
+        }
     }
 }

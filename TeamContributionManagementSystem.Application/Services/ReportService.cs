@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
+using TeamContributionManagementSystem.Application.DTOs.Events;
+using TeamContributionManagementSystem.Application.DTOs.Contributions;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Enums;
@@ -14,19 +17,22 @@ public class ReportService : IReportService
     private readonly IContributionRepository _contributionRepository;
     private readonly IExpenseRepository _expenseRepository;
     private readonly IPaymentTransactionRepository _paymentTransactionRepository;
+    private readonly ICurrentUserService? _currentUserService;
 
     public ReportService(
         ILogger<ReportService> logger, 
         IEventRepository eventRepository, 
         IContributionRepository contributionRepository,
         IExpenseRepository expenseRepository,
-        IPaymentTransactionRepository paymentTransactionRepository)
+        IPaymentTransactionRepository paymentTransactionRepository,
+        ICurrentUserService? currentUserService = null)
     {
         _logger = logger;
         _eventRepository = eventRepository;
         _contributionRepository = contributionRepository;
         _expenseRepository = expenseRepository;
         _paymentTransactionRepository = paymentTransactionRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<ReportsSummaryDto> GetSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
@@ -36,9 +42,40 @@ public class ReportService : IReportService
             int? targetMonth = (month == 0 || month == null) ? null : month;
             int? targetYear = (year == 0 || year == null) ? null : year;
 
-            var events = await _eventRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
+            List<EventSummaryDto> events;
             var pendingDues = await _contributionRepository.GetPendingAsync(targetMonth, targetYear, cancellationToken);
             var contributions = await _contributionRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    events = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, targetMonth, targetYear, cancellationToken);
+                    var orgEventIds = events.Select(e => e.EventId).ToHashSet();
+                    pendingDues = pendingDues.Where(p => orgEventIds.Contains(p.EventId)).ToList();
+                    contributions = contributions.Where(c => orgEventIds.Contains(c.EventId)).ToList();
+                }
+                else
+                {
+                    events = new List<EventSummaryDto>();
+                    pendingDues = new List<ContributionDto>();
+                    contributions = new List<ContributionDto>();
+                }
+            }
+            else
+            {
+                events = await _eventRepository.GetAllAsync(targetMonth, targetYear, cancellationToken);
+            }
 
             // Date filtering for expenses & payments
             DateTime? startDate = null;
