@@ -2,6 +2,7 @@ using System.IO;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.Exceptions;
 using TeamContributionManagementSystem.Application.Interfaces.Common;

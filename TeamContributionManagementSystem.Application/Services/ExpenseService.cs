@@ -271,11 +271,13 @@ public class ExpenseService : IExpenseService
         var remainingBudget = expectedAmount - spentAmount;
         if (expectedAmount > 0 && requestedAmount > remainingBudget)
         {
-            throw new InvalidOperationException(string.Format(
-                CommonMessages.Expenses.ExceedsExpectedBudgetFormat,
-                expectedAmount,
-                spentAmount,
-                Math.Max(0, remainingBudget)));
+            var extraAmount = (spentAmount + requestedAmount) - expectedAmount;
+            _logger.LogWarning(
+                "Expense amount {RequestedAmount} exceeds the remaining budget of {RemainingBudget} for event '{EventName}'. Total projected spending exceeds expected budget by {ExtraAmount}.",
+                requestedAmount,
+                Math.Max(0, remainingBudget),
+                eventItem.EventName,
+                extraAmount);
         }
     }
 
