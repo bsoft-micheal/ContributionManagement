@@ -40,6 +40,7 @@ public class EventSummaryDto
     public decimal StandardSharePercentage { get; set; }
     public string? RuleDescription { get; set; }
     public bool IsReferred { get; set; }
+    public int SupportTicketRaisedCount { get; set; }
 
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }

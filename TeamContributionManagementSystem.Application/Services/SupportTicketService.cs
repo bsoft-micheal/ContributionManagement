@@ -264,8 +264,8 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            Guid? eventId = null;
-            if (!string.IsNullOrWhiteSpace(request.RelatedEvent) && _eventRepository != null)
+            Guid? eventId = request.EventId;
+            if (!eventId.HasValue && !string.IsNullOrWhiteSpace(request.RelatedEvent) && _eventRepository != null)
             {
                 var eventObj = await _eventRepository.GetByNameAsync(request.RelatedEvent.Trim(), cancellationToken);
                 eventId = eventObj?.EventId;
@@ -367,7 +367,15 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            if (request.RelatedEvent != null)
+            if (request.EventId.HasValue)
+            {
+                ticket.EventId = request.EventId.Value;
+                if (!string.IsNullOrWhiteSpace(request.RelatedEvent))
+                {
+                    ticket.RelatedEvent = request.RelatedEvent.Trim();
+                }
+            }
+            else if (request.RelatedEvent != null)
             {
                 ticket.RelatedEvent = string.IsNullOrWhiteSpace(request.RelatedEvent) ? null : request.RelatedEvent.Trim();
                 if (!string.IsNullOrWhiteSpace(ticket.RelatedEvent) && _eventRepository != null)

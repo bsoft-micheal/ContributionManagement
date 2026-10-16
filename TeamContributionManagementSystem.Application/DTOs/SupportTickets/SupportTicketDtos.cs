@@ -8,6 +8,7 @@ public class SupportTicketDto
     public string TicketNo { get; set; } = string.Empty;
     public string MemberName { get; set; } = string.Empty;
     public string? MemberId { get; set; }
+    public Guid? EventId { get; set; }
     public string? RelatedEvent { get; set; }
     public string TicketType { get; set; } = string.Empty;
     public string? Subject { get; set; }
@@ -34,6 +35,8 @@ public class CreateSupportTicketRequestDto
 
     [MaxLength(100)]
     public string? MemberId { get; set; }
+
+    public Guid? EventId { get; set; }
 
     [MaxLength(200)]
     public string? RelatedEvent { get; set; }
@@ -68,6 +71,8 @@ public class UpdateSupportTicketRequestDto
 
     [MaxLength(100)]
     public string? MemberId { get; set; }
+
+    public Guid? EventId { get; set; }
 
     [MaxLength(200)]
     public string? RelatedEvent { get; set; }
