@@ -56,6 +56,7 @@ public class SupportTicketRepository : ISupportTicketRepository
                     TicketNo = x.TicketNo,
                     MemberName = x.User != null ? (!string.IsNullOrWhiteSpace(x.User.FullName) ? x.User.FullName : x.User.Username) : string.Empty,
                     MemberId = x.UserId != null ? x.UserId.ToString() : null,
+                    EventId = x.EventId,
                     RelatedEvent = x.Event != null ? x.Event.EventName : null,
                     TicketType = x.TicketTypeItem != null ? x.TicketTypeItem.TypeName : string.Empty,
                     Subject = x.Subject,

@@ -113,6 +113,36 @@ public class EventRepository : IEventRepository
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load photo event names."); }
 
+            var ticketCountByEventId = new Dictionary<Guid, int>();
+            var ticketCountByEventName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var activeTickets = await _context.SupportTickets
+                    .Where(t => !t.IsDeleted &&
+                        (t.StatusItem == null || (
+                            !t.StatusItem.StatusName.ToLower().Contains("resolve") &&
+                            !t.StatusItem.StatusName.ToLower().Contains("close")
+                        )) &&
+                        (t.EventId.HasValue || (t.Event != null && t.Event.EventId != Guid.Empty)))
+                    .Select(t => new {
+                        EventId = t.EventId ?? (t.Event != null ? t.Event.EventId : Guid.Empty),
+                        EventName = t.Event != null ? t.Event.EventName : string.Empty
+                    })
+                    .ToListAsync(cancellationToken);
+
+                ticketCountByEventId = activeTickets
+                    .Where(t => t.EventId != Guid.Empty)
+                    .GroupBy(t => t.EventId)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                ticketCountByEventName = activeTickets
+                    .Where(t => !string.IsNullOrEmpty(t.EventName))
+                    .GroupBy(t => t.EventName.Trim().ToLower())
+                    .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load support ticket counts."); }
+
             var results = await query
                 .OrderByDescending(x => x.EventDate)
                 .ThenByDescending(x => x.CreatedAt)
@@ -173,6 +203,16 @@ public class EventRepository : IEventRepository
 
             foreach (var r in results)
             {
+                int count = 0;
+                if (ticketCountByEventId.TryGetValue(r.EventId, out var c1))
+                {
+                    count = c1;
+                }
+                else if (!string.IsNullOrEmpty(r.EventName) && ticketCountByEventName.TryGetValue(r.EventName.Trim().ToLower(), out var c2))
+                {
+                    count = c2;
+                }
+                r.SupportTicketRaisedCount = count;
                 var cleanName = r.EventName.Trim().ToLower();
                 bool hasPaymentTxn = paymentTxnEventIds.Contains(r.EventId) || paymentTxnEventNames.Contains(cleanName);
                 bool hasPaidContrib = contribPaidEventIds.Contains(r.EventId);
@@ -277,8 +317,48 @@ public class EventRepository : IEventRepository
                 })
                 .ToListAsync(cancellationToken);
 
+            var ticketCountByEventId = new Dictionary<Guid, int>();
+            var ticketCountByEventName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var activeTickets = await _context.SupportTickets
+                    .Where(t => !t.IsDeleted &&
+                        (t.StatusItem == null || (
+                            !t.StatusItem.StatusName.ToLower().Contains("resolve") &&
+                            !t.StatusItem.StatusName.ToLower().Contains("close")
+                        )) &&
+                        (t.EventId.HasValue || (t.Event != null && t.Event.EventId != Guid.Empty)))
+                    .Select(t => new {
+                        EventId = t.EventId ?? (t.Event != null ? t.Event.EventId : Guid.Empty),
+                        EventName = t.Event != null ? t.Event.EventName : string.Empty
+                    })
+                    .ToListAsync(cancellationToken);
+
+                ticketCountByEventId = activeTickets
+                    .Where(t => t.EventId != Guid.Empty)
+                    .GroupBy(t => t.EventId)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                ticketCountByEventName = activeTickets
+                    .Where(t => !string.IsNullOrEmpty(t.EventName))
+                    .GroupBy(t => t.EventName.Trim().ToLower())
+                    .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load support ticket counts for member events."); }
+
             foreach (var r in results)
             {
+                int count = 0;
+                if (ticketCountByEventId.TryGetValue(r.EventId, out var c1))
+                {
+                    count = c1;
+                }
+                else if (!string.IsNullOrEmpty(r.EventName) && ticketCountByEventName.TryGetValue(r.EventName.Trim().ToLower(), out var c2))
+                {
+                    count = c2;
+                }
+                r.SupportTicketRaisedCount = count;
                 r.HasPaidContributions = r.HasPaidContributions || r.TotalPaidAmount > 0 || r.PaidContributionsCount > 0;
                 if (r.HasPaidContributions && r.PaidContributionsCount == 0)
                 {
@@ -345,6 +425,36 @@ public class EventRepository : IEventRepository
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load photo event names."); }
 
+            var ticketCountByEventId = new Dictionary<Guid, int>();
+            var ticketCountByEventName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var activeTickets = await _context.SupportTickets
+                    .Where(t => !t.IsDeleted &&
+                        (t.StatusItem == null || (
+                            !t.StatusItem.StatusName.ToLower().Contains("resolve") &&
+                            !t.StatusItem.StatusName.ToLower().Contains("close")
+                        )) &&
+                        (t.EventId.HasValue || (t.Event != null && t.Event.EventId != Guid.Empty)))
+                    .Select(t => new {
+                        EventId = t.EventId ?? (t.Event != null ? t.Event.EventId : Guid.Empty),
+                        EventName = t.Event != null ? t.Event.EventName : string.Empty
+                    })
+                    .ToListAsync(cancellationToken);
+
+                ticketCountByEventId = activeTickets
+                    .Where(t => t.EventId != Guid.Empty)
+                    .GroupBy(t => t.EventId)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                ticketCountByEventName = activeTickets
+                    .Where(t => !string.IsNullOrEmpty(t.EventName))
+                    .GroupBy(t => t.EventName.Trim().ToLower())
+                    .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to load support ticket counts for upcoming events."); }
+
             var results = await _context.Events
                 .Where(x => !x.IsDeleted && x.EventDate >= DateTime.UtcNow.Date)
                 .OrderBy(x => x.EventDate)
@@ -406,6 +516,16 @@ public class EventRepository : IEventRepository
 
             foreach (var r in results)
             {
+                int count = 0;
+                if (ticketCountByEventId.TryGetValue(r.EventId, out var c1))
+                {
+                    count = c1;
+                }
+                else if (!string.IsNullOrEmpty(r.EventName) && ticketCountByEventName.TryGetValue(r.EventName.Trim().ToLower(), out var c2))
+                {
+                    count = c2;
+                }
+                r.SupportTicketRaisedCount = count;
                 var cleanName = r.EventName.Trim().ToLower();
                 r.IsReferred = r.TotalPaidAmount > 0
                     || paymentTxnEventNames.Contains(cleanName)
@@ -567,6 +687,20 @@ public class EventRepository : IEventRepository
 
             if (details != null)
             {
+                try
+                {
+                    var cleanEventName = details.EventName.Trim().ToLower();
+                    details.SupportTicketRaisedCount = await _context.SupportTickets
+                        .CountAsync(t => !t.IsDeleted &&
+                            (t.EventId == details.EventId || (t.Event != null && t.Event.EventId == details.EventId) || (t.Event != null && t.Event.EventName.ToLower() == cleanEventName)) &&
+                            (t.StatusItem == null || (
+                                !t.StatusItem.StatusName.ToLower().Contains("resolve") &&
+                                !t.StatusItem.StatusName.ToLower().Contains("close")
+                            )), cancellationToken);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to load support ticket count for event details."); }
+
                 var cleanName = details.EventName.Trim().ToLower();
                 var hasTxn = await _context.PaymentTransactions.AnyAsync(x => !x.IsDeleted && x.Amount > 0 &&
                     (x.EventId == details.EventId || (x.Event != null && x.Event.EventId == details.EventId)), cancellationToken);
