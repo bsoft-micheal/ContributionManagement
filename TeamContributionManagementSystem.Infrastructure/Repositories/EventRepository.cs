@@ -516,16 +516,16 @@ public class EventRepository : IEventRepository
 
             foreach (var r in results)
             {
-                int count = 0;
+                int ticketCount = 0;
                 if (ticketCountByEventId.TryGetValue(r.EventId, out var c1))
                 {
-                    count = c1;
+                    ticketCount = c1;
                 }
                 else if (!string.IsNullOrEmpty(r.EventName) && ticketCountByEventName.TryGetValue(r.EventName.Trim().ToLower(), out var c2))
                 {
-                    count = c2;
+                    ticketCount = c2;
                 }
-                r.SupportTicketRaisedCount = count;
+                r.SupportTicketRaisedCount = ticketCount;
                 var cleanName = r.EventName.Trim().ToLower();
                 r.IsReferred = r.TotalPaidAmount > 0
                     || paymentTxnEventNames.Contains(cleanName)
