@@ -56,7 +56,7 @@ public class ExceptionHandlingMiddleware
             {
                 success = false,
                 statusCode = (int)statusCode,
-                message = !string.IsNullOrWhiteSpace(delEx.Message) ? delEx.Message : "This record no longer exists. Please refresh the page.",
+                message = "Username not found.",
                 data = (object?)null
             };
         }
@@ -100,7 +100,7 @@ public class ExceptionHandlingMiddleware
             {
                 success = false,
                 statusCode = (int)statusCode,
-                message = "This record no longer exists. Please refresh the page.",
+                message = "Username not found.",
                 data = (object?)null
             };
         }

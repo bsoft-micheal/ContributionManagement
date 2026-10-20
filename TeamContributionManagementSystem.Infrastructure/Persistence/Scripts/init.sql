@@ -326,7 +326,7 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
 -- 16. Gallery Photos Table
 CREATE TABLE IF NOT EXISTS gallery_photos (
     photo_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    title VARCHAR(200) NOT NULL,
+    title VARCHAR(250) NOT NULL,
     event_name VARCHAR(200) NOT NULL,
     category VARCHAR(100) NOT NULL,
     image_url TEXT NOT NULL,
@@ -547,6 +547,7 @@ ALTER TABLE IF EXISTS support_tickets ALTER COLUMN assigned_to DROP NOT NULL;
 -- Gallery & Transactions Specific Upgrades
 ALTER TABLE IF EXISTS payment_transactions ALTER COLUMN screenshot TYPE TEXT;
 ALTER TABLE IF EXISTS gallery_photos ALTER COLUMN image_url TYPE TEXT;
+ALTER TABLE IF EXISTS gallery_photos ALTER COLUMN title TYPE VARCHAR(250);
 
 -- Events: Add event_dates column for multi-date celebrations
 ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS event_dates VARCHAR(500) NULL;
