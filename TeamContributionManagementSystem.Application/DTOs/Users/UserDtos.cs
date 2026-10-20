@@ -58,7 +58,7 @@ public class CreateUserRequestDto
 
     [Required]
     [EmailAddress]
-    [MaxLength(150)]
+    [MaxLength(254)]
     public string Email { get; set; } = string.Empty;
 
     [MaxLength(12)]
@@ -112,7 +112,7 @@ public class UpdateUserRequestDto
 
     [Required]
     [EmailAddress]
-    [MaxLength(150)]
+    [MaxLength(254)]
     public string Email { get; set; } = string.Empty;
 
     /// <summary>Optional – only set when the caller wants to change the password.</summary>
@@ -165,7 +165,7 @@ public class UpdateProfileRequestDto
 
     [Required]
     [EmailAddress]
-    [MaxLength(150)]
+    [MaxLength(254)]
     public string Email { get; set; } = string.Empty;
 
     public string? ProfileImage { get; set; }

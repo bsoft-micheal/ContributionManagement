@@ -650,6 +650,13 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("event_id");
 
+                    b.Property<decimal>("AllocatedAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("allocated_amount");
+
                     b.Property<decimal>("BaseAmount")
                         .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
@@ -707,6 +714,12 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
                         .HasColumnName("status");
+
+                    b.Property<bool>("UseAvailableBalance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("use_available_balance");
 
                     b.HasKey("EventId")
                         .HasName("pk_events");
@@ -1521,6 +1534,18 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_on");
 
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("General")
+                        .HasColumnName("module");
+
+                    b.Property<int?>("ModuleId")
+                        .HasColumnType("integer")
+                        .HasColumnName("module_id");
+
                     b.Property<string>("StatusName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1530,9 +1555,9 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasKey("StatusId")
                         .HasName("pk_statuses");
 
-                    b.HasIndex("StatusName")
+                    b.HasIndex("StatusName", "Module")
                         .IsUnique()
-                        .HasDatabaseName("ix_statuses_status_name");
+                        .HasDatabaseName("ix_statuses_status_name_module");
 
                     b.ToTable("statuses");
                 });

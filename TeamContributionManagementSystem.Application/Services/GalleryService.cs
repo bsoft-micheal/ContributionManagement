@@ -234,9 +234,9 @@ public class GalleryService : IGalleryService
 
             if (!string.IsNullOrWhiteSpace(request.Title))
             {
-                if (request.Title.Trim().Length > 50)
+                if (request.Title.Trim().Length > 250)
                 {
-                    throw new InvalidOperationException("Photo Title cannot exceed 50 characters.");
+                    request.Title = request.Title.Trim().Substring(0, 250);
                 }
                 if (!System.Text.RegularExpressions.Regex.IsMatch(request.Title.Trim(), @"^[a-zA-Z\s]+$"))
                 {

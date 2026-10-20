@@ -164,6 +164,11 @@ public class UserManagementService : IUserManagementService
     {
         try
         {
+            if (!EmailValidationHelper.IsValidEmail(request.Email, out var emailValidationError))
+            {
+                throw new InvalidOperationException(emailValidationError);
+            }
+
             var emailToUse = request.Email.Trim().ToLowerInvariant();
             var isAccessEnabled = (request.EnableUserAccess == true || request.CreateMemberProfile == true) ||
                                   (request.CreateMemberProfile != false && request.EnableUserAccess != false && (!string.IsNullOrWhiteSpace(request.Username) || !string.IsNullOrWhiteSpace(request.Password)));
@@ -528,6 +533,11 @@ public class UserManagementService : IUserManagementService
     {
         try
         {
+            if (!EmailValidationHelper.IsValidEmail(request.Email, out var emailValidationError))
+            {
+                throw new InvalidOperationException(emailValidationError);
+            }
+
             var newEmail = request.Email.Trim().ToLowerInvariant();
 
             // Find existing AppUser
@@ -547,6 +557,19 @@ public class UserManagementService : IUserManagementService
             if (emailUser != null && emailUser.UserId != appUser.UserId)
             {
                 throw new InvalidOperationException("This email is already registered.");
+            }
+
+            // Disallow deactivating the currently logged in user
+            if (appUser.IsActive && !request.IsActive && !string.IsNullOrWhiteSpace(user))
+            {
+                var isSelf = (Guid.TryParse(user, out var currentGuid) && appUser.UserId == currentGuid) ||
+                             string.Equals(appUser.Username, user, StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(appUser.Email, user, StringComparison.OrdinalIgnoreCase);
+
+                if (isSelf)
+                {
+                    throw new InvalidOperationException("You cannot deactivate your own account.");
+                }
             }
 
             var isAccessEnabled = (request.EnableUserAccess == true || request.CreateMemberProfile == true) ||
@@ -901,6 +924,11 @@ public class UserManagementService : IUserManagementService
                 ?? throw new KeyNotFoundException(CommonMessages.Users.NotFound);
 
             var oldEmail = user.Email;
+            if (!EmailValidationHelper.IsValidEmail(request.Email, out var emailValidationError))
+            {
+                throw new InvalidOperationException(emailValidationError);
+            }
+
             var newEmail = request.Email.Trim().ToLowerInvariant();
 
             var emailOwner = await _userRepository.GetByEmailAsync(newEmail, cancellationToken);
