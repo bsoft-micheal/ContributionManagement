@@ -13,6 +13,8 @@ public class Event
     public string Description { get; set; } = string.Empty;
     public EventStatus Status { get; set; } = EventStatus.Planned;
     public decimal BaseAmount { get; set; }
+    public bool UseAvailableBalance { get; set; }
+    public decimal AllocatedAmount { get; set; }
     public bool IsDeleted { get; set; }
 
     public EventType? EventType { get; set; }

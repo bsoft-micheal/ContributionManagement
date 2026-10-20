@@ -2,6 +2,7 @@ using System.IO;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
+using TeamContributionManagementSystem.Application.DTOs.Contributions;
 using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.Exceptions;
 using TeamContributionManagementSystem.Application.Interfaces.Common;
@@ -79,6 +80,23 @@ public class PaymentTransactionService : IPaymentTransactionService
                 }
                 return Array.Empty<PaymentTransactionDto>();
             }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet();
+
+                    return all.Where(t =>
+                        (t.EventId.HasValue && myEventIds.Contains(t.EventId.Value)) ||
+                        (!string.IsNullOrWhiteSpace(t.EventName) && myEventNames.Contains(t.EventName.Trim().ToLower()))
+                    ).ToList();
+                }
+                return Array.Empty<PaymentTransactionDto>();
+            }
             return all;
         }
         catch (Exception ex)
@@ -115,6 +133,24 @@ public class PaymentTransactionService : IPaymentTransactionService
                 if (!isOwner)
                 {
                     throw new UnauthorizedAccessException("Access denied to requested payment transaction.");
+                }
+            }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet();
+
+                    var isMyEvent = (entity.EventId.HasValue && myEventIds.Contains(entity.EventId.Value)) ||
+                                    (!string.IsNullOrWhiteSpace(entity.EventName) && myEventNames.Contains(entity.EventName.Trim().ToLower()));
+                    if (!isMyEvent)
+                    {
+                        throw new UnauthorizedAccessException("Access denied to requested payment transaction.");
+                    }
                 }
             }
 
@@ -558,8 +594,18 @@ public class PaymentTransactionService : IPaymentTransactionService
                 {
                     result.Amount = contrib.Amount;
                     result.Status = contrib.StatusItem?.StatusName ?? contrib.PaymentStatus.ToString();
-                    var isPaid = result.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase);
+                    var isPaid = result.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                                 result.Status.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                                 result.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
+                                 result.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase) ||
+                                 contrib.PaymentStatus == PaymentStatus.Paid ||
+                                 (contrib.CashAmount.HasValue && contrib.CashAmount.Value > 0) ||
+                                 (contrib.UpiAmount.HasValue && contrib.UpiAmount.Value > 0);
                     result.CurrentEventDue = isPaid ? 0 : contrib.Amount;
+                    if (isPaid && !result.Status.Equals("Verified", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result.Status = "Paid";
+                    }
                 }
             }
 
@@ -569,9 +615,52 @@ public class PaymentTransactionService : IPaymentTransactionService
                 try
                 {
                     var pastContribs = await _contributionRepository.GetByMemberEmailAsync(result.Email, cancellationToken);
-                    var arrearsList = pastContribs
-                        .Where(c => c.EventId != effectiveEventId && c.PaymentStatus != PaymentStatus.Paid)
-                        .ToList();
+                    var allTxns = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
+
+                    var hasAllOutstandingPaid = allTxns.Any(t =>
+                        !string.IsNullOrWhiteSpace(t.MemberName) &&
+                        t.MemberName.Trim().Equals(result.MemberName?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(t.Status, "Rejected", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrEmpty(t.Notes) &&
+                        (t.Notes.Contains("AllOutstanding", StringComparison.OrdinalIgnoreCase) ||
+                         t.Notes.Contains("All Outstanding", StringComparison.OrdinalIgnoreCase) ||
+                         t.Notes.Contains("Scope: All", StringComparison.OrdinalIgnoreCase)));
+
+                    List<ContributionDto> arrearsList;
+                    if (hasAllOutstandingPaid)
+                    {
+                        arrearsList = new List<ContributionDto>();
+                    }
+                    else
+                    {
+                        arrearsList = pastContribs
+                            .Where(c => c.EventId != effectiveEventId)
+                            .Where(c =>
+                            {
+                                if (c.PaymentStatus == PaymentStatus.Paid ||
+                                    string.Equals(c.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(c.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(c.StatusName, "Closed", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(c.StatusName, "Completed", StringComparison.OrdinalIgnoreCase) ||
+                                    (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                                    (c.UpiAmount.HasValue && c.UpiAmount.Value > 0))
+                                {
+                                    return false;
+                                }
+
+                                var hasTx = allTxns.Any(t =>
+                                    ((t.EventId.HasValue && t.EventId.Value == c.EventId) ||
+                                     (!string.IsNullOrWhiteSpace(t.EventName) && !string.IsNullOrWhiteSpace(c.EventName) && t.EventName.Trim().Equals(c.EventName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
+                                    ((t.UserId.HasValue && t.UserId.Value == c.MemberId) ||
+                                     (!string.IsNullOrWhiteSpace(t.MemberName) && !string.IsNullOrWhiteSpace(c.MemberName) && t.MemberName.Trim().Equals(c.MemberName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
+                                    !string.Equals(t.Status, "Rejected", StringComparison.OrdinalIgnoreCase) &&
+                                    t.Amount > 0);
+
+                                return !hasTx;
+                            })
+                            .ToList();
+                    }
+
                     result.PreviousArrears = arrearsList.Sum(c => c.Amount);
                     result.ArrearBreakdown = arrearsList.Select(c => new ArrearItemDto
                     {
@@ -608,6 +697,24 @@ public class PaymentTransactionService : IPaymentTransactionService
                     throw new RecordDeletedException();
                 }
                 throw new RecordDeletedException();
+            }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet();
+
+                    var isMyEvent = (entity.EventId.HasValue && myEventIds.Contains(entity.EventId.Value)) ||
+                                    (!string.IsNullOrWhiteSpace(entity.EventName) && myEventNames.Contains(entity.EventName.Trim().ToLower()));
+                    if (!isMyEvent)
+                    {
+                        throw new UnauthorizedAccessException("You are only permitted to verify payments for events you organize.");
+                    }
+                }
             }
 
             var reqStatus = request.Status?.Trim() ?? string.Empty;
@@ -914,6 +1021,28 @@ public class PaymentTransactionService : IPaymentTransactionService
         // Store screenshot/receipt data directly in the database (Base64 data URI)
         var trimmed = screenshotInput.Trim();
         return Task.FromResult<string?>(trimmed);
+    }
+
+    private async Task<Guid?> GetOrganizerIdAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserService == null) return null;
+        if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+        {
+            return parsedGuid;
+        }
+        if (_currentUserService.MemberId.HasValue)
+        {
+            return _currentUserService.MemberId.Value;
+        }
+        if (!string.IsNullOrWhiteSpace(_currentUserService.Email) && _memberRepository != null)
+        {
+            var myMember = await _memberRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
+            if (myMember != null)
+            {
+                return myMember.MemberId;
+            }
+        }
+        return null;
     }
 }
 

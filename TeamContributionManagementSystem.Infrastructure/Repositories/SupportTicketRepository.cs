@@ -72,7 +72,8 @@ public class SupportTicketRepository : ISupportTicketRepository
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
                     ModifiedBy = x.ModifiedBy.HasValue ? x.ModifiedBy.Value.ToString() : null,
-                    ModifiedOn = x.ModifiedOn
+                    ModifiedOn = x.ModifiedOn,
+                    VerifiedBy = !string.IsNullOrWhiteSpace(x.AssignedTo) ? x.AssignedTo : null
                 })
                 .ToListAsync(cancellationToken);
 
@@ -85,6 +86,10 @@ public class SupportTicketRepository : ISupportTicketRepository
                 if (!string.IsNullOrWhiteSpace(item.ModifiedBy) && Guid.TryParse(item.ModifiedBy, out var mGuid) && users.TryGetValue(mGuid, out var mName))
                 {
                     item.ModifiedBy = mName;
+                    if (string.IsNullOrWhiteSpace(item.VerifiedBy))
+                    {
+                        item.VerifiedBy = mName;
+                    }
                 }
             }
 

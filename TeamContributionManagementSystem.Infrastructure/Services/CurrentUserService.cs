@@ -151,6 +151,16 @@ public class CurrentUserService : ICurrentUserService
         }
     }
 
+    public bool IsAdminRole =>
+        string.Equals(Role, CommonRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
+        HasRole(CommonRoles.Admin);
+
+    public bool IsOrganizerRole =>
+        !IsAdminRole && (
+            string.Equals(Role, "Organizer", StringComparison.OrdinalIgnoreCase) ||
+            HasRole("Organizer")
+        );
+
     public bool IsMemberRole
     {
         get

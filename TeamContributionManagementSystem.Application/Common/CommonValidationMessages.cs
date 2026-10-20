@@ -9,8 +9,8 @@ public static class CommonValidationMessages
     public const string PasswordMinLength = "Password must be at least 8 characters long.";
     public const string EmailRequired = "Email is required.";
     public const string UsernameOrEmailRequired = "This Field is required.";
-    public const string EmailValid = "A valid email address is required.";
-    public const string EmailMaxLength = "Email must not exceed 250 characters.";
+    public const string EmailValid = "Please enter a valid email address.";
+    public const string EmailMaxLength = "Email must not exceed 254 characters.";
     public const string PasswordRequired = "This Field is required.";
     public const string OtpRequired = "This Field is required.";
     public const string OtpExactLength = "OTP must be exactly 6 characters.";

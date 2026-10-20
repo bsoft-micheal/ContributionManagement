@@ -147,4 +147,22 @@ public class EventsController : ControllerBase
                 CommonMessages.Events.PreviewSuccess,
                 CommonStatusCodes.Status200OK));
     }
+
+    /// <summary>
+    /// Retrieves the current available Amount In Hand (liquidity) and unspent allocations for new events.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet(CommonRoutes.Events.GetAvailableAmountInHand)]
+    [HttpGet(CommonRoutes.Events.GetAvailableBalance)]
+    [ActionName(nameof(GetAvailableAmountInHandAsync))]
+    public async Task<ActionResult<ApiResponse<AvailableAmountInHandDto>>> GetAvailableAmountInHandAsync(CancellationToken cancellationToken)
+    {
+        var result = await _eventService.GetAvailableAmountInHandAsync(cancellationToken);
+        return StatusCode(
+            CommonStatusCodes.Status200OK,
+            ApiResponse<AvailableAmountInHandDto>.SuccessResult(
+                result,
+                "Available Amount In Hand retrieved successfully.",
+                CommonStatusCodes.Status200OK));
+    }
 }

@@ -14,8 +14,8 @@ public class CreateMemberRequestValidator : AbstractValidator<CreateMemberReques
 
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage(CommonValidationMessages.EmailRequired)
-            .EmailAddress().WithMessage(CommonValidationMessages.EmailValid)
-            .MaximumLength(150).WithMessage(CommonValidationMessages.EmailMaxLength);
+            .ValidEmailAddress()
+            .MaximumLength(EmailValidationHelper.MaxEmailLength).WithMessage(CommonValidationMessages.EmailMaxLength);
 
         RuleFor(x => x.Phone)
             .NotEmpty().WithMessage(CommonValidationMessages.PhoneRequired)

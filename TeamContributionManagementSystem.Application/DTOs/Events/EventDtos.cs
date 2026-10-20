@@ -41,6 +41,8 @@ public class EventSummaryDto
     public string? RuleDescription { get; set; }
     public bool IsReferred { get; set; }
     public int SupportTicketRaisedCount { get; set; }
+    public bool UseAvailableBalance { get; set; }
+    public decimal AllocatedAmount { get; set; }
 
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }
@@ -56,6 +58,13 @@ public class EventParticipantDto
 public class EventDetailsDto : EventSummaryDto
 {
     public IReadOnlyCollection<Contributions.ContributionDto> Contributions { get; set; } = Array.Empty<Contributions.ContributionDto>();
+}
+
+public class AvailableAmountInHandDto
+{
+    public decimal ActualAmountInHand { get; set; }
+    public decimal TotalReservedAmount { get; set; }
+    public decimal AvailableAmountInHand { get; set; }
 }
 
 public class ContributionOverrideDto
@@ -89,6 +98,8 @@ public class CreateEventRequestDto
 
     [Range(0, 1000000, ErrorMessage = "Base amount must be between 0 and 1,000,000.")]
     public decimal BaseAmount { get; set; }
+    public bool UseAvailableBalance { get; set; }
+    public decimal? AllocatedAmount { get; set; }
     public List<Guid>? EventTypeIds { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
@@ -100,6 +111,8 @@ public class EventContributionPreviewRequestDto
     public List<Guid>? EventTypeIds { get; set; }
     public DateTime EventDate { get; set; }
     public decimal BaseAmount { get; set; }
+    public bool UseAvailableBalance { get; set; }
+    public decimal? AllocatedAmount { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto>? ContributionOverrides { get; set; }
 }

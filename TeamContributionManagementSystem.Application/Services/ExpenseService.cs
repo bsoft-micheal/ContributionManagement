@@ -5,6 +5,7 @@ using AutoMapper;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Expenses;
 using TeamContributionManagementSystem.Application.Exceptions;
+using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
@@ -19,6 +20,7 @@ public class ExpenseService : IExpenseService
     private readonly IStatusRepository? _statusRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService? _currentUserService;
 
     public ExpenseService(
         ILogger<ExpenseService> logger,
@@ -26,7 +28,8 @@ public class ExpenseService : IExpenseService
         IEventRepository eventRepository,
         IUnitOfWork unitOfWork,
         IMapper mapper,
-        IStatusRepository? statusRepository = null)
+        IStatusRepository? statusRepository = null,
+        ICurrentUserService? currentUserService = null)
     {
         _logger = logger;
         _expenseRepository = expenseRepository;
@@ -34,13 +37,39 @@ public class ExpenseService : IExpenseService
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _statusRepository = statusRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<IReadOnlyCollection<ExpenseDto>> GetAllAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
+            var expenses = await _expenseRepository.GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+
+                    expenses = expenses.Where(ex =>
+                        (!string.IsNullOrWhiteSpace(ex.EventName) && myEventNames.Contains(ex.EventName.Trim().ToLower())) ||
+                        (!string.IsNullOrWhiteSpace(ex.SubmittedBy) && string.Equals(ex.SubmittedBy.Trim(), _currentUserService.UserName?.Trim(), StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+                }
+            }
+            return expenses;
         }
         catch (Exception ex)
         {
@@ -90,6 +119,34 @@ public class ExpenseService : IExpenseService
             if (rapidDup != null)
             {
                 throw new AlreadyProcessedException("This action has already been completed.");
+            }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+
+                    bool isMyEvent = (request.EventId.HasValue && myEventIds.Contains(request.EventId.Value)) ||
+                        (!string.IsNullOrWhiteSpace(request.EventName) && myEventNames.Contains(request.EventName.Trim().ToLower()));
+
+                    if (!isMyEvent)
+                    {
+                        throw new UnauthorizedAccessException("Organizers can only submit expenses for events they organize.");
+                    }
+                }
             }
 
             await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, request.Amount, null, cancellationToken);
@@ -271,11 +328,13 @@ public class ExpenseService : IExpenseService
         var remainingBudget = expectedAmount - spentAmount;
         if (expectedAmount > 0 && requestedAmount > remainingBudget)
         {
-            throw new InvalidOperationException(string.Format(
-                CommonMessages.Expenses.ExceedsExpectedBudgetFormat,
-                expectedAmount,
-                spentAmount,
-                Math.Max(0, remainingBudget)));
+            var extraAmount = (spentAmount + requestedAmount) - expectedAmount;
+            _logger.LogWarning(
+                "Expense amount {RequestedAmount} exceeds the remaining budget of {RemainingBudget} for event '{EventName}'. Total projected spending exceeds expected budget by {ExtraAmount}.",
+                requestedAmount,
+                Math.Max(0, remainingBudget),
+                eventItem.EventName,
+                extraAmount);
         }
     }
 

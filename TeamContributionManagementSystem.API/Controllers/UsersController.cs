@@ -154,7 +154,10 @@ public class UsersController : ControllerBase
     {
         try
         {
-            var currentUser = User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+            var currentUser = User.FindFirstValue(ClaimTypes.NameIdentifier) 
+                ?? User.FindFirstValue(ClaimTypes.Name) 
+                ?? User.FindFirstValue(ClaimTypes.Email) 
+                ?? User.Identity?.Name;
             var result = await _userService.UpdateUserAsyncById(id, request, currentUser, cancellationToken);
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<UserDto>.SuccessResult(result, CommonMessages.Users.UpdateSuccess, CommonStatusCodes.Status200OK));
         }
