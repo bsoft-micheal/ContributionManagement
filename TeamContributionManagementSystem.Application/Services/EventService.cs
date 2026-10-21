@@ -782,6 +782,7 @@ public class EventService : IEventService
                             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{eventName}", safeEventName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{eventDescription}", eventDescription, StringComparison.OrdinalIgnoreCase)
                             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
                             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
                             .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase);
@@ -879,6 +880,7 @@ public class EventService : IEventService
                             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{eventName}", safeEventName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{eventDescription}", eventDescription, StringComparison.OrdinalIgnoreCase)
                             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
                             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
                             .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase)
@@ -1786,10 +1788,10 @@ public class EventService : IEventService
         string templateType = "initial")
     {
         string defaultBirthdaySubject = "Birthday Celebration Contribution - {categoryName}";
-        string defaultBirthdayDesc = "Dear {memberName},\n\nWe have upcoming birthdays this month in our team! Your planned contribution for {categoryName} is {amount}, due by {dueDate}.\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nWarm regards,\n{orgName}";
+        string defaultBirthdayDesc = "Dear {memberName},\n\nWe have upcoming birthdays this month in our team! Your planned contribution for {categoryName} is {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nWarm regards,\n{orgName}";
 
         string defaultGeneralSubject = "Contribution Notice - {categoryName}";
-        string defaultGeneralDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
+        string defaultGeneralDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
 
         bool isBirthday = (eventTypeName ?? string.Empty).Contains("Birthday", StringComparison.OrdinalIgnoreCase);
         string fallbackSubject = isBirthday ? defaultBirthdaySubject : defaultGeneralSubject;
