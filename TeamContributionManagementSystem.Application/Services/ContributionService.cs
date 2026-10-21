@@ -173,8 +173,8 @@ public class ContributionService : IContributionService
                     throw new ArgumentException(CommonMessages.Contributions.SplitPaymentNegative);
                 }
 
-                var splitSum = Math.Round(request.CashAmount.Value + request.UpiAmount.Value, 2);
-                if (splitSum != Math.Round(targetAmount, 2))
+                var splitSum = RoundingHelper.RoundToWhole(request.CashAmount.Value + request.UpiAmount.Value);
+                if (splitSum != RoundingHelper.RoundToWhole(targetAmount))
                 {
                     throw new ArgumentException(string.Format(CommonMessages.Contributions.SplitPaymentSumMismatchFormat, request.CashAmount.Value, request.UpiAmount.Value, splitSum, targetAmount));
                 }
@@ -257,8 +257,8 @@ public class ContributionService : IContributionService
                     if (request.PaymentMode == PaymentMode.Split && targetAmount > 0)
                     {
                         decimal ratio = paidForThis / targetAmount;
-                        item.CashAmount = Math.Round((request.CashAmount ?? 0) * ratio, 2);
-                        item.UpiAmount = Math.Round((request.UpiAmount ?? 0) * ratio, 2);
+                        item.CashAmount = RoundingHelper.RoundToWhole((request.CashAmount ?? 0) * ratio);
+                        item.UpiAmount = RoundingHelper.RoundToWhole((request.UpiAmount ?? 0) * ratio);
                     }
                     else
                     {
