@@ -1222,6 +1222,7 @@ public class EventService : IEventService
             }
 
             // Add or Reactivate requested participants
+            var newParticipantsToAdd = new List<EventParticipant>();
             foreach (var memberId in newParticipantIds)
             {
                 if (participantLookup.TryGetValue(memberId, out var existingList) && existingList.Count > 0)
@@ -1236,13 +1237,16 @@ public class EventService : IEventService
                     }
                     for (int i = 1; i < existingList.Count; i++)
                     {
-                        existingList[i].IsDeleted = true;
-                        existingList[i].ModifiedOn = DateTime.UtcNow;
+                        if (!existingList[i].IsDeleted)
+                        {
+                            existingList[i].IsDeleted = true;
+                            existingList[i].ModifiedOn = DateTime.UtcNow;
+                        }
                     }
                 }
                 else
                 {
-                    eventItem.Participants.Add(new EventParticipant
+                    var newParticipant = new EventParticipant
                     {
                         Id = Guid.NewGuid(),
                         EventId = eventItem.EventId,
@@ -1250,9 +1254,16 @@ public class EventService : IEventService
                         IsActive = true,
                         IsDeleted = false,
                         CreatedAt = DateTime.UtcNow
-                    });
+                    };
+                    eventItem.Participants.Add(newParticipant);
+                    newParticipantsToAdd.Add(newParticipant);
                     participantIdsToAdd.Add(memberId);
                 }
+            }
+
+            if (newParticipantsToAdd.Count > 0)
+            {
+                await _eventRepository.AddParticipantsAsync(newParticipantsToAdd, cancellationToken);
             }
 
             // 2. Synchronize Contributions
@@ -1282,6 +1293,7 @@ public class EventService : IEventService
             }
 
             // Update or Add contributions for requested participants
+            var newContributionsToAdd = new List<Contribution>();
             foreach (var memberId in newParticipantIds)
             {
                 if (!memberAmounts.TryGetValue(memberId, out var amount))
@@ -1299,13 +1311,16 @@ public class EventService : IEventService
 
                     for (int i = 1; i < existingList.Count; i++)
                     {
-                        existingList[i].IsDeleted = true;
-                        existingList[i].ModifiedOn = DateTime.UtcNow;
+                        if (!existingList[i].IsDeleted)
+                        {
+                            existingList[i].IsDeleted = true;
+                            existingList[i].ModifiedOn = DateTime.UtcNow;
+                        }
                     }
                 }
                 else
                 {
-                    eventItem.Contributions.Add(new Contribution
+                    var newContribution = new Contribution
                     {
                         ContributionId = Guid.NewGuid(),
                         EventId = eventItem.EventId,
@@ -1321,8 +1336,15 @@ public class EventService : IEventService
                         IsActive = true,
                         IsDeleted = false,
                         CreatedAt = DateTime.UtcNow
-                    });
+                    };
+                    eventItem.Contributions.Add(newContribution);
+                    newContributionsToAdd.Add(newContribution);
                 }
+            }
+
+            if (newContributionsToAdd.Count > 0)
+            {
+                await _contributionRepository.AddRangeAsync(newContributionsToAdd, cancellationToken);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);

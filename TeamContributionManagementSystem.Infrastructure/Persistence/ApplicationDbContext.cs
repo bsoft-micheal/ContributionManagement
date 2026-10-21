@@ -558,7 +558,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             if (entry.State == EntityState.Modified || entry.State == EntityState.Unchanged)
             {
-                if (entry.Entity.UserId == Guid.Empty || (entry.Entity.User != null && !entry.Entity.User.UserRoles.Any(ur => ur.UserId == entry.Entity.UserId && ur.RoleId == entry.Entity.RoleId)))
+                if (entry.Entity.UserId == Guid.Empty || (entry.Entity.User != null && entry.Entity.User.UserRoles != null && entry.Entity.User.UserRoles.Count > 0 && !entry.Entity.User.UserRoles.Any(ur => ur.UserId == entry.Entity.UserId && ur.RoleId == entry.Entity.RoleId)))
                 {
                     entry.State = EntityState.Deleted;
                 }
