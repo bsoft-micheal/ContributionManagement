@@ -160,7 +160,9 @@ public class EventRepository : IEventRepository
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
+                    TotalExpectedAmount = x.UseAvailableBalance && x.AllocatedAmount > 0
+                        ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? Math.Max(0m, x.BaseAmount - x.AllocatedAmount))
+                        : Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
                         c.PaymentDate != null ||
                         (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
@@ -386,7 +388,9 @@ public class EventRepository : IEventRepository
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
+                    TotalExpectedAmount = x.UseAvailableBalance && x.AllocatedAmount > 0
+                        ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? Math.Max(0m, x.BaseAmount - x.AllocatedAmount))
+                        : Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
                         c.PaymentDate != null ||
                         (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
@@ -701,7 +705,9 @@ public class EventRepository : IEventRepository
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
+                    TotalExpectedAmount = x.UseAvailableBalance && x.AllocatedAmount > 0
+                        ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? Math.Max(0m, x.BaseAmount - x.AllocatedAmount))
+                        : Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
                         c.PaymentDate != null ||
                         (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||
@@ -854,7 +860,9 @@ public class EventRepository : IEventRepository
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
                     ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
-                    TotalExpectedAmount = Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
+                    TotalExpectedAmount = x.UseAvailableBalance && x.AllocatedAmount > 0
+                        ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? Math.Max(0m, x.BaseAmount - x.AllocatedAmount))
+                        : Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
                         c.PaymentDate != null ||
                         (c.StatusItem != null && (c.StatusItem.StatusName.ToLower() == "paid" || c.StatusItem.StatusName.ToLower() == "verified" || c.StatusItem.StatusName.ToLower() == "closed" || c.StatusItem.StatusName.ToLower() == "completed")) ||

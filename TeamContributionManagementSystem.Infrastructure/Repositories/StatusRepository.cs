@@ -174,7 +174,17 @@ public class StatusRepository : IStatusRepository
         if (!string.IsNullOrWhiteSpace(module))
         {
             var cleanModule = module.Trim().ToLower();
-            query = query.Where(x => x.Module.ToLower() == cleanModule);
+            var singular = cleanModule.EndsWith("s") && cleanModule.Length > 3 ? cleanModule.Substring(0, cleanModule.Length - 1) : cleanModule;
+            var plural = cleanModule.EndsWith("s") ? cleanModule : cleanModule + "s";
+
+            query = query.Where(x =>
+                x.Module.ToLower() == cleanModule ||
+                x.Module.ToLower() == singular ||
+                x.Module.ToLower() == plural ||
+                x.Module.ToLower().Contains(cleanModule) ||
+                x.Module.ToLower().Contains(singular) ||
+                x.Module.ToLower().Contains(plural) ||
+                x.Module.ToLower() == "general");
         }
 
         var usedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -296,7 +306,16 @@ public class StatusRepository : IStatusRepository
         if (!string.IsNullOrWhiteSpace(module))
         {
             var cleanModule = module.Trim().ToLower();
-            query = query.Where(x => x.Module.ToLower() == cleanModule);
+            var singular = cleanModule.EndsWith("s") && cleanModule.Length > 3 ? cleanModule.Substring(0, cleanModule.Length - 1) : cleanModule;
+            var plural = cleanModule.EndsWith("s") ? cleanModule : cleanModule + "s";
+            query = query.Where(x =>
+                x.Module.ToLower() == cleanModule ||
+                x.Module.ToLower() == singular ||
+                x.Module.ToLower() == plural ||
+                x.Module.ToLower().Contains(cleanModule) ||
+                x.Module.ToLower().Contains(singular) ||
+                x.Module.ToLower().Contains(plural) ||
+                x.Module.ToLower() == "general");
         }
         return await query.FirstOrDefaultAsync(cancellationToken);
     }
