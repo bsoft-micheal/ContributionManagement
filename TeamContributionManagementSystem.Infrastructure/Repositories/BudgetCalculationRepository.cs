@@ -80,7 +80,7 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                     0,
                     'Initial rate',
                     NULL,
-                    bc.created_by,
+                    COALESCE(bc.modified_by, bc.created_by),
                     COALESCE(bc.created_at, CURRENT_TIMESTAMP),
                     TRUE
                 FROM budget_calculations bc
@@ -88,6 +88,14 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                     SELECT 1 FROM budget_calculation_history bch 
                     WHERE bch.budget_calculation_id = bc.budget_calculation_id
                 );
+
+                -- Update existing history records missing changed_by using actual modified_by or created_by
+                UPDATE budget_calculation_history bch
+                SET changed_by = COALESCE(bc.modified_by, bc.created_by)
+                FROM budget_calculations bc
+                WHERE bch.budget_calculation_id = bc.budget_calculation_id
+                  AND bch.changed_by IS NULL
+                  AND (bc.modified_by IS NOT NULL OR bc.created_by IS NOT NULL);
             ", cancellationToken);
             _columnsEnsured = true;
         }
@@ -204,13 +212,13 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
 
                 item.IsReferred = isUsedInExpenses;
 
-                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid))
                 {
-                    item.CreatedBy = cName;
+                    item.CreatedBy = users.TryGetValue(cGuid, out var cName) ? cName : null;
                 }
-                if (!string.IsNullOrWhiteSpace(item.ModifiedBy) && Guid.TryParse(item.ModifiedBy, out var mGuid) && users.TryGetValue(mGuid, out var mName))
+                if (!string.IsNullOrWhiteSpace(item.ModifiedBy) && Guid.TryParse(item.ModifiedBy, out var mGuid))
                 {
-                    item.ModifiedBy = mName;
+                    item.ModifiedBy = users.TryGetValue(mGuid, out var mName) ? mName : null;
                 }
             }
 
@@ -356,6 +364,20 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                 .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
                 .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
 
+            var parentBc = await _context.BudgetCalculations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.BudgetCalculationId == budgetCalculationId, cancellationToken);
+
+            string? parentModifiedByName = null;
+            if (parentBc?.ModifiedBy.HasValue == true && users.TryGetValue(parentBc.ModifiedBy.Value, out var mName))
+            {
+                parentModifiedByName = mName;
+            }
+            else if (parentBc?.CreatedBy.HasValue == true && users.TryGetValue(parentBc.CreatedBy.Value, out var cName))
+            {
+                parentModifiedByName = cName;
+            }
+
             var list = await _context.BudgetCalculationHistories
                 .Where(x => x.BudgetCalculationId == budgetCalculationId && x.IsActive)
                 .OrderByDescending(x => x.EffectiveFrom)
@@ -373,7 +395,9 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
                     ChangeReason = x.ChangeReason,
                     Remarks = x.Remarks,
                     ChangedById = x.ChangedBy,
-                    ChangedBy = x.ChangedBy.HasValue ? x.ChangedBy.Value.ToString() : null,
+                    ChangedBy = null,
+                    ModifiedById = x.ChangedBy ?? (parentBc != null ? (parentBc.ModifiedBy ?? parentBc.CreatedBy) : null),
+                    ModifiedBy = null,
                     ChangedOn = x.ChangedOn,
                     IsActive = x.IsActive
                 })
@@ -381,14 +405,22 @@ public class BudgetCalculationRepository : IBudgetCalculationRepository
 
             foreach (var item in list)
             {
-                if (item.ChangedById.HasValue && users.TryGetValue(item.ChangedById.Value, out var userName))
+                string? resolvedUserName = null;
+                var userIdToLookup = item.ChangedById ?? item.ModifiedById ?? parentBc?.ModifiedBy ?? parentBc?.CreatedBy;
+
+                if (userIdToLookup.HasValue && users.TryGetValue(userIdToLookup.Value, out var matchedName))
                 {
-                    item.ChangedBy = userName;
+                    resolvedUserName = matchedName;
                 }
-                else if (string.IsNullOrWhiteSpace(item.ChangedBy))
+                else if (!string.IsNullOrWhiteSpace(parentModifiedByName))
                 {
-                    item.ChangedBy = "System";
+                    resolvedUserName = parentModifiedByName;
                 }
+
+                item.ChangedById = userIdToLookup;
+                item.ChangedBy = resolvedUserName;
+                item.ModifiedById = userIdToLookup;
+                item.ModifiedBy = resolvedUserName;
             }
 
             return list;
