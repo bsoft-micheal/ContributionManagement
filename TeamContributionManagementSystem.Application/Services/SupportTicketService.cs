@@ -628,110 +628,162 @@ public class SupportTicketService : ISupportTicketService
                 return;
             }
 
-            var organizerEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var recipientEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // 1. Resolve Event-Specific Organizer who created that particular event
-            Domain.Entities.Event? eventObj = null;
-            if (ticket.EventId.HasValue && _eventRepository != null)
+            // 1. ALL ACTIVE ADMINS: Admin can receive all the support ticket notifications
+            try
             {
-                try
+                Guid? adminRoleId = null;
+                if (_roleRepository != null)
                 {
-                    eventObj = await _eventRepository.GetByIdAsync(ticket.EventId.Value, cancellationToken);
+                    var adminRole = await _roleRepository.GetByNameAsync(CommonConstants.UserRoles.Admin, cancellationToken);
+                    adminRoleId = adminRole?.RoleId;
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not resolve Event by EventId {EventId}.", ticket.EventId);
-                }
-            }
 
-            if (eventObj == null && !string.IsNullOrWhiteSpace(ticket.RelatedEvent) && _eventRepository != null)
-            {
-                try
+                if (_userRepository != null)
                 {
-                    eventObj = await _eventRepository.GetByNameAsync(ticket.RelatedEvent.Trim(), cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not resolve Event by name '{RelatedEvent}'.", ticket.RelatedEvent);
-                }
-            }
-
-            if (eventObj != null && eventObj.CreatedBy != Guid.Empty && _userRepository != null)
-            {
-                try
-                {
-                    var creatorUser = await _userRepository.GetByIdAsync(eventObj.CreatedBy, cancellationToken);
-                    if (creatorUser != null && creatorUser.IsActive && !creatorUser.IsDeleted && !string.IsNullOrWhiteSpace(creatorUser.Email))
-                    {
-                        organizerEmails.Add(creatorUser.Email.Trim());
-                        _logger.LogInformation("Resolved creator organizer {Email} for Event '{EventName}' (Ticket {TicketNo}).", creatorUser.Email, eventObj.EventName, ticket.TicketNo);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not resolve event creator organizer for Event '{EventName}'.", eventObj.EventName);
-                }
-            }
-
-            // 2. If no event-specific organizer was found, fallback to active global organizers/admins
-            if (organizerEmails.Count == 0 && _userRepository != null)
-            {
-                try
-                {
-                    Guid? organizerRoleId = null;
-                    Guid? adminRoleId = null;
-                    if (_roleRepository != null)
-                    {
-                        var organizerRole = await _roleRepository.GetByNameAsync(CommonConstants.UserRoles.Organizer, cancellationToken);
-                        organizerRoleId = organizerRole?.RoleId;
-                        var adminRole = await _roleRepository.GetByNameAsync(CommonConstants.UserRoles.Admin, cancellationToken);
-                        adminRoleId = adminRole?.RoleId;
-                    }
-
                     var allUsers = await _userRepository.GetAllAsync(cancellationToken);
                     foreach (var u in allUsers)
                     {
                         if (u.IsActive && !u.IsDeleted && !string.IsNullOrWhiteSpace(u.Email))
                         {
-                            bool isOrganizerOrAdmin =
-                                (organizerRoleId.HasValue && (u.RoleIds.Contains(organizerRoleId.Value) || u.PrimaryRoleIds.Contains(organizerRoleId.Value) || u.SecondaryRoleIds.Contains(organizerRoleId.Value)))
-                                || (adminRoleId.HasValue && (u.RoleIds.Contains(adminRoleId.Value) || u.PrimaryRoleIds.Contains(adminRoleId.Value) || u.SecondaryRoleIds.Contains(adminRoleId.Value)))
-                                || (u.RoleId.HasValue && ((organizerRoleId.HasValue && u.RoleId.Value == organizerRoleId.Value) || (adminRoleId.HasValue && u.RoleId.Value == adminRoleId.Value)))
+                            bool isAdmin =
+                                (adminRoleId.HasValue && (
+                                    (u.RoleId.HasValue && u.RoleId.Value == adminRoleId.Value)
+                                    || (u.RoleIds != null && u.RoleIds.Contains(adminRoleId.Value))
+                                    || (u.PrimaryRoleIds != null && u.PrimaryRoleIds.Contains(adminRoleId.Value))
+                                    || (u.SecondaryRoleIds != null && u.SecondaryRoleIds.Contains(adminRoleId.Value))
+                                ))
                                 || string.Equals(u.Role, CommonConstants.UserRoles.Admin, StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(u.Role, CommonConstants.UserRoles.Organizer, StringComparison.OrdinalIgnoreCase)
                                 || string.Equals(u.RoleName, CommonConstants.UserRoles.Admin, StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(u.RoleName, CommonConstants.UserRoles.Organizer, StringComparison.OrdinalIgnoreCase);
+                                || (u.Roles != null && u.Roles.Any(r => string.Equals(r, CommonConstants.UserRoles.Admin, StringComparison.OrdinalIgnoreCase)))
+                                || (u.PrimaryRoles != null && u.PrimaryRoles.Any(r => string.Equals(r, CommonConstants.UserRoles.Admin, StringComparison.OrdinalIgnoreCase)))
+                                || (u.SecondaryRoles != null && u.SecondaryRoles.Any(r => string.Equals(r, CommonConstants.UserRoles.Admin, StringComparison.OrdinalIgnoreCase)));
 
-                            if (isOrganizerOrAdmin)
+                            if (isAdmin)
                             {
-                                organizerEmails.Add(u.Email.Trim());
+                                recipientEmails.Add(u.Email.Trim());
+                                _logger.LogInformation("Added Admin {Email} to support ticket {TicketNo} notification recipients.", u.Email, ticket.TicketNo);
                             }
                         }
                     }
-                    if (organizerEmails.Count == 0 && allUsers.Count > 0)
+
+                    // Fallback to GetFirstAdminAsync if no admin users were loaded
+                    if (recipientEmails.Count == 0)
                     {
-                        foreach (var u in allUsers)
+                        var firstAdmin = await _userRepository.GetFirstAdminAsync(cancellationToken);
+                        if (firstAdmin != null && firstAdmin.IsActive && !firstAdmin.IsDeleted && !string.IsNullOrWhiteSpace(firstAdmin.Email))
                         {
-                            if (u.IsActive && !u.IsDeleted && !string.IsNullOrWhiteSpace(u.Email))
+                            recipientEmails.Add(firstAdmin.Email.Trim());
+                            _logger.LogInformation("Added First Admin {Email} to support ticket {TicketNo} notification recipients via fallback.", firstAdmin.Email, ticket.TicketNo);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resolving Admin recipients for support ticket {TicketNo}.", ticket.TicketNo);
+            }
+
+            // 2. ORGANISER: Organiser can receive ONLY if he/she created the event
+            if (ticket.EventId.HasValue || !string.IsNullOrWhiteSpace(ticket.RelatedEvent))
+            {
+                try
+                {
+                    Domain.Entities.Event? eventObj = null;
+                    if (ticket.EventId.HasValue && ticket.EventId.Value != Guid.Empty && _eventRepository != null)
+                    {
+                        try
+                        {
+                            eventObj = await _eventRepository.GetByIdAsync(ticket.EventId.Value, cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Could not resolve Event by EventId {EventId}.", ticket.EventId);
+                        }
+                    }
+
+                    if (eventObj == null && !string.IsNullOrWhiteSpace(ticket.RelatedEvent) && _eventRepository != null)
+                    {
+                        try
+                        {
+                            eventObj = await _eventRepository.GetByNameAsync(ticket.RelatedEvent.Trim(), cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Could not resolve Event by name '{RelatedEvent}'.", ticket.RelatedEvent);
+                        }
+                    }
+
+                    if (eventObj != null)
+                    {
+                        if (string.IsNullOrWhiteSpace(ticket.RelatedEvent))
+                        {
+                            ticket.RelatedEvent = eventObj.EventName;
+                        }
+
+                        if (eventObj.CreatedBy != Guid.Empty)
+                        {
+                            string? creatorEmail = null;
+                            if (_userRepository != null)
                             {
-                                organizerEmails.Add(u.Email.Trim());
+                                try
+                                {
+                                    var creatorUser = await _userRepository.GetByIdAsync(eventObj.CreatedBy, cancellationToken);
+                                    if (creatorUser != null && creatorUser.IsActive && !creatorUser.IsDeleted && !string.IsNullOrWhiteSpace(creatorUser.Email))
+                                    {
+                                        creatorEmail = creatorUser.Email.Trim();
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex, "Could not query event creator user for Event '{EventName}'.", eventObj.EventName);
+                                }
+                            }
+
+                            if (string.IsNullOrWhiteSpace(creatorEmail) && _memberRepository != null)
+                            {
+                                try
+                                {
+                                    var creatorMember = await _memberRepository.GetByIdAsync(eventObj.CreatedBy, cancellationToken);
+                                    if (creatorMember != null && creatorMember.IsActive && !creatorMember.IsDeleted && !string.IsNullOrWhiteSpace(creatorMember.Email))
+                                    {
+                                        creatorEmail = creatorMember.Email.Trim();
+                                    }
+                                }
+                                catch { }
+                            }
+
+                            if (string.IsNullOrWhiteSpace(creatorEmail) && eventObj.CreatedByUser != null && !string.IsNullOrWhiteSpace(eventObj.CreatedByUser.Email))
+                            {
+                                creatorEmail = eventObj.CreatedByUser.Email.Trim();
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(creatorEmail))
+                            {
+                                recipientEmails.Add(creatorEmail);
+                                _logger.LogInformation("Added Event Creator Organiser {Email} for Event '{EventName}' (Ticket {TicketNo}).", creatorEmail, eventObj.EventName, ticket.TicketNo);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Event '{EventName}' creator ID {CreatedBy} email could not be resolved for ticket {TicketNo}.", eventObj.EventName, eventObj.CreatedBy, ticket.TicketNo);
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Could not query global active organizers/admins for support ticket email notification.");
+                    _logger.LogError(ex, "Error resolving event creator organiser for support ticket {TicketNo}.", ticket.TicketNo);
                 }
             }
 
-            if (organizerEmails.Count == 0)
+            if (recipientEmails.Count == 0)
             {
-                _logger.LogWarning("No active Organizer found for support ticket {TicketNo} (RefNo: {RefNo}, EventId: {EventId}).", ticket.TicketNo, ticket.RefNo, ticket.EventId);
+                _logger.LogWarning("No active Admin or Event Organiser found for support ticket {TicketNo} (RefNo: {RefNo}, EventId: {EventId}).", ticket.TicketNo, ticket.RefNo, ticket.EventId);
                 return;
             }
 
-            // 3. Resolve Member Contact Info & add to recipient list
+            // 3. Resolve Member Contact Info to display inside the email body
             string? memberEmail = null;
             string? memberPhone = null;
             if (ticket.UserId.HasValue && _userRepository != null)
@@ -748,14 +800,37 @@ public class SupportTicketService : ISupportTicketService
                 catch { }
             }
 
+            if (string.IsNullOrWhiteSpace(memberEmail) && ticket.UserId.HasValue && _memberRepository != null)
+            {
+                try
+                {
+                    var memObj = await _memberRepository.GetByIdAsync(ticket.UserId.Value, cancellationToken);
+                    if (memObj != null)
+                    {
+                        memberEmail = memObj.Email;
+                        memberPhone = memObj.Phone;
+                    }
+                }
+                catch { }
+            }
+
+            if (string.IsNullOrWhiteSpace(memberEmail) && !string.IsNullOrWhiteSpace(ticket.MemberName) && _memberRepository != null)
+            {
+                try
+                {
+                    var memObj = await _memberRepository.GetUserByNameAsync(ticket.MemberName.Trim(), cancellationToken);
+                    if (memObj != null)
+                    {
+                        memberEmail = memObj.Email;
+                        memberPhone = memObj.Phone;
+                    }
+                }
+                catch { }
+            }
+
             if (string.IsNullOrWhiteSpace(memberEmail) && _currentUserService != null)
             {
                 memberEmail = _currentUserService.Email;
-            }
-
-            if (!string.IsNullOrWhiteSpace(memberEmail))
-            {
-                organizerEmails.Add(memberEmail.Trim());
             }
 
             // 4. Build Email Subject and Body
@@ -763,8 +838,8 @@ public class SupportTicketService : ISupportTicketService
             var subject = $"[Support Ticket #{ticket.TicketNo}] New Support Request: {subjectTitle}";
             var htmlBody = BuildSupportTicketEmailHtml(ticket, memberEmail, memberPhone);
 
-            // 5. Send Email to Recipients safely
-            foreach (var recipientEmail in organizerEmails)
+            // 5. Send Email to Recipients safely (Admin and Event Organiser)
+            foreach (var recipientEmail in recipientEmails)
             {
                 try
                 {
@@ -842,7 +917,7 @@ public class SupportTicketService : ISupportTicketService
             <p>Team Contribution Management System</p>
         </div>
         <div class=""content"">
-            <p style=""font-size: 15px; margin-top: 0;"">Hello Organizer,</p>
+            <p style=""font-size: 15px; margin-top: 0;"">Hello Admin / Organizer,</p>
             <p style=""font-size: 14px; color: #555555;"">A new support ticket has been submitted by a member and requires your attention.</p>
             
             <div class=""section-title"">Ticket Details</div>

@@ -115,10 +115,10 @@ public class EmailService : IEmailService
         var inlineImageList = inlineImages?.Where(image => !string.IsNullOrWhiteSpace(image.ContentId) && !string.IsNullOrWhiteSpace(image.FilePath)).ToList()
             ?? new List<InlineEmailImage>();
 
-        var host = _smtpSettings.Host;
+        var host = _smtpSettings.Host?.Trim() ?? string.Empty;
         var port = _smtpSettings.Port > 0 ? _smtpSettings.Port : 587;
-        var username = _smtpSettings.Username;
-        var password = _smtpSettings.Password;
+        var username = _smtpSettings.Username?.Trim() ?? string.Empty;
+        var password = !string.IsNullOrWhiteSpace(_smtpSettings.Password) ? _smtpSettings.Password.Replace(" ", "").Trim() : string.Empty;
         var enableSsl = _smtpSettings.EnableSsl;
         var fromAddress = !string.IsNullOrWhiteSpace(_smtpSettings.FromAddress)
             ? _smtpSettings.FromAddress

@@ -303,6 +303,12 @@ public class ContributionReminderJobService : IContributionReminderJobService
         var eventDate = eventItem.EventDate;
         var pendingAmount = contribution.Amount;
 
+        // Get the event's actual description and strip internal metadata
+        var eventDescription = System.Text.RegularExpressions.Regex
+            .Replace(eventItem.Description ?? string.Empty, @"<!--contrib:[\s\S]*?-->", string.Empty,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Trim();
+
         var orgName = !string.IsNullOrWhiteSpace(systemSettings?.OrgName)
             ? systemSettings.OrgName
             : "Team Contribution Management";
@@ -315,6 +321,104 @@ public class ContributionReminderJobService : IContributionReminderJobService
 
         var frontendBaseUrl = _configuration["Cors:AllowedOrigins:0"] ?? CommonConstants.Defaults.DefaultFrontendUrl;
         var portalPaymentUrl = $"{frontendBaseUrl}/contributions";
+
+        // Query birthday celebrants and format celebrants list
+        bool isBirthdayEvent = (eventTypeName ?? string.Empty).IndexOf("birthday", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                               (eventName ?? string.Empty).IndexOf("birthday", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        List<AppUser> targetCelebrants = new();
+        if (isBirthdayEvent)
+        {
+            try
+            {
+                var exemptCelebrantIds = await _context.Contributions
+                    .Where(c => c.EventId == eventItem.EventId && c.Amount == 0)
+                    .Select(c => c.MemberId)
+                    .ToListAsync(cancellationToken);
+
+                if (exemptCelebrantIds.Count > 0)
+                {
+                    targetCelebrants = await _context.Users
+                        .Where(u => u.IsActive && !u.IsExited && exemptCelebrantIds.Contains(u.UserId))
+                        .ToListAsync(cancellationToken);
+                }
+
+                if (targetCelebrants.Count == 0)
+                {
+                    targetCelebrants = await _context.Users
+                        .Where(u => u.IsActive && !u.IsExited && u.DateOfBirth.Month == eventDate.Month)
+                        .ToListAsync(cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve active birthday celebrants for reminder email");
+            }
+        }
+
+        targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
+
+        Func<AppUser, DateTime> getCelebrantBirthDate = (m) =>
+        {
+            int birthMonth = m.DateOfBirth.Month >= 1 && m.DateOfBirth.Month <= 12 ? m.DateOfBirth.Month : (eventDate.Month >= 1 && eventDate.Month <= 12 ? eventDate.Month : DateTime.UtcNow.Month);
+            int maxDays = DateTime.DaysInMonth(eventDate.Year, birthMonth);
+            int birthDay = m.DateOfBirth.Day >= 1 && m.DateOfBirth.Day <= maxDays ? m.DateOfBirth.Day : Math.Min(Math.Max(1, m.DateOfBirth.Day), maxDays);
+            return new DateTime(eventDate.Year, birthMonth, birthDay);
+        };
+
+        string celebrantsAndDatesHtml = string.Empty;
+        if (isBirthdayEvent)
+        {
+            if (targetCelebrants.Count == 1)
+            {
+                var c = targetCelebrants[0];
+                var bdayDate = getCelebrantBirthDate(c);
+                celebrantsAndDatesHtml = $@"
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Birthday Celebrant:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{c.FullName}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Particular Birthday Date:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #c026d3;"">{bdayDate:MMMM dd, yyyy}</span>
+                </div>";
+            }
+            else if (targetCelebrants.Count > 1)
+            {
+                var tableRows = string.Join("", targetCelebrants.Select(c =>
+                {
+                    var bdayDate = getCelebrantBirthDate(c);
+                    return $@"
+                        <tr style=""border-bottom: 1px dashed rgba(74, 63, 107, 0.1);"">
+                            <td style=""padding: 8px 12px; color: #4a3f6b; font-weight: 700; font-size: 13.5px;"">&#x1F382; {c.FullName}</td>
+                            <td align=""right"" style=""padding: 8px 12px; color: #c026d3; font-weight: 700; font-size: 13.5px;"">{bdayDate:MMMM dd, yyyy}</td>
+                        </tr>";
+                }));
+
+                celebrantsAndDatesHtml = $@"
+                <div class=""detail-row"">
+                    <span class=""detail-label"" style=""vertical-align: top; padding-top: 4px;"">Birthday Celebrants &amp; Dates:</span>
+                    <div class=""detail-value"" style=""display: block; margin-top: 6px;"">
+                        <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"" style=""border-collapse: collapse; background-color: #fbfaff; border-radius: 8px; border: 1.5px solid #ece8f8;"">
+                            {tableRows}
+                        </table>
+                    </div>
+                </div>";
+            }
+        }
+
+        string eventDateLabel = isBirthdayEvent && !string.IsNullOrWhiteSpace(eventItem.EventDates) && eventItem.EventDates.Contains(",")
+            ? "Event Dates:"
+            : "Event Date:";
+
+        string eventDateValueDisplay = !string.IsNullOrWhiteSpace(eventItem.EventDates)
+            ? eventItem.EventDates
+            : $"{eventDate:MMMM dd, yyyy}";
+
+        string totalAmountDisplay = isBirthdayEvent && targetCelebrants.Count > 1
+            ? $"Rs.{eventItem.BaseAmount:F2} ({targetCelebrants.Count} celebrants combined)"
+            : $"Rs.{eventItem.BaseAmount:F2}";
+
 
         // 1. Resolve Payment QR Setting for this Event Type
         EventTypePaymentSetting? paymentSetting = null;
@@ -457,6 +561,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
             eventTypeName,
             memberName,
             eventName,
+            eventDescription,
             formattedAmount,
             formattedDueDate,
             orgName,
@@ -539,52 +644,40 @@ public class ContributionReminderJobService : IContributionReminderJobService
             white-space: pre-line;
         }}
         .details-card {{
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
+            background-color: #faf9fd;
+            border: 1px solid rgba(74, 63, 107, 0.12);
+            border-radius: 10px;
+            padding: 24px;
+            margin-bottom: 25px;
         }}
         .detail-row {{
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px dashed #e2e8f0;
-            font-size: 14px;
+            margin-bottom: 16px;
+            border-bottom: 1px dashed rgba(74, 63, 107, 0.1);
+            padding-bottom: 16px;
         }}
         .detail-row:last-child {{
+            margin-bottom: 0;
             border-bottom: none;
             padding-bottom: 0;
         }}
         .detail-label {{
-            color: #64748b;
-            font-weight: 500;
+            font-weight: 700;
+            color: #5b5280;
+            display: inline-block;
+            width: 160px;
         }}
         .detail-value {{
-            color: #0f172a;
-            font-weight: 700;
-            text-align: right;
+            color: #1e1a2e;
+            display: inline-block;
         }}
-        .amount-banner {{
-            background: #fdf4ff;
-            border: 1.5px solid #d946ef;
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-            margin-bottom: 28px;
-        }}
-        .amount-banner .label {{
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 700;
-            color: #a21caf;
-            margin-bottom: 4px;
-        }}
-        .amount-banner .value {{
-            font-size: 28px;
+        .amount-highlight {{
+            font-size: 18px;
+            color: #2d2550;
             font-weight: 800;
-            color: #86198f;
+            background-color: #f0ecf9;
+            padding: 4px 10px;
+            border-radius: 6px;
+            display: inline-block;
         }}
         .qr-section {{
             text-align: center;
@@ -677,30 +770,28 @@ public class ContributionReminderJobService : IContributionReminderJobService
                 {resolvedDescription}
             </div>
 
-            <div class=""amount-banner"">
-                <div class=""label"">Pending Amount Due</div>
-                <div class=""value"">{formattedAmount}</div>
-            </div>
-
             <div class=""details-card"">
-                <table style=""width: 100%; border-collapse: collapse;"">
-                    <tr style=""border-bottom: 1px dashed #e2e8f0;"">
-                        <td style=""padding: 8px 0; color: #64748b; font-size: 14px;"">Member Name</td>
-                        <td style=""padding: 8px 0; color: #0f172a; font-weight: 700; text-align: right; font-size: 14px;"">{memberName}</td>
-                    </tr>
-                    <tr style=""border-bottom: 1px dashed #e2e8f0;"">
-                        <td style=""padding: 8px 0; color: #64748b; font-size: 14px;"">Event Name</td>
-                        <td style=""padding: 8px 0; color: #0f172a; font-weight: 700; text-align: right; font-size: 14px;"">{eventName}</td>
-                    </tr>
-                    <tr style=""border-bottom: 1px dashed #e2e8f0;"">
-                        <td style=""padding: 8px 0; color: #64748b; font-size: 14px;"">Event Date</td>
-                        <td style=""padding: 8px 0; color: #0f172a; font-weight: 700; text-align: right; font-size: 14px;"">{formattedDueDate}</td>
-                    </tr>
-                    <tr>
-                        <td style=""padding: 8px 0; color: #64748b; font-size: 14px;"">Payment Status</td>
-                        <td style=""padding: 8px 0; color: #dc2626; font-weight: 700; text-align: right; font-size: 14px;"">&#x23F3; Pending</td>
-                    </tr>
-                </table>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Event Name:</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{eventName}</span>
+                </div>
+                {celebrantsAndDatesHtml}
+                <div class=""detail-row"">
+                    <span class=""detail-label"">{eventDateLabel}</span>
+                    <span class=""detail-value"" style=""font-weight: 600;"">{eventDateValueDisplay}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Total Amount:</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{totalAmountDisplay}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Description:</span>
+                    <span class=""detail-value"">{eventDescription}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Contribution Amount:</span>
+                    <span class=""detail-value amount-highlight"">{formattedAmount}</span>
+                </div>
             </div>
 
             {qrSectionBlock}
@@ -742,6 +833,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
         string categoryName,
         string memberName,
         string eventName,
+        string eventDescription,
         string formattedAmount,
         string formattedDueDate,
         string orgName,
@@ -791,13 +883,14 @@ public class ContributionReminderJobService : IContributionReminderJobService
         {
             rawDescription = !string.IsNullOrWhiteSpace(systemSettings?.EmailDescription)
                 ? systemSettings.EmailDescription
-                : "Dear {memberName},\n\nThis is a friendly reminder that your contribution of {amount} for {categoryName} is pending.\nDue Date: {dueDate}\n\nPlease scan the dynamic UPI QR code below or log in to the portal to complete your contribution payment.\n\nThank you,\n{orgName}";
+                : "Dear {memberName},\n\nThis is a friendly reminder that your contribution of {amount} for {categoryName} is pending.\nDue Date: {dueDate}\n\n{eventDescription}\n\nPlease scan the dynamic UPI QR code below or log in to the portal to complete your contribution payment.\n\nThank you,\n{orgName}";
         }
 
         string resolvedSubject = rawSubject
             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
             .Replace("{categoryName}", categoryName, StringComparison.OrdinalIgnoreCase)
             .Replace("{eventName}", eventName, StringComparison.OrdinalIgnoreCase)
+            .Replace("{eventDescription}", eventDescription, StringComparison.OrdinalIgnoreCase)
             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
             .Replace("{orgName}", orgName, StringComparison.OrdinalIgnoreCase);
@@ -818,6 +911,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
             .Replace("{categoryName}", categoryName, StringComparison.OrdinalIgnoreCase)
             .Replace("{eventName}", eventName, StringComparison.OrdinalIgnoreCase)
+            .Replace("{eventDescription}", eventDescription, StringComparison.OrdinalIgnoreCase)
             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
             .Replace("{orgName}", orgName, StringComparison.OrdinalIgnoreCase)
