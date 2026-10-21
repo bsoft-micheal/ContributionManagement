@@ -182,7 +182,7 @@ public class ContributionRepository : IContributionRepository
                 if (ev != null && ev.BaseAmount > 0)
                 {
                     var count = items.Count;
-                    var perMemberAmount = count > 0 ? Math.Round(ev.BaseAmount / count, 2) : 0m;
+                    var perMemberAmount = count > 0 ? RoundingHelper.RoundToWhole(ev.BaseAmount / count) : 0m;
                     if (perMemberAmount > 0)
                     {
                         var dbContribs = await _context.Contributions
@@ -228,20 +228,21 @@ public class ContributionRepository : IContributionRepository
                     if (participantUserIds.Count > 0)
                     {
                         var baseAmount = ev.BaseAmount;
-                        var perMemberAmount = participantUserIds.Count > 0 ? Math.Round(baseAmount / participantUserIds.Count, 2) : 0m;
+                        var splitAmounts = RoundingHelper.DistributeEqualSplit(baseAmount, participantUserIds.Count);
 
                         var pendingStatus = await _context.Statuses.FirstOrDefaultAsync(s => s.StatusName.ToLower() == "pending", cancellationToken);
                         var pendingStatusId = pendingStatus?.StatusId;
 
                         var newContribs = new List<Contribution>();
-                        foreach (var uid in participantUserIds)
+                        for (int i = 0; i < participantUserIds.Count; i++)
                         {
+                            var uid = participantUserIds[i];
                             var contrib = new Contribution
                             {
                                 ContributionId = Guid.NewGuid(),
                                 EventId = ev.EventId,
                                 UserId = uid,
-                                Amount = perMemberAmount,
+                                Amount = splitAmounts[i],
                                 StatusId = pendingStatusId,
                                 PaymentStatus = PaymentStatus.Pending,
                                 PaymentMode = PaymentMode.None,
