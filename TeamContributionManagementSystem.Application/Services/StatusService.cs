@@ -101,10 +101,13 @@ public class StatusService : IStatusService
                 throw new InvalidOperationException($"Status '{trimmedName}' already exists.");
             }
 
+            var moduleVal = !string.IsNullOrWhiteSpace(request.Module) ? request.Module.Trim() : "General";
             var entity = new Status
             {
                 StatusId = Guid.NewGuid(),
                 StatusName = trimmedName,
+                Module = moduleVal,
+                ModuleId = request.ModuleId,
                 IsActive = request.IsActive,
                 IsDeleted = false,
                 CreatedBy = CommonMethods.ParseNullableGuid(user),
@@ -139,6 +142,14 @@ public class StatusService : IStatusService
             }
 
             entity.StatusName = trimmedName;
+            if (!string.IsNullOrWhiteSpace(request.Module))
+            {
+                entity.Module = request.Module.Trim();
+            }
+            if (request.ModuleId.HasValue)
+            {
+                entity.ModuleId = request.ModuleId;
+            }
             entity.IsActive = request.IsActive;
             entity.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             entity.ModifiedOn = DateTime.UtcNow;

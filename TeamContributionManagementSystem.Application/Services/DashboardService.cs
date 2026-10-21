@@ -196,9 +196,10 @@ public class DashboardService : IDashboardService
                 ? allExpenses.Where(e => (!startDate.HasValue || e.ExpenseDate >= startDate.Value) && (!endDate.HasValue || e.ExpenseDate <= endDate.Value)).Sum(e => e.Amount)
                 : allExpenses.Sum(e => e.Amount);
             var totalExpenses = monthlyEvents.Count > 0 ? eventExpensesSum : periodExpenses;
+            var totalAllocated = monthlyEvents.Where(e => e.UseAvailableBalance).Sum(e => e.AllocatedAmount);
             var adminOverallExpected = monthlyEvents.Sum(x => x.TotalExpectedAmount);
             var adminTotalCollections = monthlyEvents.Sum(x => x.TotalPaidAmount);
-            var adminOverallRemaining = adminTotalCollections - totalExpenses;
+            var adminOverallRemaining = adminTotalCollections - totalExpenses - totalAllocated;
 
             return new DashboardSummaryDto
             {
@@ -206,6 +207,7 @@ public class DashboardService : IDashboardService
                 TotalContributions = RoundingHelper.RoundToWhole(adminTotalCollections),
                 PendingPayments = monthlyEvents.Count > 0 ? eventPendingCount : pendingContributions.Count,
                 TotalPendingAmount = RoundingHelper.RoundToWhole(monthlyEvents.Count > 0 ? eventPendingSum : pendingContributions.Sum(x => x.Amount)),
+                TotalAllocatedAmount = RoundingHelper.RoundToWhole(totalAllocated),
                 TotalExpectedAmount = RoundingHelper.RoundToWhole(adminOverallExpected),
                 TotalExpenses = RoundingHelper.RoundToWhole(totalExpenses),
                 TotalRemainingAmount = RoundingHelper.RoundToWhole(adminOverallRemaining),
@@ -213,7 +215,8 @@ public class DashboardService : IDashboardService
                     var eventExp = allExpenses
                         .Where(e => string.Equals(e.EventName?.Trim(), x.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
                         .Sum(e => e.Amount);
-                    var eventRemaining = x.TotalPaidAmount - eventExp;
+                    var eventAllocated = x.UseAvailableBalance ? x.AllocatedAmount : 0m;
+                    var eventRemaining = x.TotalPaidAmount - eventExp - eventAllocated;
                     return new UpcomingEventDto
                     {
                         EventId = x.EventId,
@@ -224,6 +227,8 @@ public class DashboardService : IDashboardService
                         CollectedAmount = RoundingHelper.RoundToWhole(x.TotalPaidAmount),
                         PendingAmount = RoundingHelper.RoundToWhole(x.TotalExpectedAmount - x.TotalPaidAmount),
                         ExpenseAmount = RoundingHelper.RoundToWhole(eventExp),
+                        UseAvailableBalance = x.UseAvailableBalance,
+                        AllocatedAmount = x.AllocatedAmount,
                         RemainingAmount = RoundingHelper.RoundToWhole(eventRemaining),
                         OverallExpectedAmount = RoundingHelper.RoundToWhole(x.TotalExpectedAmount),
                         OverallExpenseAmount = RoundingHelper.RoundToWhole(eventExp),
