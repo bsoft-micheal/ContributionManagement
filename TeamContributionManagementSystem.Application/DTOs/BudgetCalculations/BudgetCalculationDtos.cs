@@ -57,6 +57,8 @@ public class BudgetCalculationHistoryDto
     public string? Remarks { get; set; }
     public string? ChangedBy { get; set; }
     public Guid? ChangedById { get; set; }
+    public string? ModifiedBy { get; set; }
+    public Guid? ModifiedById { get; set; }
     public DateTime ChangedOn { get; set; }
     public bool IsActive { get; set; } = true;
 }
