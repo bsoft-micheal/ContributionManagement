@@ -1103,6 +1103,19 @@ public class EventRepository : IEventRepository
         }
     }
 
+    public async Task AddParticipantsAsync(IEnumerable<EventParticipant> participants, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _context.EventParticipants.AddRangeAsync(participants, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddParticipantsAsync));
+            throw;
+        }
+    }
+
     public void DeleteParticipants(IEnumerable<EventParticipant> participants)
     {
         try
