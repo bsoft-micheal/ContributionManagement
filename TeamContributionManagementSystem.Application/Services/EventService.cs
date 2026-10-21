@@ -332,22 +332,23 @@ public class EventService : IEventService
                 throw new InvalidOperationException("Event cannot be saved with ₹0. Please configure budget calculation rates or enter a valid contribution amount.");
             }
 
+            decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
             decimal allocatedAmount = 0m;
             if (request.UseAvailableBalance)
             {
                 allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
-                    ? request.AllocatedAmount.Value
-                    : request.BaseAmount;
+                    ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value)
+                    : plannedBudget;
 
-                if (allocatedAmount > request.BaseAmount)
+                if (allocatedAmount > plannedBudget)
                 {
-                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N2}) cannot exceed the planned budget (₹{request.BaseAmount:N2}).");
+                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the planned budget (₹{plannedBudget:N0}).");
                 }
 
                 var balanceInfo = await GetAvailableAmountInHandAsync(cancellationToken);
                 if (allocatedAmount > balanceInfo.AvailableAmountInHand)
                 {
-                    throw new InvalidOperationException($"The selected deduction (₹{allocatedAmount:N2}) exceeds the available Amount In Hand (₹{balanceInfo.AvailableAmountInHand:N2}).");
+                    throw new InvalidOperationException($"The selected deduction (₹{allocatedAmount:N0}) exceeds the available Amount In Hand (₹{balanceInfo.AvailableAmountInHand:N0}).");
                 }
             }
 
@@ -362,7 +363,7 @@ public class EventService : IEventService
                 CreatedAt = DateTime.UtcNow,
                 Description = (request.Description ?? string.Empty).Trim(),
                 Status = request.Status != 0 ? request.Status : EventStatus.Planned,
-                BaseAmount = request.BaseAmount,
+                BaseAmount = plannedBudget,
                 UseAvailableBalance = request.UseAvailableBalance,
                 AllocatedAmount = allocatedAmount
             };
@@ -383,8 +384,8 @@ public class EventService : IEventService
             }
 
             var remainingBudgetToCollect = request.UseAvailableBalance
-                ? Math.Max(0m, request.BaseAmount - allocatedAmount)
-                : request.BaseAmount;
+                ? Math.Max(0m, plannedBudget - allocatedAmount)
+                : plannedBudget;
 
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
@@ -1156,21 +1157,22 @@ public class EventService : IEventService
             {
                 eventItem.Status = request.Status;
             }
-            eventItem.BaseAmount = request.BaseAmount;
+            decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
+            eventItem.BaseAmount = plannedBudget;
             decimal allocatedAmount = 0m;
             if (request.UseAvailableBalance)
             {
                 allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
-                    ? request.AllocatedAmount.Value
-                    : request.BaseAmount;
+                    ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value)
+                    : plannedBudget;
 
-                if (allocatedAmount > request.BaseAmount)
+                if (allocatedAmount > plannedBudget)
                 {
-                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N2}) cannot exceed the planned budget (₹{request.BaseAmount:N2}).");
+                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the planned budget (₹{plannedBudget:N0}).");
                 }
             }
 
-            eventItem.BaseAmount = request.BaseAmount;
+            eventItem.BaseAmount = plannedBudget;
             eventItem.UseAvailableBalance = request.UseAvailableBalance;
             eventItem.AllocatedAmount = allocatedAmount;
             eventItem.ModifiedOn = DateTime.UtcNow;
@@ -1188,8 +1190,8 @@ public class EventService : IEventService
             }
 
             var remainingBudgetToCollect = request.UseAvailableBalance
-                ? Math.Max(0m, request.BaseAmount - allocatedAmount)
-                : request.BaseAmount;
+                ? Math.Max(0m, plannedBudget - allocatedAmount)
+                : plannedBudget;
 
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
@@ -1466,21 +1468,21 @@ public class EventService : IEventService
     {
         var overrideLookup = (overrides ?? Array.Empty<ContributionOverrideDto>())
             .GroupBy(x => x.MemberId)
-            .ToDictionary(x => x.Key, x => Math.Round(x.Last().Amount, 2, MidpointRounding.AwayFromZero));
+            .ToDictionary(x => x.Key, x => RoundingHelper.RoundToWhole(x.Last().Amount));
 
         bool hasTenureRule = eventType.HasTenureRule;
         decimal thresholdYears = eventType.TenureThresholdYears > 0 ? eventType.TenureThresholdYears : 1.0m;
         decimal newEntrantRatio = (eventType.NewEntrantSharePercentage > 0 ? eventType.NewEntrantSharePercentage : 50.0m) / 100.0m;
         decimal standardRatio = (eventType.StandardSharePercentage > 0 ? eventType.StandardSharePercentage : 100.0m) / 100.0m;
 
-        decimal totalBaseDecimal = Math.Round(baseAmount, 2, MidpointRounding.AwayFromZero);
+        decimal totalBaseDecimal = RoundingHelper.RoundToWhole(baseAmount);
         decimal overrideSum = overrideLookup.Values.Sum();
         decimal splitPool = Math.Max(0m, totalBaseDecimal - overrideSum);
 
         var nonOverrideMembers = members.Where(m => !overrideLookup.ContainsKey(m.MemberId)).ToList();
         var results = new List<MemberContributionCalculationResult>();
 
-        decimal baseStandardAmount = members.Count > 0 ? Math.Round(totalBaseDecimal / members.Count, 2, MidpointRounding.AwayFromZero) : 0m;
+        decimal baseStandardAmount = members.Count > 0 ? RoundingHelper.RoundToWhole(totalBaseDecimal / members.Count) : 0m;
 
         foreach (var member in members)
         {
@@ -1563,37 +1565,19 @@ public class EventService : IEventService
 
                 decimal divisor = memberRatios.Values.Sum(x => x.Ratio);
                 decimal standardShare = divisor > 0 ? (splitPool / divisor) : 0m;
-                baseStandardAmount = Math.Round(standardShare, 2, MidpointRounding.AwayFromZero);
+                baseStandardAmount = RoundingHelper.RoundToWhole(standardShare);
 
-                var tempAmounts = new Dictionary<Guid, decimal>();
-                foreach (var member in nonOverrideMembers)
-                {
-                    var (shareRatio, _) = memberRatios[member.MemberId];
-                    tempAmounts[member.MemberId] = Math.Round(standardShare * shareRatio, 2, MidpointRounding.AwayFromZero);
-                }
+                var rawShares = nonOverrideMembers.Select(m => standardShare * memberRatios[m.MemberId].Ratio).ToList();
+                var distributedShares = RoundingHelper.DistributeRoundedTotal(splitPool, rawShares);
 
-                // Distribute integer remainder (+1/-1 rupees) so sum of member amounts equals splitPool
-                decimal nonOverrideSum = tempAmounts.Values.Sum();
-                decimal remainder = splitPool - nonOverrideSum;
-                if (remainder != 0)
+                for (int i = 0; i < nonOverrideMembers.Count; i++)
                 {
-                    int step = remainder > 0 ? 1 : -1;
-                    int remainingAdjustment = (int)Math.Abs(remainder);
-                    for (int i = 0; i < nonOverrideMembers.Count && remainingAdjustment > 0; i++)
-                    {
-                        var mId = nonOverrideMembers[i].MemberId;
-                        tempAmounts[mId] += step;
-                        remainingAdjustment--;
-                    }
-                }
-
-                foreach (var member in nonOverrideMembers)
-                {
+                    var member = nonOverrideMembers[i];
                     var (shareRatio, tenureYears) = memberRatios[member.MemberId];
                     results.Add(new MemberContributionCalculationResult
                     {
                         MemberId = member.MemberId,
-                        Amount = tempAmounts[member.MemberId],
+                        Amount = distributedShares[i],
                         CompletedYears = tenureYears,
                         SharePercentage = Math.Round(shareRatio * 100m, 1),
                         StandardAmount = baseStandardAmount
@@ -1602,39 +1586,19 @@ public class EventService : IEventService
             }
             else
             {
-                decimal rawPerPerson = splitPool / nonOverrideMembers.Count;
-                decimal roundedPerPerson = Math.Round(rawPerPerson, 2, MidpointRounding.AwayFromZero);
-                baseStandardAmount = roundedPerPerson;
+                var distributedShares = RoundingHelper.DistributeEqualSplit(splitPool, nonOverrideMembers.Count);
+                baseStandardAmount = distributedShares.Count > 0 ? distributedShares.Max() : 0m;
 
-                var tempAmounts = new Dictionary<Guid, decimal>();
-                foreach (var member in nonOverrideMembers)
+                for (int i = 0; i < nonOverrideMembers.Count; i++)
                 {
-                    tempAmounts[member.MemberId] = roundedPerPerson;
-                }
-
-                decimal nonOverrideSum = tempAmounts.Values.Sum();
-                decimal remainder = splitPool - nonOverrideSum;
-                if (remainder != 0)
-                {
-                    int step = remainder > 0 ? 1 : -1;
-                    int remainingAdjustment = (int)Math.Abs(remainder);
-                    for (int i = 0; i < nonOverrideMembers.Count && remainingAdjustment > 0; i++)
-                    {
-                        var mId = nonOverrideMembers[i].MemberId;
-                        tempAmounts[mId] += step;
-                        remainingAdjustment--;
-                    }
-                }
-
-                foreach (var member in nonOverrideMembers)
-                {
+                    var member = nonOverrideMembers[i];
                     double tenureDays = (eventDate.Date - member.JoiningDate.Date).TotalDays;
                     decimal tenureYears = Math.Max(0m, Math.Round((decimal)(tenureDays / 365.25), 1, MidpointRounding.AwayFromZero));
 
                     results.Add(new MemberContributionCalculationResult
                     {
                         MemberId = member.MemberId,
-                        Amount = tempAmounts[member.MemberId],
+                        Amount = distributedShares[i],
                         CompletedYears = tenureYears,
                         SharePercentage = 100m,
                         StandardAmount = baseStandardAmount
@@ -1693,13 +1657,14 @@ public class EventService : IEventService
                 };
             }
 
+            decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
             var memberLookup = members.ToDictionary(m => m.MemberId);
             var allocatedAmount = request.UseAvailableBalance
-                ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? request.AllocatedAmount.Value : request.BaseAmount)
+                ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value) : plannedBudget)
                 : 0m;
             var remainingBudgetToCollect = request.UseAvailableBalance
-                ? Math.Max(0m, request.BaseAmount - allocatedAmount)
-                : request.BaseAmount;
+                ? Math.Max(0m, plannedBudget - allocatedAmount)
+                : plannedBudget;
 
             var detailedCalculations = CalculateDetailedMemberContributions(
                 eventType,
@@ -1741,9 +1706,9 @@ public class EventService : IEventService
             {
                 TotalMembers = members != null ? members.Count : 0,
                 EligibleContributors = orderedPreview.Count,
-                PlannedBudget = Math.Round(request.BaseAmount, 2, MidpointRounding.AwayFromZero),
-                ExpectedCollection = totalCalculated,
-                StandardContributionAmount = standardAmt,
+                PlannedBudget = plannedBudget,
+                ExpectedCollection = RoundingHelper.RoundToWhole(totalCalculated),
+                StandardContributionAmount = RoundingHelper.RoundToWhole(standardAmt),
                 Members = orderedPreview
             };
         }
@@ -1997,9 +1962,9 @@ public class EventService : IEventService
 
             return new AvailableAmountInHandDto
             {
-                ActualAmountInHand = Math.Round(actualAmountInHand, 2),
-                TotalReservedAmount = Math.Round(totalReserved, 2),
-                AvailableAmountInHand = Math.Round(availableAmountInHand, 2)
+                ActualAmountInHand = RoundingHelper.RoundToWhole(actualAmountInHand),
+                TotalReservedAmount = RoundingHelper.RoundToWhole(totalReserved),
+                AvailableAmountInHand = RoundingHelper.RoundToWhole(availableAmountInHand)
             };
         }
         catch (Exception ex)

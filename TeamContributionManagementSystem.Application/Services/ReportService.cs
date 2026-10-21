@@ -118,11 +118,11 @@ public class ReportService : IReportService
                     EventName = x.EventName,
                     EventTypeName = x.EventTypeName,
                     EventDate = x.EventDate,
-                    ExpectedAmount = expected,
-                    PaidAmount = paid,
-                    PendingAmount = pending,
+                    ExpectedAmount = RoundingHelper.RoundToWhole(expected),
+                    PaidAmount = RoundingHelper.RoundToWhole(paid),
+                    PendingAmount = RoundingHelper.RoundToWhole(pending),
                     CollectionRate = rate,
-                    ExpenseAmount = eventExp,
+                    ExpenseAmount = RoundingHelper.RoundToWhole(eventExp),
                     CreatedBy = x.CreatedBy,
                     CreatedAt = x.CreatedAt
                 };
@@ -160,9 +160,9 @@ public class ReportService : IReportService
                             EventName = evName,
                             CategoryName = evType,
                             EventDate = evDate,
-                            ExpectedAmount = c.Amount,
-                            PaidAmount = isPaid ? c.Amount : 0m,
-                            PendingAmount = isPaid ? 0m : c.Amount,
+                            ExpectedAmount = RoundingHelper.RoundToWhole(c.Amount),
+                            PaidAmount = isPaid ? RoundingHelper.RoundToWhole(c.Amount) : 0m,
+                            PendingAmount = isPaid ? 0m : RoundingHelper.RoundToWhole(c.Amount),
                             PaymentStatus = isPaid ? "Paid" : "Pending",
                             PaymentDate = c.PaymentDate,
                             PaymentMode = c.PaymentMode.ToString()
@@ -173,8 +173,8 @@ public class ReportService : IReportService
                     {
                         MemberId = group.Key,
                         MemberName = memberName,
-                        TotalExpectedAmount = expected,
-                        TotalPaidAmount = paid,
+                        TotalExpectedAmount = RoundingHelper.RoundToWhole(expected),
+                        TotalPaidAmount = RoundingHelper.RoundToWhole(paid),
                         PaidEventsCount = group.Count(x => x.PaymentStatus == PaymentStatus.Paid),
                         PendingEventsCount = group.Count(x => x.PaymentStatus != PaymentStatus.Paid),
                         CompletionRate = completion,
@@ -230,9 +230,9 @@ public class ReportService : IReportService
                     EventName = x.EventName,
                     EventTypeName = x.EventTypeName,
                     EventDate = x.EventDate,
-                    TotalCollections = collections,
-                    TotalExpenses = expenses,
-                    NetBalance = net,
+                    TotalCollections = RoundingHelper.RoundToWhole(collections),
+                    TotalExpenses = RoundingHelper.RoundToWhole(expenses),
+                    NetBalance = RoundingHelper.RoundToWhole(net),
                     Status = net >= 0 ? CommonConstants.FinancialStatus.Surplus : CommonConstants.FinancialStatus.Deficit,
                     SavingsRatePercent = savingsRate,
                     CreatedBy = x.CreatedBy,
@@ -280,7 +280,7 @@ public class ReportService : IReportService
                 {
                     PaymentMode = kvp.Key,
                     TransactionCount = kvp.Value.Count,
-                    TotalAmount = kvp.Value.TotalAmount,
+                    TotalAmount = RoundingHelper.RoundToWhole(kvp.Value.TotalAmount),
                     Percentage = totalPaidFromContributions > 0 ? Math.Round((kvp.Value.TotalAmount / totalPaidFromContributions) * 100, 1) : 0,
                     VerifiedCount = kvp.Value.Count
                 })
@@ -296,7 +296,7 @@ public class ReportService : IReportService
                     {
                         PaymentMode = g.Key,
                         TransactionCount = g.Count(),
-                        TotalAmount = g.Sum(p => p.Amount),
+                        TotalAmount = RoundingHelper.RoundToWhole(g.Sum(p => p.Amount)),
                         Percentage = totalFromPayments > 0 ? Math.Round((g.Sum(p => p.Amount) / totalFromPayments) * 100, 1) : 0,
                         VerifiedCount = g.Count(p => p.Status == CommonConstants.PaymentStatuses.Verified || p.Status == CommonConstants.PaymentStatuses.Approved)
                     })
@@ -313,11 +313,11 @@ public class ReportService : IReportService
 
             var financialSummary = new FinancialHealthSummaryDto
             {
-                TotalExpectedCollections = totalExpected,
-                TotalActualCollections = totalCollected,
-                TotalExpenses = totalExp,
-                NetReserveFund = totalCollected - totalExp,
-                TotalPendingDues = totalPending,
+                TotalExpectedCollections = RoundingHelper.RoundToWhole(totalExpected),
+                TotalActualCollections = RoundingHelper.RoundToWhole(totalCollected),
+                TotalExpenses = RoundingHelper.RoundToWhole(totalExp),
+                NetReserveFund = RoundingHelper.RoundToWhole(totalCollected - totalExp),
+                TotalPendingDues = RoundingHelper.RoundToWhole(totalPending),
                 DefaultersCount = defaulters,
                 CollectionEfficiencyPercent = totalExpected > 0 ? Math.Round((totalCollected / totalExpected) * 100, 1) : 0
             };
