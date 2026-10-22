@@ -159,7 +159,7 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
-                    ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
+                    ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.UseAvailableBalance && x.AllocatedAmount > 0
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? Math.Max(0m, x.BaseAmount - x.AllocatedAmount))
                         : Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
@@ -195,7 +195,7 @@ public class EventRepository : IEventRepository
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
                     StandardSharePercentage = x.EventType != null ? x.EventType.StandardSharePercentage : 0,
                     RuleDescription = x.EventType != null ? x.EventType.RuleDescription : null,
-                    Participants = x.Participants.Where(p => !p.Member!.IsDeleted).Select(p => new EventParticipantDto
+                    Participants = x.Participants.Where(p => !p.IsDeleted && !p.Member!.IsDeleted).Select(p => new EventParticipantDto
                     {
                         Id = p.Id,
                         MemberId = p.UserId,
@@ -387,7 +387,7 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
-                    ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
+                    ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.UseAvailableBalance && x.AllocatedAmount > 0
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? Math.Max(0m, x.BaseAmount - x.AllocatedAmount))
                         : Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
@@ -423,7 +423,7 @@ public class EventRepository : IEventRepository
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
                     StandardSharePercentage = x.EventType != null ? x.EventType.StandardSharePercentage : 0,
                     RuleDescription = x.EventType != null ? x.EventType.RuleDescription : null,
-                    Participants = x.Participants.Where(p => !p.Member!.IsDeleted).Select(p => new EventParticipantDto
+                    Participants = x.Participants.Where(p => !p.IsDeleted && !p.Member!.IsDeleted).Select(p => new EventParticipantDto
                     {
                         Id = p.Id,
                         MemberId = p.UserId,
@@ -539,7 +539,7 @@ public class EventRepository : IEventRepository
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
                     StandardSharePercentage = x.EventType != null ? x.EventType.StandardSharePercentage : 0,
                     RuleDescription = x.EventType != null ? x.EventType.RuleDescription : null,
-                    Participants = x.Participants.Where(p => !p.Member!.IsDeleted && p.UserId == memberId).Select(p => new EventParticipantDto
+                    Participants = x.Participants.Where(p => !p.IsDeleted && !p.Member!.IsDeleted && p.UserId == memberId).Select(p => new EventParticipantDto
                     {
                         Id = p.Id,
                         MemberId = p.UserId,
@@ -704,7 +704,7 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
-                    ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
+                    ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.UseAvailableBalance && x.AllocatedAmount > 0
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? Math.Max(0m, x.BaseAmount - x.AllocatedAmount))
                         : Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
@@ -740,7 +740,7 @@ public class EventRepository : IEventRepository
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
                     StandardSharePercentage = x.EventType != null ? x.EventType.StandardSharePercentage : 0,
                     RuleDescription = x.EventType != null ? x.EventType.RuleDescription : null,
-                    Participants = x.Participants.Where(p => !p.Member!.IsDeleted).Select(p => new EventParticipantDto
+                    Participants = x.Participants.Where(p => !p.IsDeleted && !p.Member!.IsDeleted).Select(p => new EventParticipantDto
                     {
                         Id = p.Id,
                         MemberId = p.UserId,
@@ -859,7 +859,7 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
-                    ParticipantCount = x.Participants.Count(p => !p.Member!.IsDeleted),
+                    ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.UseAvailableBalance && x.AllocatedAmount > 0
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? Math.Max(0m, x.BaseAmount - x.AllocatedAmount))
                         : Math.Max(x.BaseAmount, x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? x.BaseAmount),
@@ -894,7 +894,7 @@ public class EventRepository : IEventRepository
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
                     StandardSharePercentage = x.EventType != null ? x.EventType.StandardSharePercentage : 0,
                     RuleDescription = x.EventType != null ? x.EventType.RuleDescription : null,
-                    Participants = x.Participants.Where(p => !p.Member!.IsDeleted).Select(p => new EventParticipantDto
+                    Participants = x.Participants.Where(p => !p.IsDeleted && !p.Member!.IsDeleted).Select(p => new EventParticipantDto
                     {
                         Id = p.Id,
                         MemberId = p.UserId,
