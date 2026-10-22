@@ -218,6 +218,79 @@ public class EventService : IEventService
                 _logger.LogWarning(ex, "Failed to resolve user names for events");
             }
 
+            foreach (var ev in events)
+            {
+                if (!string.IsNullOrWhiteSpace(ev.EventDates) && ev.EventDates.Trim().StartsWith("{"))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(ev.EventDates);
+                        var typeDates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        var memberDates = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                            {
+                                var mDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                                foreach (var mProp in prop.Value.EnumerateObject())
+                                {
+                                    mDict[mProp.Name] = mProp.Value.GetString() ?? string.Empty;
+                                }
+                                memberDates[prop.Name] = mDict;
+                                typeDates[prop.Name] = string.Join(", ", mDict.Values.Where(v => !string.IsNullOrWhiteSpace(v)));
+                            }
+                            else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                typeDates[prop.Name] = prop.Value.GetString() ?? string.Empty;
+                            }
+                        }
+
+                        if (typeDates.Count > 0) ev.EventTypeDates = typeDates;
+                        if (memberDates.Count > 0)
+                        {
+                            ev.EventTypeMemberDates = memberDates;
+                            var typeMembers = new Dictionary<string, List<Guid>>(StringComparer.OrdinalIgnoreCase);
+                            foreach (var (typeName, mDict) in memberDates)
+                            {
+                                var guids = new List<Guid>();
+                                foreach (var key in mDict.Keys)
+                                {
+                                    if (Guid.TryParse(key, out var g)) guids.Add(g);
+                                }
+                                if (guids.Count > 0)
+                                {
+                                    typeMembers[typeName] = guids;
+                                    if (typeName.Equals("Marriage", StringComparison.OrdinalIgnoreCase))
+                                        typeMembers["marriage"] = guids;
+                                    if (typeName.Equals("Send Off", StringComparison.OrdinalIgnoreCase) || typeName.Equals("SendOff", StringComparison.OrdinalIgnoreCase))
+                                        typeMembers["sendOff"] = guids;
+                                }
+                            }
+                            if (typeMembers.Count > 0) ev.EventTypeMembers = typeMembers;
+                        }
+
+                        var allEventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
+                        var discoveredTypeIds = new HashSet<Guid>();
+                        if (ev.EventTypeId != Guid.Empty)
+                        {
+                            discoveredTypeIds.Add(ev.EventTypeId);
+                        }
+                        foreach (var catName in typeDates.Keys)
+                        {
+                            var cleanCat = catName.Replace(" ", "").Replace("-", "").Replace("_", "").ToLower();
+                            var matched = allEventTypes.FirstOrDefault(t => t.EventTypeName.Replace(" ", "").Replace("-", "").Replace("_", "").Equals(cleanCat, StringComparison.OrdinalIgnoreCase));
+                            if (matched != null) discoveredTypeIds.Add(matched.EventTypeId);
+                        }
+                        if (discoveredTypeIds.Count > 0)
+                        {
+                            ev.EventTypeIds = discoveredTypeIds.ToList();
+                        }
+                    }
+                    catch { }
+                }
+            }
+
             return events;
         }
         catch (Exception ex)
@@ -286,6 +359,76 @@ public class EventService : IEventService
                 eventDetails.CreatedBy = eventDetails.CreatedByName;
             }
 
+            if (!string.IsNullOrWhiteSpace(eventDetails.EventDates) && eventDetails.EventDates.Trim().StartsWith("{"))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(eventDetails.EventDates);
+                    var typeDates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    var memberDates = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            var mDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                            foreach (var mProp in prop.Value.EnumerateObject())
+                            {
+                                mDict[mProp.Name] = mProp.Value.GetString() ?? string.Empty;
+                            }
+                            memberDates[prop.Name] = mDict;
+                            typeDates[prop.Name] = string.Join(", ", mDict.Values.Where(v => !string.IsNullOrWhiteSpace(v)));
+                        }
+                        else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            typeDates[prop.Name] = prop.Value.GetString() ?? string.Empty;
+                        }
+                    }
+
+                    if (typeDates.Count > 0) eventDetails.EventTypeDates = typeDates;
+                    if (memberDates.Count > 0)
+                    {
+                        eventDetails.EventTypeMemberDates = memberDates;
+                        var typeMembers = new Dictionary<string, List<Guid>>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var (typeName, mDict) in memberDates)
+                        {
+                            var guids = new List<Guid>();
+                            foreach (var key in mDict.Keys)
+                            {
+                                if (Guid.TryParse(key, out var g)) guids.Add(g);
+                            }
+                            if (guids.Count > 0)
+                            {
+                                typeMembers[typeName] = guids;
+                                if (typeName.Equals("Marriage", StringComparison.OrdinalIgnoreCase))
+                                    typeMembers["marriage"] = guids;
+                                if (typeName.Equals("Send Off", StringComparison.OrdinalIgnoreCase) || typeName.Equals("SendOff", StringComparison.OrdinalIgnoreCase))
+                                    typeMembers["sendOff"] = guids;
+                            }
+                        }
+                        if (typeMembers.Count > 0) eventDetails.EventTypeMembers = typeMembers;
+                    }
+
+                    var allTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
+                    var discoveredTypeIds = new HashSet<Guid>();
+                    if (eventDetails.EventTypeId != Guid.Empty)
+                    {
+                        discoveredTypeIds.Add(eventDetails.EventTypeId);
+                    }
+                    foreach (var catName in typeDates.Keys)
+                    {
+                        var cleanCat = catName.Replace(" ", "").Replace("-", "").Replace("_", "").ToLower();
+                        var matched = allTypes.FirstOrDefault(t => t.EventTypeName.Replace(" ", "").Replace("-", "").Replace("_", "").Equals(cleanCat, StringComparison.OrdinalIgnoreCase));
+                        if (matched != null) discoveredTypeIds.Add(matched.EventTypeId);
+                    }
+                    if (discoveredTypeIds.Count > 0)
+                    {
+                        eventDetails.EventTypeIds = discoveredTypeIds.ToList();
+                    }
+                }
+                catch { }
+            }
+
             return eventDetails;
         }
         catch (Exception ex)
@@ -352,16 +495,32 @@ public class EventService : IEventService
                 }
             }
 
+            string? eventDatesSerialized = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
+            if (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Count > 0)
+            {
+                eventDatesSerialized = System.Text.Json.JsonSerializer.Serialize(request.EventTypeMemberDates);
+            }
+            else if (request.EventTypeDates != null && request.EventTypeDates.Count > 0)
+            {
+                eventDatesSerialized = System.Text.Json.JsonSerializer.Serialize(request.EventTypeDates);
+            }
+
+            var cleanDesc = (request.Description ?? string.Empty).Trim();
+            if (cleanDesc.Length > 1000)
+            {
+                cleanDesc = cleanDesc.Substring(0, 1000);
+            }
+
             var eventItem = new Event
             {
                 EventId = Guid.NewGuid(),
                 EventName = (request.EventName ?? string.Empty).Trim(),
                 EventTypeId = eventType.EventTypeId,
                 EventDate = request.EventDate.Date,
-                EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null,
+                EventDates = eventDatesSerialized,
                 CreatedBy = user.UserId,
                 CreatedAt = DateTime.UtcNow,
-                Description = (request.Description ?? string.Empty).Trim(),
+                Description = cleanDesc,
                 Status = request.Status != 0 ? request.Status : EventStatus.Planned,
                 BaseAmount = plannedBudget,
                 UseAvailableBalance = request.UseAvailableBalance,
@@ -1151,8 +1310,24 @@ public class EventService : IEventService
             eventItem.EventName = (request.EventName ?? string.Empty).Trim();
             eventItem.EventTypeId = eventType.EventTypeId;
             eventItem.EventDate = request.EventDate.Date;
-            eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
-            eventItem.Description = (request.Description ?? string.Empty).Trim();
+            if (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Count > 0)
+            {
+                eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeMemberDates);
+            }
+            else if (request.EventTypeDates != null && request.EventTypeDates.Count > 0)
+            {
+                eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeDates);
+            }
+            else
+            {
+                eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
+            }
+            var cleanDesc = (request.Description ?? string.Empty).Trim();
+            if (cleanDesc.Length > 1000)
+            {
+                cleanDesc = cleanDesc.Substring(0, 1000);
+            }
+            eventItem.Description = cleanDesc;
             if (request.Status != 0)
             {
                 eventItem.Status = request.Status;
