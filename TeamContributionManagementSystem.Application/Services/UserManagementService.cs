@@ -52,7 +52,7 @@ public class UserManagementService : IUserManagementService
             if (!string.IsNullOrWhiteSpace(first))
                 return first.Trim();
         }
-        return "Office";
+        return string.Empty;
     }
 
     private async Task<Guid?> ResolveWorkTypeIdAsync(string? workTypeName, CancellationToken cancellationToken)
