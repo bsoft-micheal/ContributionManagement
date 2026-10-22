@@ -201,9 +201,91 @@ public class SupportTicketService : ISupportTicketService
     {
         try
         {
+            var ticketType = request.TicketType?.Trim();
+            Guid? ticketTypeId = request.TicketTypeId;
+            if (_ticketTypeRepository != null)
+            {
+                if (ticketTypeId.HasValue)
+                {
+                    var matchedById = await _ticketTypeRepository.GetByIdAsync(ticketTypeId.Value, cancellationToken);
+                    if (matchedById != null)
+                    {
+                        ticketType = matchedById.TypeName;
+                    }
+                }
+                else if (string.IsNullOrWhiteSpace(ticketType))
+                {
+                    var dbTicketTypes = await _ticketTypeRepository.GetAllAsync(true, cancellationToken);
+                    var firstType = dbTicketTypes.FirstOrDefault(t => t.IsActive) ?? dbTicketTypes.FirstOrDefault();
+                    ticketType = firstType?.TypeName ?? string.Empty;
+                    ticketTypeId = firstType?.TicketTypeId;
+                }
+                else
+                {
+                    var matched = await _ticketTypeRepository.GetByNameAsync(ticketType, cancellationToken);
+                    if (matched != null)
+                    {
+                        ticketTypeId = matched.TicketTypeId;
+                        ticketType = matched.TypeName;
+                    }
+                }
+            }
+
+            var existingTickets = await _ticketRepository.GetAllAsync(cancellationToken: cancellationToken);
+
+            var reqMemberName = request.MemberName?.Trim();
+            var reqMemberId = request.MemberId?.Trim();
+
+            // Business rule: A user/member can only create a new support ticket for a ticket type after their active ticket of that ticket type is verified
+            var unverifiedTicketForType = existingTickets.FirstOrDefault(t =>
+            {
+                if (CommonConstants.TicketStatuses.IsVerified(t.Status))
+                {
+                    return false;
+                }
+
+                bool matchesName = !string.IsNullOrWhiteSpace(reqMemberName) &&
+                    string.Equals(t.MemberName?.Trim(), reqMemberName, StringComparison.OrdinalIgnoreCase);
+
+                bool matchesId = !string.IsNullOrWhiteSpace(reqMemberId) &&
+                    string.Equals(t.MemberId?.Trim(), reqMemberId, StringComparison.OrdinalIgnoreCase);
+
+                bool matchesCurrentMember = false;
+                if (_currentUserService != null && _currentUserService.IsMemberRole)
+                {
+                    var curMemberIdStr = _currentUserService.MemberId?.ToString();
+                    var curUserEmail = _currentUserService.Email?.Trim();
+                    var curUserName = _currentUserService.UserName?.Trim();
+
+                    matchesCurrentMember =
+                        (!string.IsNullOrWhiteSpace(curMemberIdStr) && (string.Equals(t.MemberId?.Trim(), curMemberIdStr, StringComparison.OrdinalIgnoreCase) || string.Equals(t.CreatedBy?.Trim(), curMemberIdStr, StringComparison.OrdinalIgnoreCase))) ||
+                        (!string.IsNullOrWhiteSpace(curUserEmail) && string.Equals(t.CreatedBy?.Trim(), curUserEmail, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrWhiteSpace(curUserName) && string.Equals(t.MemberName?.Trim(), curUserName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (!matchesName && !matchesId && !matchesCurrentMember)
+                {
+                    return false;
+                }
+
+                bool matchesTicketType =
+                    (!string.IsNullOrWhiteSpace(ticketType) && string.Equals(t.TicketType?.Trim(), ticketType, StringComparison.OrdinalIgnoreCase)) ||
+                    (ticketTypeId.HasValue && t.TicketTypeId.HasValue && t.TicketTypeId.Value == ticketTypeId.Value);
+
+                return matchesTicketType;
+            });
+
+            if (unverifiedTicketForType != null)
+            {
+                var displayType = !string.IsNullOrWhiteSpace(ticketType) ? ticketType : unverifiedTicketForType.TicketType;
+                throw new InvalidOperationException(string.Format(
+                    CommonValidationMessages.ActiveTicketForTypeExists,
+                    unverifiedTicketForType.TicketNo,
+                    displayType));
+            }
+
             if (!string.IsNullOrWhiteSpace(request.MemberName) && !string.IsNullOrWhiteSpace(request.Description))
             {
-                var existingTickets = await _ticketRepository.GetAllAsync(cancellationToken: cancellationToken);
                 var recentDup = existingTickets.FirstOrDefault(t =>
                     string.Equals(t.MemberName, request.MemberName.Trim(), StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(t.Description, request.Description.Trim(), StringComparison.OrdinalIgnoreCase) &&
@@ -217,24 +299,6 @@ public class SupportTicketService : ISupportTicketService
             }
 
             var ticketNo = await _ticketRepository.GenerateNextTicketNoAsync(cancellationToken);
-
-            var ticketType = request.TicketType?.Trim();
-            Guid? ticketTypeId = null;
-            if (_ticketTypeRepository != null)
-            {
-                if (string.IsNullOrWhiteSpace(ticketType))
-                {
-                    var dbTicketTypes = await _ticketTypeRepository.GetAllAsync(true, cancellationToken);
-                    var firstType = dbTicketTypes.FirstOrDefault();
-                    ticketType = firstType?.TypeName ?? string.Empty;
-                    ticketTypeId = firstType?.TicketTypeId;
-                }
-                else
-                {
-                    var matched = await _ticketTypeRepository.GetByNameAsync(ticketType, cancellationToken);
-                    ticketTypeId = matched?.TicketTypeId;
-                }
-            }
 
             var status = request.Status?.Trim();
             Guid? statusId = null;
