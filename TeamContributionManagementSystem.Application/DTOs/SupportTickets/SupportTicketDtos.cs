@@ -11,6 +11,7 @@ public class SupportTicketDto
     public Guid? EventId { get; set; }
     public string? RelatedEvent { get; set; }
     public string TicketType { get; set; } = string.Empty;
+    public Guid? TicketTypeId { get; set; }
     public string? Subject { get; set; }
     public string Description { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
@@ -46,6 +47,8 @@ public class CreateSupportTicketRequestDto
     [MaxLength(100)]
     public string TicketType { get; set; } = string.Empty;
 
+    public Guid? TicketTypeId { get; set; }
+
     [Required(ErrorMessage = "Description is required.")]
     [MaxLength(2000)]
     public string Description { get; set; } = string.Empty;
@@ -80,6 +83,8 @@ public class UpdateSupportTicketRequestDto
 
     [MaxLength(100)]
     public string? TicketType { get; set; }
+
+    public Guid? TicketTypeId { get; set; }
 
     [MaxLength(300)]
     public string? Subject { get; set; }

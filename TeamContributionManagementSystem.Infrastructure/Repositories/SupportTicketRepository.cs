@@ -23,6 +23,37 @@ public class SupportTicketRepository : ISupportTicketRepository
     {
         try
         {
+            var prefix = CommonConstants.Defaults.TicketPrefix;
+            var allDbTickets = await _context.SupportTickets
+                .OrderBy(x => x.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            bool needsSave = false;
+            int currentSeq = 1;
+            foreach (var ticket in allDbTickets)
+            {
+                bool isStandard = !string.IsNullOrWhiteSpace(ticket.TicketNo) &&
+                                  ticket.TicketNo.StartsWith(prefix) &&
+                                  ticket.TicketNo.Length == 7 &&
+                                  int.TryParse(ticket.TicketNo.Substring(prefix.Length), out _);
+
+                if (!isStandard)
+                {
+                    ticket.TicketNo = $"{prefix}{currentSeq:D4}";
+                    needsSave = true;
+                }
+                else if (int.TryParse(ticket.TicketNo.Substring(prefix.Length), out int parsedSeq) && parsedSeq >= currentSeq)
+                {
+                    currentSeq = parsedSeq;
+                }
+                currentSeq++;
+            }
+
+            if (needsSave)
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
             var query = _context.SupportTickets.Where(x => !x.IsDeleted).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(status) && !status.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
@@ -58,6 +89,7 @@ public class SupportTicketRepository : ISupportTicketRepository
                     MemberId = x.UserId != null ? x.UserId.ToString() : null,
                     EventId = x.EventId,
                     RelatedEvent = x.Event != null ? x.Event.EventName : null,
+                    TicketTypeId = x.TicketTypeId,
                     TicketType = x.TicketTypeItem != null ? x.TicketTypeItem.TypeName : string.Empty,
                     Subject = x.Subject,
                     Description = x.Description,
@@ -204,8 +236,7 @@ public class SupportTicketRepository : ISupportTicketRepository
     {
         try
         {
-            var year = DateTime.UtcNow.Year;
-            var prefix = $"{CommonConstants.Defaults.TicketPrefix}-{year}-";
+            var prefix = CommonConstants.Defaults.TicketPrefix;
 
             var ticketNumbers = await _context.SupportTickets
                 .IgnoreQueryFilters()
@@ -216,14 +247,14 @@ public class SupportTicketRepository : ISupportTicketRepository
             int maxSeq = 0;
             foreach (var tNo in ticketNumbers)
             {
-                var suffix = tNo.Substring(prefix.Length);
-                if (int.TryParse(suffix, out int seq) && seq > maxSeq)
+                var digits = new string(tNo.Skip(prefix.Length).Where(char.IsDigit).ToArray());
+                if (int.TryParse(digits, out int seq) && seq > maxSeq)
                 {
                     maxSeq = seq;
                 }
             }
 
-            return $"{prefix}{(maxSeq + 1):D3}";
+            return $"{prefix}{(maxSeq + 1):D4}";
         }
         catch (Exception ex)
         {
