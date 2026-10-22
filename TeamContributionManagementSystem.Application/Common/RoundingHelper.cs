@@ -29,8 +29,8 @@ public static class RoundingHelper
     }
 
     /// <summary>
-    /// Distributes an exact total amount among given raw calculated shares using the Largest Remainder Method (Hare-Niemeyer).
-    /// Guarantees that sum(resultShares) == RoundToWhole(totalAmount) exactly.
+    /// Distributes whole-number shares by rounding each raw share using standard half-up rounding (>= 0.50 rounds up, else down).
+    /// Prevents artificial discrepancies between members so that everyone with equal raw share receives identical amount.
     /// Safely handles empty collections, zero values, and negative amounts.
     /// </summary>
     public static List<decimal> DistributeRoundedTotal(decimal totalAmount, IReadOnlyList<decimal> rawShares)
@@ -40,41 +40,12 @@ public static class RoundingHelper
             return new List<decimal>();
         }
 
-        decimal roundedTarget = RoundToWhole(totalAmount);
-        var shares = rawShares.Select(RoundToWhole).ToList();
-        decimal currentSum = shares.Sum();
-        decimal diff = roundedTarget - currentSum;
-
-        if (diff != 0)
-        {
-            // Calculate remainder fraction for each share: rawShare - floor(rawShare)
-            // When diff > 0 (under-allocated), prioritize highest fractional remainders.
-            // When diff < 0 (over-allocated), prioritize lowest fractional remainders (closest to rounding down).
-            var indexedRemainders = rawShares
-                .Select((rawVal, idx) =>
-                {
-                    decimal floorVal = Math.Floor(rawVal);
-                    decimal rem = rawVal - floorVal;
-                    return new { Index = idx, Remainder = rem };
-                })
-                .OrderByDescending(x => diff > 0 ? x.Remainder : (1m - x.Remainder))
-                .ToList();
-
-            int step = diff > 0 ? 1 : -1;
-            int countToAdjust = (int)Math.Abs(diff);
-
-            for (int i = 0; i < indexedRemainders.Count && countToAdjust > 0; i++)
-            {
-                shares[indexedRemainders[i].Index] += step;
-                countToAdjust--;
-            }
-        }
-
-        return shares;
+        return rawShares.Select(RoundToWhole).ToList();
     }
 
     /// <summary>
     /// Splits a total amount equally across a given number of participants into whole numbers.
+    /// Each participant receives an identical rounded whole-number share (>= .50 rounds up, < .50 rounds down).
     /// Safely prevents division by zero when count <= 0.
     /// </summary>
     public static List<decimal> DistributeEqualSplit(decimal totalAmount, int participantCount)
@@ -84,8 +55,7 @@ public static class RoundingHelper
             return new List<decimal>();
         }
 
-        decimal rawShare = totalAmount / participantCount;
-        var rawShares = Enumerable.Repeat(rawShare, participantCount).ToList();
-        return DistributeRoundedTotal(totalAmount, rawShares);
+        decimal singleShare = RoundToWhole(totalAmount / participantCount);
+        return Enumerable.Repeat(singleShare, participantCount).ToList();
     }
 }

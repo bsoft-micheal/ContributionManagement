@@ -333,6 +333,16 @@ public class PaymentTransactionService : IPaymentTransactionService
                         }
                     }
                 }
+
+                var digitalUtrs = request.Splits
+                    .Where(s => !s.Mode.Trim().Contains("Cash", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(s.Utr))
+                    .Select(s => s.Utr.Trim().ToLowerInvariant())
+                    .ToList();
+
+                if (digitalUtrs.Count != digitalUtrs.Distinct().Count())
+                {
+                    throw new ArgumentException("Same UTR number cannot be used for different payment modes.");
+                }
             }
 
             // Resolve EventId — verify event exists in DB before setting FK to prevent constraint violation
@@ -904,12 +914,12 @@ public class PaymentTransactionService : IPaymentTransactionService
             var isAnyRejected = groupEntities.Any(t =>
                 t.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase));
 
-            var isExplicitlyVerified = groupEntities.Any(t =>
+            var isExplicitlyVerified = !isAnyRejected && groupEntities.Any(t =>
                 t.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase) ||
-                !string.IsNullOrWhiteSpace(t.VerifiedBy));
+                (!string.IsNullOrWhiteSpace(t.VerifiedBy) && !t.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase)));
 
             // Status determination
-            string targetStatusName = isExplicitlyVerified ? "Verified" : (isAllVerified ? "Paid" : (isAnyRejected ? "Rejected" : "Pending"));
+            string targetStatusName = isAnyRejected ? "Rejected" : (isExplicitlyVerified ? "Verified" : (isAllVerified ? "Paid" : "Pending"));
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
@@ -959,23 +969,16 @@ public class PaymentTransactionService : IPaymentTransactionService
                 if (isAllVerified)
                 {
                     match.PaymentStatus = PaymentStatus.Paid;
-                    match.CashAmount = totalCash;
-                    match.UpiAmount = totalUpi;
                 }
                 else
                 {
                     match.PaymentStatus = PaymentStatus.Pending;
-                    if (isAnyRejected)
-                    {
-                        match.CashAmount = 0;
-                        match.UpiAmount = 0;
-                    }
-                    else
-                    {
-                        if (totalCash > 0) match.CashAmount = totalCash;
-                        if (totalUpi > 0) match.UpiAmount = totalUpi;
-                    }
                 }
+
+                // CRITICAL: Submitted amounts must NEVER be lost or wiped when rejected.
+                // Maintain the actual submitted cash & upi amounts.
+                match.CashAmount = totalCash;
+                match.UpiAmount = totalUpi;
 
                 match.ModifiedBy = primary.ModifiedBy ?? primary.CreatedBy;
                 match.ModifiedOn = DateTime.UtcNow;
@@ -994,8 +997,8 @@ public class PaymentTransactionService : IPaymentTransactionService
                     StatusId = statusIdToAssign,
                     PaymentModeId = primary.PaymentModeId,
                     PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow,
-                    CashAmount = isAllVerified ? totalCash : 0,
-                    UpiAmount = isAllVerified ? totalUpi : 0,
+                    CashAmount = totalCash,
+                    UpiAmount = totalUpi,
                     PaymentStatus = isAllVerified ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentMode = modeEnum,
                     CreatedBy = primary.CreatedBy,
