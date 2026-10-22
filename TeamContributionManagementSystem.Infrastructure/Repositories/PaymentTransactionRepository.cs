@@ -211,53 +211,48 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
     {
         try
         {
-            const string sql = @"
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE sequencename = 'payment_txn_number_seq') THEN
-                        CREATE SEQUENCE payment_txn_number_seq START WITH 1250 INCREMENT BY 1;
-                        PERFORM setval('payment_txn_number_seq', 
-                            GREATEST(
-                                COALESCE((SELECT MAX(CAST(SUBSTRING(REGEXP_REPLACE(txn_number, '^TXN0*', '') FROM '^[0-9]+') AS INTEGER)) 
-                                          FROM payment_transactions 
-                                          WHERE txn_number LIKE 'TXN%'), 1250), 
-                                1250
-                            )
-                        );
-                    END IF;
-                END $$;
-                SELECT nextval('payment_txn_number_seq')::bigint;";
+            var prefix = CommonConstants.Defaults.TxnPrefix; // "TXN"
 
-            var connection = _context.Database.GetDbConnection();
-            if (connection.State != System.Data.ConnectionState.Open)
-            {
-                await connection.OpenAsync(cancellationToken);
-            }
-
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
-            var valObj = await cmd.ExecuteScalarAsync(cancellationToken);
-            long nextVal = Convert.ToInt64(valObj);
-            return $"{CommonConstants.Defaults.TxnPrefix}{nextVal:D6}";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating next transaction number via sequence. Falling back to query.");
-            var maxNum = await _context.PaymentTransactions
-                .Where(x => x.TxnNumber.StartsWith("TXN"))
+            // 1. Dynamic Query: Get all transaction numbers starting with prefix from the database
+            var existingTxnNumbers = await _context.PaymentTransactions
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted && x.TxnNumber.StartsWith(prefix))
                 .Select(x => x.TxnNumber)
                 .ToListAsync(cancellationToken);
 
-            long highest = 1250;
-            foreach (var txn in maxNum)
+            long highestNumber = 0;
+
+            foreach (var txn in existingTxnNumbers)
             {
-                var match = System.Text.RegularExpressions.Regex.Match(txn, @"TXN0*(\d+)");
-                if (match.Success && long.TryParse(match.Groups[1].Value, out var n))
+                if (string.IsNullOrWhiteSpace(txn)) continue;
+                var match = System.Text.RegularExpressions.Regex.Match(txn, @"\d+");
+                if (match.Success && long.TryParse(match.Value, out var num))
                 {
-                    if (n > highest) highest = n;
+                    if (num > highestNumber) highestNumber = num;
                 }
             }
-            return $"{CommonConstants.Defaults.TxnPrefix}{(highest + 1):D6}";
+
+            // 2. Also check in-memory tracked entities (e.g., when adding multiple splits before SaveChanges)
+            foreach (var local in _context.PaymentTransactions.Local)
+            {
+                if (!local.IsDeleted && !string.IsNullOrWhiteSpace(local.TxnNumber) && local.TxnNumber.StartsWith(prefix))
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(local.TxnNumber, @"\d+");
+                    if (match.Success && long.TryParse(match.Value, out var num))
+                    {
+                        if (num > highestNumber) highestNumber = num;
+                    }
+                }
+            }
+
+            // If table is empty or deleted, highestNumber is 0 -> nextVal = 1 -> "TXN0001"
+            long nextVal = highestNumber + 1;
+            return $"{prefix}{nextVal:D4}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetNextTxnNumberAsync));
+            return $"{CommonConstants.Defaults.TxnPrefix}0001";
         }
     }
 }

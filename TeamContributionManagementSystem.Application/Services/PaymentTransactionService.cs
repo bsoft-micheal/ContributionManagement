@@ -444,10 +444,15 @@ public class PaymentTransactionService : IPaymentTransactionService
                         childNotes = childNotes.Substring(0, 985) + "...";
                     }
 
+                    // Concurrency-safe distinct unique transaction ID generation in sequential order without hyphens (e.g. TXN001250, TXN001251)
+                    var childTxnNumber = index == 1
+                        ? baseTxn
+                        : await _transactionRepository.GetNextTxnNumberAsync(cancellationToken);
+
                     var childEntity = new PaymentTransaction
                     {
                         TransactionId = Guid.NewGuid(),
-                        TxnNumber = $"{baseTxn}-{index}",
+                        TxnNumber = childTxnNumber,
                         ParentTxnNumber = baseTxn,
                         TransactionGroupId = groupId,
                         MemberName = resolvedMemberName.Length > 150 ? resolvedMemberName.Substring(0, 150) : resolvedMemberName,
