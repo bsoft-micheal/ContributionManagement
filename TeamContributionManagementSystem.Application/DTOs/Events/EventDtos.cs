@@ -43,6 +43,10 @@ public class EventSummaryDto
     public int SupportTicketRaisedCount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal AllocatedAmount { get; set; }
+    public List<Guid>? EventTypeIds { get; set; }
+    public Dictionary<string, string>? EventTypeDates { get; set; }
+    public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
+    public Dictionary<string, Dictionary<string, string>>? EventTypeMemberDates { get; set; }
 
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }
@@ -91,7 +95,7 @@ public class CreateEventRequestDto
     [MaxLength(500)]
     public string? EventDates { get; set; }
 
-    [MaxLength(1000)]
+    [MaxLength(2000)]
     public string Description { get; set; } = string.Empty;
 
     public EventStatus Status { get; set; } = EventStatus.Planned;
@@ -101,6 +105,9 @@ public class CreateEventRequestDto
     public bool UseAvailableBalance { get; set; }
     public decimal? AllocatedAmount { get; set; }
     public List<Guid>? EventTypeIds { get; set; }
+    public Dictionary<string, string>? EventTypeDates { get; set; }
+    public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
+    public Dictionary<string, Dictionary<string, string>>? EventTypeMemberDates { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
 }
@@ -110,6 +117,9 @@ public class EventContributionPreviewRequestDto
     public Guid EventTypeId { get; set; }
     public List<Guid>? EventTypeIds { get; set; }
     public DateTime EventDate { get; set; }
+    public Dictionary<string, string>? EventTypeDates { get; set; }
+    public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
+    public Dictionary<string, Dictionary<string, string>>? EventTypeMemberDates { get; set; }
     public decimal BaseAmount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal? AllocatedAmount { get; set; }
