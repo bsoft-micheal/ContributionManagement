@@ -45,7 +45,7 @@ public class MemberRepository : IMemberRepository
                     Gender = x.Gender,
                     IsActive = x.IsActive,
                     IsExited = x.IsExited,
-                    WorkType = !string.IsNullOrWhiteSpace(x.WorkType) ? x.WorkType : (x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : "Office"),
+                    WorkType = !string.IsNullOrWhiteSpace(x.WorkType) ? x.WorkType : (x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty),
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedOn,

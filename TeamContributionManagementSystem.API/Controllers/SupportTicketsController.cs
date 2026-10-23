@@ -85,6 +85,10 @@ public class SupportTicketsController : ControllerBase
             var result = await _ticketService.SaveSupportTicketAsync(request, currentUser, cancellationToken);
             return StatusCode(CommonStatusCodes.Status201Created, ApiResponse<SupportTicketDto>.SuccessResult(result, CommonMessages.SupportTickets.SaveSuccess, CommonStatusCodes.Status201Created));
         }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
+        }
         catch (AlreadyProcessedException ex)
         {
             return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));

@@ -58,6 +58,15 @@ public static class CommonConstants
         public const string InProgress = "In Progress";
         public const string Resolved = "Resolved";
         public const string Closed = "Closed";
+        public const string Verified = "Verified";
+
+        public static bool IsVerified(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status)) return false;
+            var clean = status.Trim().ToLowerInvariant();
+            return clean == "verified" || clean == "resolved" || clean == "closed" ||
+                   clean.Contains("verif") || clean.Contains("resolve") || clean.Contains("close");
+        }
     }
 
     public static class TicketPriorities
