@@ -179,7 +179,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                 }
             }
 
-            var txnNumber = await _transactionRepository.GetNextTxnNumberAsync(cancellationToken);
+            var txnNumber = await _transactionRepository.GetNextTxnNumberAsync(request.PaymentDate, cancellationToken);
 
             var status = request.Status?.Trim();
             if (string.IsNullOrWhiteSpace(status) && _statusRepository != null)
@@ -408,7 +408,7 @@ public class PaymentTransactionService : IPaymentTransactionService
             }
 
             // Concurrency-safe base transaction number generation (Requirement 5)
-            var baseTxn = await _transactionRepository.GetNextTxnNumberAsync(cancellationToken);
+            var baseTxn = await _transactionRepository.GetNextTxnNumberAsync(request.PaymentDate, cancellationToken);
             var savedScreenshot = await SaveScreenshotAsync(request.Screenshot, baseTxn, cancellationToken);
 
             var createdEntities = new List<PaymentTransaction>();
@@ -444,10 +444,10 @@ public class PaymentTransactionService : IPaymentTransactionService
                         childNotes = childNotes.Substring(0, 985) + "...";
                     }
 
-                    // Concurrency-safe distinct unique transaction ID generation in sequential order without hyphens (e.g. TXN001250, TXN001251)
+                    // Concurrency-safe distinct unique transaction ID generation in sequential order without hyphens (e.g. TXN2026020001, TXN2026020002)
                     var childTxnNumber = index == 1
                         ? baseTxn
-                        : await _transactionRepository.GetNextTxnNumberAsync(cancellationToken);
+                        : await _transactionRepository.GetNextTxnNumberAsync(request.PaymentDate, cancellationToken);
 
                     var childEntity = new PaymentTransaction
                     {
@@ -757,7 +757,11 @@ public class PaymentTransactionService : IPaymentTransactionService
             if (_statusRepository != null)
             {
                 matchedStatus = await _statusRepository.GetByNameAsync(targetStatus, cancellationToken);
-                if (matchedStatus == null && string.Equals(targetStatus, CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase))
+                if (matchedStatus == null && string.Equals(targetStatus, "Approved", StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedStatus = await _statusRepository.GetByNameAsync(CommonConstants.PaymentStatuses.Verified, cancellationToken) ?? await _statusRepository.GetByNameAsync("Paid", cancellationToken);
+                }
+                else if (matchedStatus == null && string.Equals(targetStatus, CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase))
                 {
                     matchedStatus = await _statusRepository.GetByNameAsync("Paid", cancellationToken);
                 }
@@ -909,10 +913,11 @@ public class PaymentTransactionService : IPaymentTransactionService
                 }
             }
 
-            // Check if all items in the group are verified/paid
+            // Check if all items in the group are verified/paid/approved
             var isAllVerified = groupEntities.All(t =>
                 t.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase) ||
                 t.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                t.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                 t.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
                 t.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase));
 
@@ -921,15 +926,20 @@ public class PaymentTransactionService : IPaymentTransactionService
 
             var isExplicitlyVerified = !isAnyRejected && groupEntities.Any(t =>
                 t.Status.Equals(CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase) ||
+                t.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                 (!string.IsNullOrWhiteSpace(t.VerifiedBy) && !t.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase)));
 
             // Status determination
-            string targetStatusName = isAnyRejected ? "Rejected" : (isExplicitlyVerified ? "Verified" : (isAllVerified ? "Paid" : "Pending"));
+            string targetStatusName = isAnyRejected ? "Rejected" : (primary.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase) ? "Approved" : (isExplicitlyVerified ? "Verified" : (isAllVerified ? "Paid" : "Pending")));
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
                 var st = await _statusRepository.GetByNameAsync(targetStatusName, cancellationToken);
-                if (st == null && targetStatusName == "Verified")
+                if (st == null && targetStatusName == "Approved")
+                {
+                    st = await _statusRepository.GetByNameAsync("Verified", cancellationToken) ?? await _statusRepository.GetByNameAsync("Paid", cancellationToken);
+                }
+                else if (st == null && targetStatusName == "Verified")
                 {
                     st = await _statusRepository.GetByNameAsync("Paid", cancellationToken);
                 }

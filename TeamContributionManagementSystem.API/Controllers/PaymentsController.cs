@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.Exceptions;
@@ -77,6 +78,7 @@ public class PaymentsController : ControllerBase
     /// <summary>
     /// Records a new payment transaction.
     /// </summary>
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.Payments)]
     [HttpPost(CommonRoutes.Payments.Create)]
     [ActionName(nameof(SavePaymentAsync))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> SavePaymentAsync([FromBody] CreatePaymentTransactionRequestDto request, CancellationToken cancellationToken)
@@ -101,6 +103,7 @@ public class PaymentsController : ControllerBase
     /// Allows a member to submit payment proof (UTR / Ref no) with optional screenshot (e.g. from email payment link).
     /// </summary>
     [AllowAnonymous]
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.Payments)]
     [HttpPost(CommonRoutes.Payments.SubmitProof)]
     [ActionName(nameof(SubmitPaymentProofAsync))]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> SubmitPaymentProofAsync([FromBody] SubmitPaymentProofDto request, CancellationToken cancellationToken)

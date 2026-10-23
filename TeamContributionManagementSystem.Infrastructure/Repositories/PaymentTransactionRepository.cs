@@ -208,12 +208,14 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         }
     }
 
-    public async Task<string> GetNextTxnNumberAsync(CancellationToken cancellationToken = default)
+    public async Task<string> GetNextTxnNumberAsync(DateTime? date = null, CancellationToken cancellationToken = default)
     {
         await _txnLock.WaitAsync(cancellationToken);
         try
         {
-            var prefix = CommonConstants.Defaults.TxnPrefix; // "TXN"
+            var baseDate = date ?? DateTime.UtcNow;
+            var yearMonth = baseDate.ToString(CommonConstants.Defaults.TxnDateFormat); // "yyyyMM", e.g. "202602" or "202610"
+            var prefix = $"{CommonConstants.Defaults.TxnPrefix}{yearMonth}"; // e.g. "TXN202602"
 
             // 1. Dynamic LINQ Query: Get all transaction numbers starting with prefix from the database
             var existingTxnNumbers = await _context.PaymentTransactions
@@ -249,14 +251,15 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
                 }
             }
 
-            // If table is empty, highestNumber is 0 -> nextVal = 1 -> "TXN0001"
+            // If table is empty or deleted, highestNumber is 0 -> nextVal = 1 -> $"{prefix}0001" (e.g. "TXN2026020001")
             long nextVal = highestNumber + 1;
             return $"{prefix}{nextVal:D4}";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetNextTxnNumberAsync));
-            return $"{CommonConstants.Defaults.TxnPrefix}0001";
+            var fallbackYearMonth = (date ?? DateTime.UtcNow).ToString(CommonConstants.Defaults.TxnDateFormat);
+            return $"{CommonConstants.Defaults.TxnPrefix}{fallbackYearMonth}0001";
         }
         finally
         {

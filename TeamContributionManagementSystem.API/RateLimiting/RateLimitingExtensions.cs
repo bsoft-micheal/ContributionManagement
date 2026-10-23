@@ -125,7 +125,7 @@ public static class RateLimitingExtensions
                     });
             });
 
-            // 5. Import/Export Policy: 5 req/min (Partitioned by User ID when authenticated, IP fallback)
+            // 5. Import/Export Policy: 15 req/min (Partitioned by User ID when authenticated, IP fallback)
             options.AddPolicy(CommonConstants.RateLimitPolicies.ImportExport, httpContext =>
             {
                 var partitionKey = GetUserOrIpPartitionKey(httpContext, "ie");
@@ -140,7 +140,22 @@ public static class RateLimitingExtensions
                     });
             });
 
-            // 6. Global Limiter: Automatically protects all unannotated endpoints with appropriate categorizer
+            // 6. Payments Policy: 30 req/min (Partitioned by User ID when authenticated, IP fallback)
+            options.AddPolicy(CommonConstants.RateLimitPolicies.Payments, httpContext =>
+            {
+                var partitionKey = GetUserOrIpPartitionKey(httpContext, "pay");
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = settings.Payments.PermitLimit,
+                        Window = TimeSpan.FromSeconds(settings.Payments.WindowSeconds),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = settings.Payments.QueueLimit
+                    });
+            });
+
+            // 7. Global Limiter: Automatically protects all unannotated endpoints with appropriate categorizer
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
             {
                 // Exempt internal background endpoints, health checks, Swagger, static files, and CORS preflight
@@ -160,7 +175,8 @@ public static class RateLimitingExtensions
                 var path = httpContext.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
                 var method = httpContext.Request.Method;
 
-                if (path.Contains("/auth/") || path.Contains("/mfa/"))
+                // Strict auth limits only for credential and OTP verification/requests (not switch-role or lookup)
+                if (path.Contains("/auth/login") || path.Contains("/auth/verify-2fa") || path.Contains("/auth/forgot-password") || path.Contains("/mfa/verify"))
                 {
                     return RateLimitPartition.GetFixedWindowLimiter(
                         $"auth_{GetClientIpAddress(httpContext)}",
@@ -169,6 +185,19 @@ public static class RateLimitingExtensions
                             PermitLimit = settings.Auth.PermitLimit,
                             Window = TimeSpan.FromSeconds(settings.Auth.WindowSeconds),
                             QueueLimit = settings.Auth.QueueLimit
+                        });
+                }
+
+                // Payment submission and proof upload operations
+                if (path.Contains("/payments/submit-proof") || path.Contains("/payments/create") || path.Contains("/payments/save"))
+                {
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        GetUserOrIpPartitionKey(httpContext, "pay"),
+                        _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = settings.Payments.PermitLimit,
+                            Window = TimeSpan.FromSeconds(settings.Payments.WindowSeconds),
+                            QueueLimit = settings.Payments.QueueLimit
                         });
                 }
 

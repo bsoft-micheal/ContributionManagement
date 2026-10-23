@@ -15,7 +15,6 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiVersion("1.0")]
 [ApiController]
 [Route(CommonRoutes.Auth.Base)]
-[EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -32,6 +31,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An ApiResponse containing AuthResponseDto.</returns>
     [AllowAnonymous]
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
     [HttpPost(CommonRoutes.Auth.Login)]
     [HttpPost("login")]
     [ActionName(nameof(LoginAsync))]
@@ -55,6 +55,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An ApiResponse containing AuthResponseDto upon successful verification.</returns>
     [AllowAnonymous]
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
     [HttpPost(CommonRoutes.Auth.Verify2Fa)]
     [HttpPost("verify-2fa")]
     [ActionName(nameof(VerifyTwoFactorAsync))]
@@ -78,6 +79,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An ApiResponse containing updated AuthResponseDto.</returns>
     [Authorize]
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.General)]
     [HttpPost(CommonRoutes.Auth.SwitchRole)]
     [ActionName(nameof(SwitchRoleAsync))]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> SwitchRoleAsync([FromBody] SwitchRoleRequestDto request, CancellationToken cancellationToken)
@@ -129,6 +131,7 @@ public class AuthController : ControllerBase
     /// <param name="request">The user's registered email address.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
     [HttpPost(CommonRoutes.Auth.ForgotPasswordRequest)]
     [ActionName(nameof(RequestForgotPasswordOtpAsync))]
     public async Task<ActionResult<ApiResponse>> RequestForgotPasswordOtpAsync([FromBody] ForgotPasswordRequestDto request, CancellationToken cancellationToken)
@@ -143,6 +146,7 @@ public class AuthController : ControllerBase
     /// <param name="request">The email and the OTP received.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
     [HttpPost(CommonRoutes.Auth.ForgotPasswordVerify)]
     [ActionName(nameof(VerifyForgotPasswordOtpAsync))]
     public async Task<ActionResult<ApiResponse>> VerifyForgotPasswordOtpAsync([FromBody] VerifyOtpRequestDto request, CancellationToken cancellationToken)
@@ -161,6 +165,7 @@ public class AuthController : ControllerBase
     /// <param name="request">The email, OTP, and the new password.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [AllowAnonymous]
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
     [HttpPost(CommonRoutes.Auth.ForgotPasswordReset)]
     [ActionName(nameof(ResetPasswordWithOtpAsync))]
     public async Task<ActionResult<ApiResponse>> ResetPasswordWithOtpAsync([FromBody] ResetPasswordRequestDto request, CancellationToken cancellationToken)

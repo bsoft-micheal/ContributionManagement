@@ -200,9 +200,10 @@ app.UseSerilogRequestLogging();
 app.UseStaticFiles();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors(CommonConstants.CorsPolicies.FrontendPolicy);
+app.UseRouting();
 app.UseAuthentication();
-app.UseApiRateLimiting();
 app.UseAuthorization();
+app.UseApiRateLimiting();
 
 // Configure secured Hangfire Dashboard
 var hangfireSettings = app.Configuration.GetSection("HangfireSettings");
