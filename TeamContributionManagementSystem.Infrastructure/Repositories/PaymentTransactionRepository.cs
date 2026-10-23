@@ -12,7 +12,8 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<PaymentTransactionRepository> _logger;
-
+    private static readonly SemaphoreSlim _txnLock = new(1, 1);
+    
     public PaymentTransactionRepository(ApplicationDbContext context, ILogger<PaymentTransactionRepository> logger)
     {
         _context = context;
@@ -209,14 +210,15 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
 
     public async Task<string> GetNextTxnNumberAsync(CancellationToken cancellationToken = default)
     {
+        await _txnLock.WaitAsync(cancellationToken);
         try
         {
             var prefix = CommonConstants.Defaults.TxnPrefix; // "TXN"
 
-            // 1. Dynamic Query: Get all transaction numbers starting with prefix from the database
+            // 1. Dynamic LINQ Query: Get all transaction numbers starting with prefix from the database
             var existingTxnNumbers = await _context.PaymentTransactions
                 .AsNoTracking()
-                .Where(x => !x.IsDeleted && x.TxnNumber.StartsWith(prefix))
+                .Where(x => x.TxnNumber.StartsWith(prefix))
                 .Select(x => x.TxnNumber)
                 .ToListAsync(cancellationToken);
 
@@ -225,19 +227,21 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
             foreach (var txn in existingTxnNumbers)
             {
                 if (string.IsNullOrWhiteSpace(txn)) continue;
-                var match = System.Text.RegularExpressions.Regex.Match(txn, @"\d+");
+                string numPart = txn.Length > prefix.Length ? txn.Substring(prefix.Length) : txn;
+                var match = System.Text.RegularExpressions.Regex.Match(numPart, @"^\d+");
                 if (match.Success && long.TryParse(match.Value, out var num))
                 {
                     if (num > highestNumber) highestNumber = num;
                 }
             }
 
-            // 2. Also check in-memory tracked entities (e.g., when adding multiple splits before SaveChanges)
+            // 2. Also check in-memory tracked entities in DbContext (e.g., when adding multiple splits in a single batch before SaveChanges)
             foreach (var local in _context.PaymentTransactions.Local)
             {
-                if (!local.IsDeleted && !string.IsNullOrWhiteSpace(local.TxnNumber) && local.TxnNumber.StartsWith(prefix))
+                if (!string.IsNullOrWhiteSpace(local.TxnNumber) && local.TxnNumber.StartsWith(prefix))
                 {
-                    var match = System.Text.RegularExpressions.Regex.Match(local.TxnNumber, @"\d+");
+                    string numPart = local.TxnNumber.Length > prefix.Length ? local.TxnNumber.Substring(prefix.Length) : local.TxnNumber;
+                    var match = System.Text.RegularExpressions.Regex.Match(numPart, @"^\d+");
                     if (match.Success && long.TryParse(match.Value, out var num))
                     {
                         if (num > highestNumber) highestNumber = num;
@@ -245,7 +249,7 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
                 }
             }
 
-            // If table is empty or deleted, highestNumber is 0 -> nextVal = 1 -> "TXN0001"
+            // If table is empty, highestNumber is 0 -> nextVal = 1 -> "TXN0001"
             long nextVal = highestNumber + 1;
             return $"{prefix}{nextVal:D4}";
         }
@@ -253,6 +257,10 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetNextTxnNumberAsync));
             return $"{CommonConstants.Defaults.TxnPrefix}0001";
+        }
+        finally
+        {
+            _txnLock.Release();
         }
     }
 }
