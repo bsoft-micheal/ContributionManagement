@@ -1288,6 +1288,7 @@ public class EventService : IEventService
                         (c.StatusItem != null && (
                             c.StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
                             c.StatusItem.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                            c.StatusItem.StatusName.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                             c.StatusItem.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
                             c.StatusItem.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))) ||
                         (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
@@ -1588,6 +1589,7 @@ public class EventService : IEventService
                         (c.StatusItem != null && (
                             c.StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
                             c.StatusItem.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                            c.StatusItem.StatusName.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                             c.StatusItem.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
                             c.StatusItem.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))) ||
                         (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
@@ -2116,6 +2118,7 @@ public class EventService : IEventService
                             (!string.IsNullOrWhiteSpace(c.StatusName) && (
                                 c.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
                                 c.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                                c.StatusName.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                                 c.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
                                 c.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))) ||
                             (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||

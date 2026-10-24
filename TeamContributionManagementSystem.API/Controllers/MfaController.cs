@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Mfa;
@@ -46,6 +47,7 @@ public class MfaController : ControllerBase
     /// </summary>
     /// <param name="request">The Secret Key, device label, and 6-digit OTP to verify.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    [EnableRateLimiting(CommonConstants.RateLimitPolicies.Auth)]
     [HttpPost(CommonRoutes.Mfa.VerifySetup)]
     [ActionName(nameof(VerifySetupMfaAsync))]
     public async Task<ActionResult<ApiResponse>> VerifySetupMfaAsync([FromBody] MfaSetupVerifyRequestDto request, CancellationToken cancellationToken)

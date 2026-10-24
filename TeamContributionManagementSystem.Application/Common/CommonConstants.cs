@@ -212,6 +212,8 @@ public static class CommonConstants
         public const string TimeZone = "Asia/Kolkata";
         public const string IndiaStandardTimeId = "India Standard Time";
         public const string TxnPrefix = "TXN";
+        public const string TxnDateFormat = "yyyyMM";
+        public const int TxnSequencePadding = 4;
         public const string TicketPrefix = "TKT";
         public const string BirthdayMemberPrefix = "birthday-member:";
         public const string DefaultFrontendUrl = "http://localhost:5173";
@@ -268,5 +270,6 @@ public static class CommonConstants
         public const string Crud = "CrudPolicy";
         public const string Reports = "ReportsPolicy";
         public const string ImportExport = "ImportExportPolicy";
+        public const string Payments = "PaymentsPolicy";
     }
 }
