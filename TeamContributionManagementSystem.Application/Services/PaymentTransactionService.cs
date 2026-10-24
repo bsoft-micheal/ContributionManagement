@@ -609,17 +609,21 @@ public class PaymentTransactionService : IPaymentTransactionService
                 {
                     result.Amount = contrib.Amount;
                     result.Status = contrib.StatusItem?.StatusName ?? contrib.PaymentStatus.ToString();
+                    var paidSum = (contrib.CashAmount ?? 0) + (contrib.UpiAmount ?? 0);
                     var isPaid = result.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
                                  result.Status.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
                                  result.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
                                  result.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase) ||
                                  contrib.PaymentStatus == PaymentStatus.Paid ||
-                                 (contrib.CashAmount.HasValue && contrib.CashAmount.Value > 0) ||
-                                 (contrib.UpiAmount.HasValue && contrib.UpiAmount.Value > 0);
-                    result.CurrentEventDue = isPaid ? 0 : contrib.Amount;
+                                 (contrib.Amount > 0 && paidSum >= contrib.Amount);
+                    result.CurrentEventDue = isPaid ? 0 : Math.Max(0, contrib.Amount - paidSum);
                     if (isPaid && !result.Status.Equals("Verified", StringComparison.OrdinalIgnoreCase))
                     {
                         result.Status = "Paid";
+                    }
+                    else if (!isPaid && paidSum > 0)
+                    {
+                        result.Status = "Partial";
                     }
                 }
             }
@@ -632,49 +636,32 @@ public class PaymentTransactionService : IPaymentTransactionService
                     var pastContribs = await _contributionRepository.GetByMemberEmailAsync(result.Email, cancellationToken);
                     var allTxns = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
 
-                    var hasAllOutstandingPaid = allTxns.Any(t =>
-                        !string.IsNullOrWhiteSpace(t.MemberName) &&
-                        t.MemberName.Trim().Equals(result.MemberName?.Trim(), StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(t.Status, "Rejected", StringComparison.OrdinalIgnoreCase) &&
-                        !string.IsNullOrEmpty(t.Notes) &&
-                        (t.Notes.Contains("AllOutstanding", StringComparison.OrdinalIgnoreCase) ||
-                         t.Notes.Contains("All Outstanding", StringComparison.OrdinalIgnoreCase) ||
-                         t.Notes.Contains("Scope: All", StringComparison.OrdinalIgnoreCase)));
-
-                    List<ContributionDto> arrearsList;
-                    if (hasAllOutstandingPaid)
-                    {
-                        arrearsList = new List<ContributionDto>();
-                    }
-                    else
-                    {
-                        arrearsList = pastContribs
-                            .Where(c => c.EventId != effectiveEventId)
-                            .Where(c =>
+                    List<ContributionDto> arrearsList = pastContribs
+                        .Where(c => c.EventId != effectiveEventId)
+                        .Where(c =>
+                        {
+                            var paidSum = (c.CashAmount ?? 0) + (c.UpiAmount ?? 0);
+                            if (c.PaymentStatus == PaymentStatus.Paid ||
+                                string.Equals(c.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(c.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(c.StatusName, "Closed", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(c.StatusName, "Completed", StringComparison.OrdinalIgnoreCase) ||
+                                (c.Amount > 0 && paidSum >= c.Amount))
                             {
-                                if (c.PaymentStatus == PaymentStatus.Paid ||
-                                    string.Equals(c.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(c.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(c.StatusName, "Closed", StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(c.StatusName, "Completed", StringComparison.OrdinalIgnoreCase) ||
-                                    (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                                    (c.UpiAmount.HasValue && c.UpiAmount.Value > 0))
-                                {
-                                    return false;
-                                }
+                                return false;
+                            }
 
-                                var hasTx = allTxns.Any(t =>
-                                    ((t.EventId.HasValue && t.EventId.Value == c.EventId) ||
-                                     (!string.IsNullOrWhiteSpace(t.EventName) && !string.IsNullOrWhiteSpace(c.EventName) && t.EventName.Trim().Equals(c.EventName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
-                                    ((t.UserId.HasValue && t.UserId.Value == c.MemberId) ||
-                                     (!string.IsNullOrWhiteSpace(t.MemberName) && !string.IsNullOrWhiteSpace(c.MemberName) && t.MemberName.Trim().Equals(c.MemberName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
-                                    !string.Equals(t.Status, "Rejected", StringComparison.OrdinalIgnoreCase) &&
-                                    t.Amount > 0);
+                            var hasTx = allTxns.Any(t =>
+                                ((t.EventId.HasValue && t.EventId.Value == c.EventId) ||
+                                 (!string.IsNullOrWhiteSpace(t.EventName) && !string.IsNullOrWhiteSpace(c.EventName) && t.EventName.Trim().Equals(c.EventName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
+                                ((t.UserId.HasValue && t.UserId.Value == c.MemberId) ||
+                                 (!string.IsNullOrWhiteSpace(t.MemberName) && !string.IsNullOrWhiteSpace(c.MemberName) && t.MemberName.Trim().Equals(c.MemberName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
+                                !string.Equals(t.Status, "Rejected", StringComparison.OrdinalIgnoreCase) &&
+                                t.Amount >= c.Amount);
 
-                                return !hasTx;
-                            })
-                            .ToList();
-                    }
+                            return !hasTx;
+                        })
+                        .ToList();
 
                     result.PreviousArrears = arrearsList.Sum(c => c.Amount);
                     result.ArrearBreakdown = arrearsList.Select(c => new ArrearItemDto
@@ -1021,6 +1008,46 @@ public class PaymentTransactionService : IPaymentTransactionService
                 };
                 await _contributionRepository.AddAsync(newContrib, cancellationToken);
                 _logger.LogInformation("Created new contribution for member {Member} and event {Event}", primary.MemberName, primary.EventName);
+            }
+
+            // Multi-Event Settlement: If the total transacted amount covers more than the primary event
+            // or notes indicate AllOutstanding scope, allocate remaining funds to the member's other pending contributions.
+            var totalTransacted = totalCash + totalUpi;
+            var primaryAmount = match?.Amount ?? 0;
+            var isAllScope = (primary.Notes ?? "").Contains("[Scope: AllOutstanding]", StringComparison.OrdinalIgnoreCase) ||
+                             (primary.Notes ?? "").Contains("All Outstanding", StringComparison.OrdinalIgnoreCase);
+
+            if (primary.UserId.HasValue && (isAllScope || totalTransacted > primaryAmount))
+            {
+                var remainingForOtherEvents = totalTransacted > primaryAmount ? totalTransacted - primaryAmount : 0;
+                var allContribs = await _contributionRepository.GetAllAsync(cancellationToken);
+                var otherMemberContribs = allContribs
+                    .Where(c => c.MemberId == primary.UserId.Value &&
+                                (match == null || c.ContributionId != match.ContributionId) &&
+                                c.PaymentStatus != PaymentStatus.Paid)
+                    .ToList();
+
+                foreach (var otherDto in otherMemberContribs)
+                {
+                    var otherEntity = await _contributionRepository.GetByEventAndMemberAsync(otherDto.EventId, otherDto.MemberId, cancellationToken);
+                    if (otherEntity != null)
+                    {
+                        var alloc = otherEntity.Amount > 0 ? Math.Min(remainingForOtherEvents, otherEntity.Amount) : remainingForOtherEvents;
+                        remainingForOtherEvents -= alloc;
+
+                        if (statusIdToAssign.HasValue) otherEntity.StatusId = statusIdToAssign.Value;
+                        if (primary.PaymentModeId.HasValue) otherEntity.PaymentModeId = primary.PaymentModeId.Value;
+                        otherEntity.PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow;
+                        otherEntity.PaymentMode = modeEnum;
+                        otherEntity.PaymentStatus = isAllVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
+                        otherEntity.ModifiedBy = primary.ModifiedBy ?? primary.CreatedBy;
+                        otherEntity.ModifiedOn = DateTime.UtcNow;
+
+                        _contributionRepository.Update(otherEntity);
+                        _logger.LogInformation("Multi-event settled contribution {ContributionId} for member {MemberId}: Status={Status}",
+                            otherEntity.ContributionId, primary.UserId.Value, targetStatusName);
+                    }
+                }
             }
         }
         catch (Exception ex)
