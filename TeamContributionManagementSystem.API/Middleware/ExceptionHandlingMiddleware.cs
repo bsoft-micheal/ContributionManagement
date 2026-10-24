@@ -82,6 +82,17 @@ public class ExceptionHandlingMiddleware
                 data = (object?)null
             };
         }
+        else if (exception is DuplicateEventException dupEx)
+        {
+            statusCode = HttpStatusCode.Conflict;
+            payload = new
+            {
+                success = false,
+                statusCode = (int)statusCode,
+                message = dupEx.Message,
+                data = (object?)null
+            };
+        }
         else if (exception is Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
         {
             statusCode = HttpStatusCode.Conflict;

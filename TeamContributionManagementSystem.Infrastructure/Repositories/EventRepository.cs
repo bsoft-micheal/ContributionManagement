@@ -1020,6 +1020,125 @@ public class EventRepository : IEventRepository
         }
     }
 
+    public async Task<bool> HasDuplicateEventTypeInMonthAsync(Guid eventTypeId, int month, int year, Guid? excludeEventId = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var targetTypeId = eventTypeId;
+            var targetType = await _context.EventTypes.AsNoTracking().FirstOrDefaultAsync(t => t.EventTypeId == targetTypeId, cancellationToken);
+            var targetTypeName = targetType?.EventTypeName?.Trim().ToLowerInvariant() ?? string.Empty;
+
+            var existingEvents = await _context.Events
+                .AsNoTracking()
+                .Where(e => !e.IsDeleted && (!excludeEventId.HasValue || e.EventId != excludeEventId.Value))
+                .Select(e => new
+                {
+                    e.EventId,
+                    e.EventTypeId,
+                    e.EventDate,
+                    e.EventDates
+                })
+                .ToListAsync(cancellationToken);
+
+            foreach (var ev in existingEvents)
+            {
+                // Check primary event type and primary date
+                if (ev.EventTypeId == targetTypeId && ev.EventDate.Month == month && ev.EventDate.Year == year)
+                {
+                    return true;
+                }
+
+                // Check serialized dates & multi-types in EventDates JSON
+                if (!string.IsNullOrWhiteSpace(ev.EventDates) && ev.EventDates.Trim().StartsWith("{"))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(ev.EventDates);
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                        {
+                            bool typeMatches = false;
+                            if (Guid.TryParse(prop.Name, out var parsedTypeId) && parsedTypeId == targetTypeId)
+                            {
+                                typeMatches = true;
+                            }
+                            else if (!string.IsNullOrWhiteSpace(targetTypeName) &&
+                                     prop.Name.Replace(" ", "").Replace("-", "").Replace("_", "").Equals(
+                                         targetTypeName.Replace(" ", "").Replace("-", "").Replace("_", ""),
+                                         StringComparison.OrdinalIgnoreCase))
+                            {
+                                typeMatches = true;
+                            }
+
+                            if (typeMatches)
+                            {
+                                if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                                {
+                                    var dateStr = prop.Value.GetString();
+                                    if (DateTime.TryParse(dateStr, out var parsedDate) && parsedDate.Month == month && parsedDate.Year == year)
+                                    {
+                                        return true;
+                                    }
+                                }
+                                else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                                {
+                                    foreach (var subProp in prop.Value.EnumerateObject())
+                                    {
+                                        if (subProp.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                                        {
+                                            var dateStr = subProp.Value.GetString();
+                                            if (DateTime.TryParse(dateStr, out var parsedDate) && parsedDate.Month == month && parsedDate.Year == year)
+                                            {
+                                                return true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Even if type doesn't match prop.Name, check if this event has primary type == targetTypeId
+                                // and one of the sub-dates is in target month/year
+                                if (ev.EventTypeId == targetTypeId)
+                                {
+                                    if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                                    {
+                                        var dateStr = prop.Value.GetString();
+                                        if (DateTime.TryParse(dateStr, out var parsedDate) && parsedDate.Month == month && parsedDate.Year == year)
+                                        {
+                                            return true;
+                                        }
+                                    }
+                                    else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                                    {
+                                        foreach (var subProp in prop.Value.EnumerateObject())
+                                        {
+                                            if (subProp.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                                            {
+                                                var dateStr = subProp.Value.GetString();
+                                                if (DateTime.TryParse(dateStr, out var parsedDate) && parsedDate.Month == month && parsedDate.Year == year)
+                                                {
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { /* Continue checking other events */ }
+                }
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasDuplicateEventTypeInMonthAsync));
+            throw;
+        }
+    }
+
     public async Task<bool> HasPaidContributionsAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
         try

@@ -43,6 +43,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<PaymentModeItem> PaymentModes => Set<PaymentModeItem>();
     public DbSet<NavigationMenu> NavigationMenus => Set<NavigationMenu>();
     public DbSet<EventTypePaymentSetting> EventTypePaymentSettings => Set<EventTypePaymentSetting>();
+    public DbSet<BirthdayReminderLog> BirthdayReminderLogs => Set<BirthdayReminderLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -505,6 +506,24 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.QrMode).HasColumnName("qr_mode").HasMaxLength(50).HasDefaultValue("generated");
             entity.Property(x => x.QrImageUrl).HasColumnName("qr_image_url").HasColumnType("text");
             entity.Property(x => x.IsConfigured).HasColumnName("is_configured").HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<BirthdayReminderLog>(entity =>
+        {
+            entity.HasKey(x => x.ReminderLogId);
+            entity.Property(x => x.ReminderType).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.RecipientEmail).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(30).IsRequired().HasDefaultValue("Sent");
+            entity.Property(x => x.ErrorMessage).HasMaxLength(500);
+            entity.HasIndex(x => new { x.CelebrationDate, x.CelebrantUserId, x.RecipientUserId, x.ReminderType }).IsUnique();
+            entity.HasOne(x => x.CelebrantUser)
+                .WithMany()
+                .HasForeignKey(x => x.CelebrantUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.RecipientUser)
+                .WithMany()
+                .HasForeignKey(x => x.RecipientUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.ApplySnakeCaseNames();
