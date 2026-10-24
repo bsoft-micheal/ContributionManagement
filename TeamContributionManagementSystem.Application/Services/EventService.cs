@@ -584,6 +584,12 @@ public class EventService : IEventService
                 CreatedAt = DateTime.UtcNow
             }).ToList();
 
+            if (eventItem.Status == EventStatus.Published || eventItem.Status == EventStatus.Planned)
+            {
+                eventItem.PublishedAt = DateTime.UtcNow;
+                eventItem.PublishedBy = user.UserId;
+            }
+
             foreach (var c in contributions)
             {
                 eventItem.Contributions.Add(c);
@@ -593,35 +599,36 @@ public class EventService : IEventService
             await _contributionRepository.AddRangeAsync(contributions, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-
-
             // Fetch the created event to ensure it is fully committed
             var createdEvent = await GetByIdAsync(eventItem.EventId, cancellationToken);
 
-            // Send notification emails asynchronously in the background to active contributors
-            var participantData = members.Select(m => (
-                MemberId: m.MemberId,
-                Name: (string?)m.Name,
-                Email: (string?)m.Email,
-                ContributionAmount: contributions.FirstOrDefault(c => c.MemberId == m.MemberId)?.Amount ?? 0m
-            ));
+            // Send notification emails asynchronously ONLY if event is published (never for Drafts)
+            if (eventItem.Status != EventStatus.Draft)
+            {
+                var participantData = members.Select(m => (
+                    MemberId: m.MemberId,
+                    Name: (string?)m.Name,
+                    Email: (string?)m.Email,
+                    ContributionAmount: contributions.FirstOrDefault(c => c.MemberId == m.MemberId)?.Amount ?? 0m
+                ));
 
-            var exemptCelebrantIds = (request.ContributionOverrides ?? new List<ContributionOverrideDto>())
-                .Where(x => x.Amount == 0)
-                .Select(x => x.MemberId)
-                .ToHashSet();
+                var exemptCelebrantIds = (request.ContributionOverrides ?? new List<ContributionOverrideDto>())
+                    .Where(x => x.Amount == 0)
+                    .Select(x => x.MemberId)
+                    .ToHashSet();
 
-            DispatchEventNotificationEmails(
-                eventItem.EventId,
-                eventItem.EventName,
-                eventItem.EventDate,
-                eventItem.EventDates,
-                eventItem.Description,
-                eventItem.BaseAmount,
-                eventType.EventTypeId,
-                eventType.EventTypeName,
-                exemptCelebrantIds,
-                participantData);
+                DispatchEventNotificationEmails(
+                    eventItem.EventId,
+                    eventItem.EventName,
+                    eventItem.EventDate,
+                    eventItem.EventDates,
+                    eventItem.Description,
+                    eventItem.BaseAmount,
+                    eventType.EventTypeId,
+                    eventType.EventTypeName,
+                    exemptCelebrantIds,
+                    participantData);
+            }
 
             return createdEvent;
         }
@@ -1525,8 +1532,8 @@ public class EventService : IEventService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // If new participants were added, dispatch notification emails to them
-            if (participantIdsToAdd.Count > 0)
+            // If new participants were added, dispatch notification emails ONLY if event is published (never for Drafts)
+            if (participantIdsToAdd.Count > 0 && eventItem.Status != EventStatus.Draft)
             {
                 var newMembers = members.Where(m => participantIdsToAdd.Contains(m.MemberId)).ToList();
                 var newParticipantData = newMembers.Select(m => (
@@ -1637,6 +1644,98 @@ public class EventService : IEventService
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteAsync));
+            throw;
+        }
+    }
+
+    public async Task<EventDetailsDto> PublishAsync(Guid eventId, Guid publishingUserId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var eventItem = await _eventRepository.GetByIdAsync(eventId, cancellationToken)
+                ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
+
+            if (eventItem.IsDeleted)
+            {
+                throw new InvalidOperationException("Cannot publish a deleted event.");
+            }
+
+            // Verify Organizer permission: Organizers can only publish events they created or organize
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                var curUserId = _currentUserService.UserId;
+                if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
+                {
+                    if (eventItem.CreatedBy != curUserGuid && !eventItem.Participants.Any(p => p.UserId == curUserGuid))
+                    {
+                        throw new UnauthorizedAccessException("Organizers can only publish events they created or organize.");
+                    }
+                }
+            }
+
+            // Idempotent: If already published/planned/active/completed, return existing details without duplicated notifications
+            if (eventItem.Status == EventStatus.Published || eventItem.Status == EventStatus.Active || eventItem.Status == EventStatus.Completed)
+            {
+                return await GetByIdAsync(eventItem.EventId, cancellationToken);
+            }
+
+            var eventType = await _eventTypeRepository.GetByIdAsync(eventItem.EventTypeId, cancellationToken)
+                ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
+
+            var activeParticipants = eventItem.Participants.Where(p => !p.IsDeleted).ToList();
+            if (activeParticipants.Count == 0)
+            {
+                throw new InvalidOperationException(CommonMessages.Events.AtLeastOneParticipantRequired);
+            }
+
+            if (eventItem.BaseAmount <= 0)
+            {
+                throw new InvalidOperationException("Event cannot be published with ₹0. Please configure budget calculation rates or enter a valid contribution amount.");
+            }
+
+            // Update status and audit
+            eventItem.Status = EventStatus.Published;
+            eventItem.PublishedAt = DateTime.UtcNow;
+            eventItem.PublishedBy = publishingUserId;
+            eventItem.ModifiedBy = publishingUserId;
+            eventItem.ModifiedOn = DateTime.UtcNow;
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Send notification emails to all active participant contributors
+            var participantMemberIds = activeParticipants.Select(p => p.UserId).Distinct().ToList();
+            var members = await _memberRepository.GetByIdsAsync(participantMemberIds, cancellationToken);
+            var activeContributions = eventItem.Contributions.Where(c => !c.IsDeleted).ToList();
+
+            var participantData = members.Select(m => (
+                MemberId: m.MemberId,
+                Name: (string?)m.Name,
+                Email: (string?)m.Email,
+                ContributionAmount: activeContributions.FirstOrDefault(c => c.UserId == m.MemberId)?.Amount ?? 0m
+            ));
+
+            var exemptCelebrantIds = activeContributions
+                .Where(c => c.Amount == 0)
+                .Select(c => c.UserId)
+                .ToHashSet();
+
+            DispatchEventNotificationEmails(
+                eventItem.EventId,
+                eventItem.EventName,
+                eventItem.EventDate,
+                eventItem.EventDates,
+                eventItem.Description,
+                eventItem.BaseAmount,
+                eventType.EventTypeId,
+                eventType.EventTypeName,
+                exemptCelebrantIds,
+                participantData);
+
+            return await GetByIdAsync(eventItem.EventId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(PublishAsync));
             throw;
         }
     }

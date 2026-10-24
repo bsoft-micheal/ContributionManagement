@@ -68,6 +68,11 @@ public class MemberRepository : IMemberRepository
 
             return items;
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("GetAllAsync request in MemberRepository was canceled.");
+            return new List<MemberDto>();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));

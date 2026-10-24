@@ -6,7 +6,8 @@ public enum EventStatus
     Planned = 2,
     Active = 3,
     Completed = 4,
-    Cancelled = 5
+    Cancelled = 5,
+    Published = 6
 }
 
 public enum PaymentStatus

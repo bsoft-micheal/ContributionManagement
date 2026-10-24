@@ -104,6 +104,28 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Publishes a draft event, making it visible to members and dispatching notifications (Admin or Organizer).
+    /// </summary>
+    /// <param name="id">The unique identifier of the event to publish.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [Authorize(Roles = CommonRoles.AdminOrOrganizer)]
+    [RequireFeaturePermission(32, AccessType.ReadWrite)]
+    [HttpPost(CommonRoutes.Events.Publish)]
+    [HttpPost(CommonRoutes.Events.PublishAsync)]
+    [ActionName(nameof(PublishEventAsyncById))]
+    public async Task<ActionResult<ApiResponse<EventDetailsDto>>> PublishEventAsyncById([FromRoute] Guid id, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new UnauthorizedAccessException(CommonMessages.General.UserIdentityNotAvailable);
+
+        var eventItem = await _eventService.PublishEventAsyncById(id, Guid.Parse(userIdClaim), cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<EventDetailsDto>.SuccessResult(
+            eventItem,
+            "Event published successfully. Member notifications are being processed.",
+            CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
     /// Manually triggers contribution reminder emails for all pending members of an event (Admin or Organizer).
     /// </summary>
     /// <param name="eventId">The unique identifier of the event.</param>

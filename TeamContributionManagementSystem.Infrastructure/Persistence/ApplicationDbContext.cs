@@ -181,6 +181,12 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .WithMany(x => x.CreatedEvents)
                 .HasForeignKey(x => x.CreatedBy)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(x => x.PublishedAt).HasColumnName("published_at");
+            entity.Property(x => x.PublishedBy).HasColumnName("published_by");
+            entity.HasOne(x => x.PublishedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.PublishedBy)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<EventParticipant>(entity =>

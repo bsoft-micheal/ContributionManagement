@@ -66,7 +66,7 @@ public class EventRepository : IEventRepository
                 paymentTxnEventIds = paymentTxns.Where(p => p.EventId.HasValue).Select(p => p.EventId!.Value).Distinct().ToList();
                 paymentTxnEventNames = paymentTxns.Where(p => !string.IsNullOrEmpty(p.EventName)).Select(p => p.EventName!).Distinct().ToList();
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load payment transaction event names."); }
 
             try
@@ -88,7 +88,7 @@ public class EventRepository : IEventRepository
                     .Distinct()
                     .ToListAsync(cancellationToken);
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load contributions paid event ids."); }
 
             try
@@ -99,7 +99,7 @@ public class EventRepository : IEventRepository
                     .Distinct()
                     .ToListAsync(cancellationToken);
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load expense event names."); }
 
             try
@@ -110,7 +110,7 @@ public class EventRepository : IEventRepository
                     .Distinct()
                     .ToListAsync(cancellationToken);
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load photo event names."); }
 
             var ticketCountByEventId = new Dictionary<Guid, int>();
@@ -140,7 +140,7 @@ public class EventRepository : IEventRepository
                     .GroupBy(t => t.EventName.Trim().ToLower())
                     .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load support ticket counts."); }
 
             var results = await query
@@ -190,6 +190,11 @@ public class EventRepository : IEventRepository
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
+                    PublishedAt = x.PublishedAt,
+                    PublishedBy = x.PublishedBy,
+                    PublishedByName = x.PublishedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.PublishedByUser.FullName) ? x.PublishedByUser.FullName : x.PublishedByUser.Username)
+                        : null,
                     HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,
                     TenureThresholdYears = x.EventType != null ? x.EventType.TenureThresholdYears : 0,
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
@@ -294,7 +299,7 @@ public class EventRepository : IEventRepository
                 paymentTxnEventIds = paymentTxns.Where(p => p.EventId.HasValue).Select(p => p.EventId!.Value).Distinct().ToList();
                 paymentTxnEventNames = paymentTxns.Where(p => !string.IsNullOrEmpty(p.EventName)).Select(p => p.EventName!).Distinct().ToList();
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load payment transaction event names."); }
 
             try
@@ -316,7 +321,7 @@ public class EventRepository : IEventRepository
                     .Distinct()
                     .ToListAsync(cancellationToken);
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load contributions paid event ids."); }
 
             try
@@ -327,7 +332,7 @@ public class EventRepository : IEventRepository
                     .Distinct()
                     .ToListAsync(cancellationToken);
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load expense event names."); }
 
             try
@@ -338,7 +343,7 @@ public class EventRepository : IEventRepository
                     .Distinct()
                     .ToListAsync(cancellationToken);
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load photo event names."); }
 
             var ticketCountByEventId = new Dictionary<Guid, int>();
@@ -368,7 +373,7 @@ public class EventRepository : IEventRepository
                     .GroupBy(t => t.EventName.Trim().ToLower())
                     .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) { return new List<EventSummaryDto>(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load support ticket counts."); }
 
             var results = await query
@@ -418,6 +423,11 @@ public class EventRepository : IEventRepository
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
+                    PublishedAt = x.PublishedAt,
+                    PublishedBy = x.PublishedBy,
+                    PublishedByName = x.PublishedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.PublishedByUser.FullName) ? x.PublishedByUser.FullName : x.PublishedByUser.Username)
+                        : null,
                     HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,
                     TenureThresholdYears = x.EventType != null ? x.EventType.TenureThresholdYears : 0,
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
@@ -477,7 +487,7 @@ public class EventRepository : IEventRepository
         try
         {
             var query = _context.Events
-                .Where(x => !x.IsDeleted && (
+                .Where(x => !x.IsDeleted && x.Status != EventStatus.Draft && (
                     x.Contributions.Any(c => !c.IsDeleted && c.UserId == memberId) ||
                     x.Participants.Any(p => !p.IsDeleted && p.UserId == memberId)
                 ))
@@ -534,6 +544,11 @@ public class EventRepository : IEventRepository
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
+                    PublishedAt = x.PublishedAt,
+                    PublishedBy = x.PublishedBy,
+                    PublishedByName = x.PublishedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.PublishedByUser.FullName) ? x.PublishedByUser.FullName : x.PublishedByUser.Username)
+                        : null,
                     HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,
                     TenureThresholdYears = x.EventType != null ? x.EventType.TenureThresholdYears : 0,
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
@@ -688,7 +703,7 @@ public class EventRepository : IEventRepository
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to load support ticket counts for upcoming events."); }
 
             var results = await _context.Events
-                .Where(x => !x.IsDeleted && x.EventDate >= DateTime.UtcNow.Date)
+                .Where(x => !x.IsDeleted && x.Status != EventStatus.Draft && x.EventDate >= DateTime.UtcNow.Date)
                 .OrderBy(x => x.EventDate)
                 .Take(count)
                 .Select(x => new EventSummaryDto
@@ -735,6 +750,11 @@ public class EventRepository : IEventRepository
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
+                    PublishedAt = x.PublishedAt,
+                    PublishedBy = x.PublishedBy,
+                    PublishedByName = x.PublishedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.PublishedByUser.FullName) ? x.PublishedByUser.FullName : x.PublishedByUser.Username)
+                        : null,
                     HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,
                     TenureThresholdYears = x.EventType != null ? x.EventType.TenureThresholdYears : 0,
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,
@@ -889,6 +909,11 @@ public class EventRepository : IEventRepository
                         : (x.CreatedBy != Guid.Empty ? x.CreatedBy.ToString() : null),
                     CreatedAt = x.CreatedAt,
                     CreatedOn = x.CreatedAt,
+                    PublishedAt = x.PublishedAt,
+                    PublishedBy = x.PublishedBy,
+                    PublishedByName = x.PublishedByUser != null
+                        ? (!string.IsNullOrWhiteSpace(x.PublishedByUser.FullName) ? x.PublishedByUser.FullName : x.PublishedByUser.Username)
+                        : null,
                     HasTenureRule = x.EventType != null && x.EventType.HasTenureRule,
                     TenureThresholdYears = x.EventType != null ? x.EventType.TenureThresholdYears : 0,
                     NewEntrantSharePercentage = x.EventType != null ? x.EventType.NewEntrantSharePercentage : 0,

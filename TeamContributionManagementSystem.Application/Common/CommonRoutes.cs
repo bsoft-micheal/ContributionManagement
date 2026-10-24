@@ -27,6 +27,8 @@ public static class CommonRoutes
         public const string Create = "saveEventAsync";
         public const string Update = "updateEventAsyncById/{id:guid}";
         public const string Delete = "deleteEventAsyncById/{id:guid}";
+        public const string Publish = "{id:guid}/publish";
+        public const string PublishAsync = "publishEventAsync/{id:guid}";
         public const string SendReminders = "{eventId:guid}/send-reminders";
         public const string SendRemindersAsync = "sendRemindersAsync/{eventId:guid}";
         public const string PreviewContributions = "previewContributionsAsync";
