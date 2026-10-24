@@ -32,6 +32,9 @@ public class EventSummaryDto
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? CreatedOn { get; set; }
+    public DateTime? PublishedAt { get; set; }
+    public Guid? PublishedBy { get; set; }
+    public string? PublishedByName { get; set; }
 
     // Calculation Rule Properties (inherited from EventType)
     public bool HasTenureRule { get; set; }

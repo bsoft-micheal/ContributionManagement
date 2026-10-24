@@ -276,6 +276,11 @@ public class UserRepository : IUserRepository
 
             return users;
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("GetAllAsync request in UserRepository was canceled.");
+            return new List<UserDto>();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetAllAsync));

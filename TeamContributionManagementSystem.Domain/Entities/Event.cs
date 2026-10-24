@@ -22,6 +22,11 @@ public class Event
     public ICollection<EventParticipant> Participants { get; set; } = new List<EventParticipant>();
     public ICollection<Contribution> Contributions { get; set; } = new List<Contribution>();
 
+    // Publication Audit Properties
+    public DateTime? PublishedAt { get; set; }
+    public Guid? PublishedBy { get; set; }
+    public AppUser? PublishedByUser { get; set; }
+
     // Common Audit Properties
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
     public Guid? ModifiedBy { get; set; }

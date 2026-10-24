@@ -12,6 +12,8 @@ public interface IEventService
     Task<EventContributionPreviewResponseDto> CalculateContributionPreviewAsync(EventContributionPreviewRequestDto request, CancellationToken cancellationToken = default);
     Task<AvailableAmountInHandDto> GetAvailableAmountInHandAsync(CancellationToken cancellationToken = default);
 
+    Task<EventDetailsDto> PublishAsync(Guid eventId, Guid publishingUserId, CancellationToken cancellationToken = default);
+
     // Standardized terminology
     Task<IReadOnlyCollection<EventSummaryDto>> GetAllEventAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetAllAsync(month, year, cancellationToken);
     Task<EventDetailsDto> GetEventAsyncById(Guid eventId, CancellationToken cancellationToken = default) => GetByIdAsync(eventId, cancellationToken);
@@ -19,4 +21,5 @@ public interface IEventService
     Task<EventDetailsDto> UpdateEventAsyncById(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default) => UpdateAsync(eventId, request, cancellationToken);
     Task DeleteEventAsyncById(Guid eventId, CancellationToken cancellationToken = default) => DeleteAsync(eventId, cancellationToken);
     Task<EventContributionPreviewResponseDto> PreviewContributionAsync(EventContributionPreviewRequestDto request, CancellationToken cancellationToken = default) => CalculateContributionPreviewAsync(request, cancellationToken);
+    Task<EventDetailsDto> PublishEventAsyncById(Guid eventId, Guid publishingUserId, CancellationToken cancellationToken = default) => PublishAsync(eventId, publishingUserId, cancellationToken);
 }
