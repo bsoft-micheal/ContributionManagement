@@ -245,6 +245,14 @@ using (var scope = app.Services.CreateScope())
         cronSchedule,
         new RecurringJobOptions { TimeZone = timeZoneInfo }
     );
+
+    // Register Daily Automatic Birthday Celebration Reminder Job at 9:00 AM IST
+    recurringJobManager.AddOrUpdate<IBirthdayAutomationService>(
+        "daily-birthday-reminders",
+        service => service.ProcessDailyBirthdayRemindersAsync(null, CancellationToken.None),
+        "0 9 * * *",
+        new RecurringJobOptions { TimeZone = timeZoneInfo }
+    );
 }
 
 app.MapControllers();

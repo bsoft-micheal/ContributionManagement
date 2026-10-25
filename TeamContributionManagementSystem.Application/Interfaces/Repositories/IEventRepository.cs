@@ -15,6 +15,7 @@ public interface IEventRepository
     Task<Event?> GetByNameAsync(string eventName, string? category, CancellationToken cancellationToken = default);
     Task<bool> BirthdayEventExistsAsync(Guid memberId, int month, int year, CancellationToken cancellationToken = default);
     Task<bool> HasPaidContributionsAsync(Guid eventId, CancellationToken cancellationToken = default);
+    Task<bool> HasDuplicateEventTypeInMonthAsync(Guid eventTypeId, int month, int year, Guid? excludeEventId = null, CancellationToken cancellationToken = default);
     Task<bool> HasPaymentTransactionsAsync(string eventName, CancellationToken cancellationToken = default);
     Task<bool> HasExpensesAsync(string eventName, CancellationToken cancellationToken = default);
     Task<bool> HasGalleryPhotosAsync(string eventName, CancellationToken cancellationToken = default);

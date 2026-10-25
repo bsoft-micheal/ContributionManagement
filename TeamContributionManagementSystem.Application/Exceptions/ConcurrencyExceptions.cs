@@ -23,3 +23,11 @@ public class AlreadyProcessedException : Exception
     {
     }
 }
+
+public class DuplicateEventException : Exception
+{
+    public DuplicateEventException(string message)
+        : base(message)
+    {
+    }
+}
