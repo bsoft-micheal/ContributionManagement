@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TeamContributionManagementSystem.Application.Common;
 
 namespace TeamContributionManagementSystem.Application.DTOs.SupportTickets;
 
@@ -115,7 +116,7 @@ public class UpdateSupportTicketRequestDto
 public class ReplyTicketRequestDto
 {
     [Required]
-    [MaxLength(2000)]
+    [MaxLength(250, ErrorMessage = CommonValidationMessages.ReplyMessageMaxLength)]
     public string Message { get; set; } = string.Empty;
 
     [MaxLength(50)]
