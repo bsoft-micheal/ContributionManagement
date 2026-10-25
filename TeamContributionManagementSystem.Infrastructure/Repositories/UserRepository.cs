@@ -222,6 +222,7 @@ public class UserRepository : IUserRepository
                         IsSecondary = x.IsSecondary || assignedRoles.Any(ur => ur.IsSecondary),
                         ActiveRoleId = x.RoleId,
                         IsActive = x.IsActive,
+                        IsExited = x.IsExited,
                         IsDeleted = x.IsDeleted,
                         IsFirstLogin = x.IsFirstLogin,
                         ProfileImage = x.ProfileImage,

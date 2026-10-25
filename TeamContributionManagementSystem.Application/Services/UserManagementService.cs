@@ -21,6 +21,7 @@ public class UserManagementService : IUserManagementService
     private readonly IMapper _mapper;
     private readonly IWorkTypeRepository? _workTypeRepository;
     private readonly IEmailService _emailService;
+    private readonly Microsoft.Extensions.Configuration.IConfiguration? _configuration;
 
     public UserManagementService(ILogger<UserManagementService> logger, 
         IUserRepository userRepository,
@@ -30,7 +31,8 @@ public class UserManagementService : IUserManagementService
         IPasswordHasher passwordHasher,
         IMapper mapper,
         IEmailService emailService,
-        IWorkTypeRepository? workTypeRepository = null)
+        IWorkTypeRepository? workTypeRepository = null,
+        Microsoft.Extensions.Configuration.IConfiguration? configuration = null)
     {
         _logger = logger;
         _userRepository = userRepository;
@@ -41,6 +43,7 @@ public class UserManagementService : IUserManagementService
         _mapper = mapper;
         _workTypeRepository = workTypeRepository;
         _emailService = emailService;
+        _configuration = configuration;
     }
 
     private async Task<string> ResolveDefaultWorkTypeAsync(CancellationToken cancellationToken)
@@ -359,9 +362,33 @@ public class UserManagementService : IUserManagementService
                 ? request.FullName.Trim()
                 : (!string.IsNullOrWhiteSpace(request.Username) ? request.Username.Trim() : emailToUse.Split('@')[0]);
 
-            var rawPassword = !string.IsNullOrWhiteSpace(request.Password)
-                ? request.Password.Trim()
-                : $"Pass@{new Random().Next(100000, 999999)}";
+            var isImported = request.IsImported;
+            string rawPassword;
+            string setupOtp = string.Empty;
+
+            if (isImported)
+            {
+                // Requirement 2: Automatically generate a unique, cryptographically secure temporary password in the backend
+                // Length 12 chars with upper, lower, digit, and special char
+                var randomBytes = new byte[8];
+                using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+                {
+                    rng.GetBytes(randomBytes);
+                }
+                var base64Part = Convert.ToBase64String(randomBytes).Replace("+", "A").Replace("/", "B").Replace("=", "");
+                rawPassword = $"Tmp@{base64Part[..6]}!9";
+
+                // Requirement 3: Generate a secure, expiring, single-use password setup link
+                // Generate a 6-digit OTP stored in user.PasswordResetOtp with 24 hours expiry
+                var otpNumber = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 999999);
+                setupOtp = otpNumber.ToString();
+            }
+            else
+            {
+                rawPassword = !string.IsNullOrWhiteSpace(request.Password)
+                    ? request.Password.Trim()
+                    : $"Pass@{new Random().Next(100000, 999999)}";
+            }
 
             var defaultWorkType = await ResolveDefaultWorkTypeAsync(cancellationToken);
             var assignedWorkTypeName = !string.IsNullOrWhiteSpace(request.WorkType) ? request.WorkType.Trim() : defaultWorkType;
@@ -376,7 +403,12 @@ public class UserManagementService : IUserManagementService
             appUser.Role                = enumRole;
             appUser.FullName            = fullName;
             appUser.IsActive            = request.IsActive;
-            appUser.IsFirstLogin        = false;
+            appUser.IsFirstLogin        = isImported; // Marked pending for first-time password setup
+            if (isImported)
+            {
+                appUser.PasswordResetOtp = setupOtp;
+                appUser.PasswordResetOtpExpiry = DateTime.UtcNow.AddHours(24);
+            }
             appUser.EnableMultipleRoles = isAccessEnabled && isMultipleRoles;
             appUser.IsPrimary           = isAccessEnabled;
             appUser.IsSecondary         = isAccessEnabled && isMultipleRoles && secondaryRolesReq.Count > 0;
@@ -416,13 +448,73 @@ public class UserManagementService : IUserManagementService
             }
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Send credentials email
+            // Send credentials / welcome email
             if (isAccessEnabled)
             {
                 try
                 {
-                    var subject = "Welcome to Team Contribution Management System - Your Account Details";
-                    var emailBody = $@"
+                    var configuredOrigin = _configuration?["Cors:AllowedOrigins:0"] ?? "http://localhost:5173";
+                    var baseUrl = configuredOrigin.TrimEnd('/');
+
+                    string subject;
+                    string emailBody;
+
+                    if (isImported)
+                    {
+                        // Requirement 3: Send welcome email containing Username and password setup link (reusing Forgot Password infrastructure)
+                        var setupLink = $"{baseUrl}/forgot-password/reset?email={Uri.EscapeDataString(appUser.Email)}&otp={Uri.EscapeDataString(setupOtp)}";
+                        subject = "Welcome to Team Contribution Management System - Setup Your Password";
+                        emailBody = $@"
+<div style=""font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f7f6fb; padding: 40px 20px; border-radius: 16px; max-width: 600px; margin: 0 auto; color: #1e1a2e; border: 1px solid rgba(74, 63, 107, 0.08);"">
+    <div style=""text-align: center; margin-bottom: 25px;"">
+        <h2 style=""margin: 0; color: #7c3aed; font-weight: 900; letter-spacing: 0.05em;"">TEAM CONTRIBUTION</h2>
+        <span style=""font-size: 12px; color: #5b5280; font-weight: 700; text-transform: uppercase;"">Management System</span>
+    </div>
+    <div style=""background-color: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(30, 26, 46, 0.03);"">
+        <h3 style=""margin-top: 0; color: #1e1a2e; font-weight: 800; font-size: 18px;"">Welcome to the Team!</h3>
+        <p style=""color: #5b5280; font-size: 14px; line-height: 1.6;"">Hello <strong>{fullName}</strong>,</p>
+        <p style=""color: #5b5280; font-size: 14px; line-height: 1.6;"">Your user account has been successfully created via our administrator import. To activate your account and start using the system, please set your password below:</p>
+        
+        <table style=""width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;"">
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600; width: 40%;"">Username:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{appUser.Username}</td>
+            </tr>
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600;"">Email:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{appUser.Email}</td>
+            </tr>
+            <tr style=""border-bottom: 1px solid #f1f0f7;"">
+                <td style=""padding: 10px 0; color: #64748b; font-weight: 600;"">Primary Role:</td>
+                <td style=""padding: 10px 0; color: #1e1a2e; font-weight: 700;"">{enumRole}</td>
+            </tr>
+        </table>
+
+        <div style=""text-align: center; margin: 30px 0;"">
+            <a href=""{setupLink}"" style=""background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);"">
+                Set Up Your Password &rarr;
+            </a>
+        </div>
+
+        <div style=""background-color: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 14px 16px; margin: 20px 0;"">
+            <p style=""margin: 0; color: #5b21b6; font-size: 13px; line-height: 1.5; font-weight: 500;"">
+                &#9432; This single-use password setup link will remain valid for <strong>24 hours</strong>. If it expires, you can use the Forgot Password option on the login page anytime.
+            </p>
+        </div>
+
+        <p style=""color: #5b5280; font-size: 13px; line-height: 1.6; margin-bottom: 0;"">
+            Please keep your credentials secure.
+        </p>
+    </div>
+    <div style=""text-align: center; margin-top: 25px; color: #9d96bd; font-size: 12px;"">
+        &copy; 2026 Team Contribution Management System. All rights reserved.
+    </div>
+</div>";
+                    }
+                    else
+                    {
+                        subject = "Welcome to Team Contribution Management System - Your Account Details";
+                        emailBody = $@"
 <div style=""font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f7f6fb; padding: 40px 20px; border-radius: 16px; max-width: 600px; margin: 0 auto; color: #1e1a2e; border: 1px solid rgba(74, 63, 107, 0.08);"">
     <div style=""text-align: center; margin-bottom: 25px;"">
         <h2 style=""margin: 0; color: #7c3aed; font-weight: 900; letter-spacing: 0.05em;"">TEAM CONTRIBUTION</h2>
@@ -466,8 +558,9 @@ public class UserManagementService : IUserManagementService
         &copy; 2026 Team Contribution Management System. All rights reserved.
     </div>
 </div>";
+                    }
 
-                    await _emailService.SendEmailAsync(appUser.Email, subject, emailBody, cancellationToken: cancellationToken);
+                    await _emailService.SendEmailAsync(appUser.Email, subject, emailBody, cancellationToken: CancellationToken.None);
                     _logger.LogInformation("Credentials email sent successfully to {Email}", appUser.Email);
                 }
                 catch (Exception mailEx)
@@ -518,6 +611,22 @@ public class UserManagementService : IUserManagementService
             };
 
             _logger.LogInformation("User created successfully with Email {Email}", emailToUse);
+
+            // Requirement 4: Catch-up birthday reminder for newly joined/imported member if celebration is tomorrow
+            if (appUser.IsActive && !appUser.IsDeleted && !appUser.IsExited && appUser.DateOfBirth != default)
+            {
+                try
+                {
+                    Hangfire.BackgroundJob.Enqueue<IBirthdayAutomationService>(
+                        service => service.ProcessCatchUpBirthdayReminderForUserAsync(appUser.UserId, CancellationToken.None));
+                    _logger.LogInformation("Enqueued catch-up birthday reminder check for new user {UserId}", appUser.UserId);
+                }
+                catch (Exception jobEx)
+                {
+                    _logger.LogWarning(jobEx, "Failed to enqueue Hangfire catch-up birthday reminder for user {UserId}", appUser.UserId);
+                }
+            }
+
             return returnDto;
         }
         catch (Exception ex)

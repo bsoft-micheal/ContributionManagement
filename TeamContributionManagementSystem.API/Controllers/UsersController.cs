@@ -103,6 +103,7 @@ public class UsersController : ControllerBase
                 {
                     return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<UserDto>>.FailureResult($"Row {i + 1}: {CommonMessages.General.NullRequestItem}", CommonStatusCodes.Status400BadRequest));
                 }
+                req.IsImported = true;
 
                 try
                 {
