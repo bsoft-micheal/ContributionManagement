@@ -6,7 +6,7 @@ namespace TeamContributionManagementSystem.Application.Common;
 
 /// <summary>
 /// Centralized rounding helper ensuring consistent whole-number calculations across the application.
-/// Rule: decimal part >= .50 rounds up; decimal part < .50 rounds down (MidpointRounding.AwayFromZero).
+/// Rule: decimal part &gt;= .50 rounds up; decimal part &lt; .50 rounds down (MidpointRounding.AwayFromZero).
 /// Includes exact remainder distribution so total amounts match target values without penny/rupee drift.
 /// </summary>
 public static class RoundingHelper
@@ -29,7 +29,7 @@ public static class RoundingHelper
     }
 
     /// <summary>
-    /// Distributes whole-number shares by rounding each raw share using standard half-up rounding (>= 0.50 rounds up, else down).
+    /// Distributes whole-number shares by rounding each raw share using standard half-up rounding (&gt;= 0.50 rounds up, else down).
     /// Prevents artificial discrepancies between members so that everyone with equal raw share receives identical amount.
     /// Safely handles empty collections, zero values, and negative amounts.
     /// </summary>
@@ -45,8 +45,8 @@ public static class RoundingHelper
 
     /// <summary>
     /// Splits a total amount equally across a given number of participants into whole numbers.
-    /// Each participant receives an identical rounded whole-number share (>= .50 rounds up, < .50 rounds down).
-    /// Safely prevents division by zero when count <= 0.
+    /// Each participant receives an identical rounded whole-number share (&gt;= .50 rounds up, &lt; .50 rounds down).
+    /// Safely prevents division by zero when count &lt;= 0.
     /// </summary>
     public static List<decimal> DistributeEqualSplit(decimal totalAmount, int participantCount)
     {

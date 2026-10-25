@@ -201,7 +201,8 @@ public class EmailService : IEmailService
             using var smtpClient = new SmtpClient(host, port)
             {
                 Credentials = new NetworkCredential(username, password),
-                EnableSsl = enableSsl
+                EnableSsl = enableSsl,
+                Timeout = 30000
             };
 
             await smtpClient.SendMailAsync(mailMessage, cancellationToken);

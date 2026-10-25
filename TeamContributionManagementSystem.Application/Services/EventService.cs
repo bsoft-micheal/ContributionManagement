@@ -12,6 +12,7 @@ using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
 using TeamContributionManagementSystem.Domain.Entities;
 using TeamContributionManagementSystem.Domain.Enums;
+using TeamContributionManagementSystem.Application.Exceptions;
 
 namespace TeamContributionManagementSystem.Application.Services;
 
@@ -460,6 +461,64 @@ public class EventService : IEventService
             if (!eventType.IsActive)
             {
                 throw new InvalidOperationException(CommonMessages.Events.InactiveEventType);
+            }
+
+            // Monthly Duplicate Event Prevention:
+            // Check all requested event types across all represented month/year combinations
+            var allTypesToCheck = new HashSet<Guid>();
+            if (targetTypeId != Guid.Empty) allTypesToCheck.Add(targetTypeId);
+            if (request.EventTypeIds != null && request.EventTypeIds.Count > 0)
+            {
+                foreach (var tid in request.EventTypeIds)
+                {
+                    if (tid != Guid.Empty) allTypesToCheck.Add(tid);
+                }
+            }
+
+            var allDatesToCheck = new List<DateTime> { request.EventDate.Date };
+            if (request.EventTypeDates != null)
+            {
+                foreach (var dVal in request.EventTypeDates.Values)
+                {
+                    if (DateTime.TryParse(dVal, out var parsedDate))
+                    {
+                        allDatesToCheck.Add(parsedDate.Date);
+                    }
+                }
+            }
+            if (request.EventTypeMemberDates != null)
+            {
+                foreach (var innerDict in request.EventTypeMemberDates.Values)
+                {
+                    foreach (var dVal in innerDict.Values)
+                    {
+                        if (DateTime.TryParse(dVal, out var parsedDate))
+                        {
+                            allDatesToCheck.Add(parsedDate.Date);
+                        }
+                    }
+                }
+            }
+
+            var distinctMonthYears = allDatesToCheck
+                .Select(d => (Month: d.Month, Year: d.Year))
+                .Distinct()
+                .ToList();
+
+            foreach (var typeId in allTypesToCheck)
+            {
+                var checkType = typeId == eventType.EventTypeId ? eventType : await _eventTypeRepository.GetByIdAsync(typeId, cancellationToken);
+                var typeName = checkType?.EventTypeName ?? "Event Type";
+
+                foreach (var (month, year) in distinctMonthYears)
+                {
+                    var isDuplicate = await _eventRepository.HasDuplicateEventTypeInMonthAsync(typeId, month, year, null, cancellationToken);
+                    if (isDuplicate)
+                    {
+                        var monthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+                        throw new DuplicateEventException($"A {typeName} event already exists for {monthName}. Only one event per event type is allowed per calendar month.");
+                    }
+                }
             }
 
             var participantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
@@ -1309,6 +1368,63 @@ public class EventService : IEventService
 
             var eventType = await _eventTypeRepository.GetByIdAsync(request.EventTypeId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
+
+            // Monthly Duplicate Event Prevention:
+            var allTypesToCheck = new HashSet<Guid>();
+            if (request.EventTypeId != Guid.Empty) allTypesToCheck.Add(request.EventTypeId);
+            if (request.EventTypeIds != null && request.EventTypeIds.Count > 0)
+            {
+                foreach (var tid in request.EventTypeIds)
+                {
+                    if (tid != Guid.Empty) allTypesToCheck.Add(tid);
+                }
+            }
+
+            var allDatesToCheck = new List<DateTime> { request.EventDate.Date };
+            if (request.EventTypeDates != null)
+            {
+                foreach (var dVal in request.EventTypeDates.Values)
+                {
+                    if (DateTime.TryParse(dVal, out var parsedDate))
+                    {
+                        allDatesToCheck.Add(parsedDate.Date);
+                    }
+                }
+            }
+            if (request.EventTypeMemberDates != null)
+            {
+                foreach (var innerDict in request.EventTypeMemberDates.Values)
+                {
+                    foreach (var dVal in innerDict.Values)
+                    {
+                        if (DateTime.TryParse(dVal, out var parsedDate))
+                        {
+                            allDatesToCheck.Add(parsedDate.Date);
+                        }
+                    }
+                }
+            }
+
+            var distinctMonthYears = allDatesToCheck
+                .Select(d => (Month: d.Month, Year: d.Year))
+                .Distinct()
+                .ToList();
+
+            foreach (var typeId in allTypesToCheck)
+            {
+                var checkType = typeId == eventType.EventTypeId ? eventType : await _eventTypeRepository.GetByIdAsync(typeId, cancellationToken);
+                var typeName = checkType?.EventTypeName ?? "Event Type";
+
+                foreach (var (month, year) in distinctMonthYears)
+                {
+                    var isDuplicate = await _eventRepository.HasDuplicateEventTypeInMonthAsync(typeId, month, year, eventId, cancellationToken);
+                    if (isDuplicate)
+                    {
+                        var monthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+                        throw new DuplicateEventException($"A {typeName} event already exists for {monthName}. Only one event per event type is allowed per calendar month.");
+                    }
+                }
+            }
 
             if (request.BaseAmount <= 0)
             {

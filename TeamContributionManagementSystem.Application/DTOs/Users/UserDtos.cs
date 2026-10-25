@@ -28,6 +28,7 @@ public class UserDto
     public bool IsSecondary { get; set; } = false;
     public Guid? ActiveRoleId { get; set; }
     public bool IsActive { get; set; }
+    public bool IsExited { get; set; } = false;
     public bool IsDeleted { get; set; } = false;
     public bool IsFirstLogin { get; set; } = true;
     public bool HasMemberProfile { get; set; }
@@ -100,6 +101,7 @@ public class CreateUserRequestDto
     public string? MemberUsername { get; set; }
 
     public bool IsActive { get; set; } = true;
+    public bool IsImported { get; set; } = false;
 }
 
 public class UpdateUserRequestDto
