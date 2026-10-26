@@ -197,9 +197,18 @@ public class DashboardService : IDashboardService
                 : allExpenses.Sum(e => e.Amount);
             var totalExpenses = monthlyEvents.Count > 0 ? eventExpensesSum : periodExpenses;
             var totalAllocated = monthlyEvents.Where(e => e.UseAvailableBalance).Sum(e => e.AllocatedAmount);
+            var totalRecoveredDeficit = monthlyEvents
+                .Where(e => e.UsePreviousEventBalance && e.PreviousEventAdjustmentType == "DeficitRecovery")
+                .Sum(e => e.PreviousEventAdjustment);
             var adminOverallExpected = monthlyEvents.Sum(x => x.TotalExpectedAmount);
             var adminTotalCollections = monthlyEvents.Sum(x => x.TotalPaidAmount);
-            var adminOverallRemaining = adminTotalCollections - totalExpenses - totalAllocated;
+            var rawRemaining = adminTotalCollections - totalExpenses - totalAllocated;
+            // Amount In Hand = rawRemaining + recoveredDeficits.
+            // Do NOT clamp to zero — a negative result means a genuine uncovered shortfall.
+            // Example: rawRemaining = -2600, recovered = 100 → adminOverallRemaining = -2500
+            var adminOverallRemaining = (rawRemaining < 0m && totalRecoveredDeficit > 0m)
+                ? rawRemaining + totalRecoveredDeficit
+                : rawRemaining;
 
             return new DashboardSummaryDto
             {
@@ -208,6 +217,7 @@ public class DashboardService : IDashboardService
                 PendingPayments = monthlyEvents.Count > 0 ? eventPendingCount : pendingContributions.Count,
                 TotalPendingAmount = RoundingHelper.RoundToWhole(monthlyEvents.Count > 0 ? eventPendingSum : pendingContributions.Sum(x => x.Amount)),
                 TotalAllocatedAmount = RoundingHelper.RoundToWhole(totalAllocated),
+                TotalRecoveredDeficitAmount = RoundingHelper.RoundToWhole(totalRecoveredDeficit),
                 TotalExpectedAmount = RoundingHelper.RoundToWhole(adminOverallExpected),
                 TotalExpenses = RoundingHelper.RoundToWhole(totalExpenses),
                 TotalRemainingAmount = RoundingHelper.RoundToWhole(adminOverallRemaining),
@@ -229,6 +239,10 @@ public class DashboardService : IDashboardService
                         ExpenseAmount = RoundingHelper.RoundToWhole(eventExp),
                         UseAvailableBalance = x.UseAvailableBalance,
                         AllocatedAmount = x.AllocatedAmount,
+                        UsePreviousEventBalance = x.UsePreviousEventBalance,
+                        PreviousEventAdjustment = x.PreviousEventAdjustment,
+                        PreviousEventAdjustmentType = x.PreviousEventAdjustmentType,
+                        OriginalPlannedBudget = x.OriginalPlannedBudget,
                         RemainingAmount = RoundingHelper.RoundToWhole(eventRemaining),
                         OverallExpectedAmount = RoundingHelper.RoundToWhole(x.TotalExpectedAmount),
                         OverallExpenseAmount = RoundingHelper.RoundToWhole(eventExp),

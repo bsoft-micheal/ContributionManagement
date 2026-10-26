@@ -10,7 +10,7 @@ public interface IEventService
     Task<EventDetailsDto> UpdateAsync(Guid eventId, CreateEventRequestDto request, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<EventContributionPreviewResponseDto> CalculateContributionPreviewAsync(EventContributionPreviewRequestDto request, CancellationToken cancellationToken = default);
-    Task<AvailableAmountInHandDto> GetAvailableAmountInHandAsync(CancellationToken cancellationToken = default);
+    Task<AvailableAmountInHandDto> GetAvailableAmountInHandAsync(Guid? excludeEventId = null, CancellationToken cancellationToken = default);
 
     Task<EventDetailsDto> PublishAsync(Guid eventId, Guid publishingUserId, CancellationToken cancellationToken = default);
 
