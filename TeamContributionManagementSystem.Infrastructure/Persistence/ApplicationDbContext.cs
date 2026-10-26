@@ -46,6 +46,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<NavigationMenu> NavigationMenus => Set<NavigationMenu>();
     public DbSet<EventTypePaymentSetting> EventTypePaymentSettings => Set<EventTypePaymentSetting>();
     public DbSet<BirthdayReminderLog> BirthdayReminderLogs => Set<BirthdayReminderLog>();
+    public DbSet<ExitClearance> ExitClearances => Set<ExitClearance>();
+    public DbSet<ExitClearanceHistory> ExitClearanceHistories => Set<ExitClearanceHistory>();
 
  
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -518,7 +520,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.StatusId);
             entity.Property(x => x.StatusName).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.Module).HasMaxLength(100).HasDefaultValue("General");
+            entity.Property(x => x.Module).HasMaxLength(100).IsRequired(false).HasDefaultValue("General");
             entity.Property(x => x.ModuleId).HasColumnName("module_id");
             entity.HasIndex(x => new { x.StatusName, x.Module }).IsUnique();
         });
@@ -577,6 +579,58 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasOne(x => x.RecipientUser)
                 .WithMany()
                 .HasForeignKey(x => x.RecipientUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ExitClearance>(entity =>
+        {
+            entity.HasKey(x => x.ClearanceId);
+            entity.Property(x => x.Status).HasMaxLength(50).IsRequired().HasDefaultValue("PendingClearance");
+            entity.Property(x => x.Notes).HasColumnType("text");
+            entity.Property(x => x.ApprovalRemarks).HasColumnType("text");
+            entity.HasOne(x => x.Member)
+                .WithMany()
+                .HasForeignKey(x => x.MemberId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Event)
+                .WithMany()
+                .HasForeignKey(x => x.EventId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.ApprovedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ApprovedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasMany(x => x.Histories)
+                .WithOne(x => x.Clearance)
+                .HasForeignKey(x => x.ClearanceId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ExitClearanceHistory>(entity =>
+        {
+            entity.HasKey(x => x.HistoryId);
+            entity.Property(x => x.MemberNameSnapshot).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.MemberCodeSnapshot).HasMaxLength(100);
+            entity.Property(x => x.EventNameSnapshot).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.ApprovedByName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.TotalObligations).HasPrecision(12, 2).HasDefaultValue(0);
+            entity.Property(x => x.TotalVerifiedPaid).HasPrecision(12, 2).HasDefaultValue(0);
+            entity.Property(x => x.TotalApprovedAdjustments).HasPrecision(12, 2).HasDefaultValue(0);
+            entity.Property(x => x.OutstandingAtApproval).HasPrecision(12, 2).HasDefaultValue(0);
+            entity.Property(x => x.PaymentVerificationSummary).HasColumnType("text");
+            entity.Property(x => x.ApprovalRemarks).HasColumnType("text");
+            entity.Property(x => x.SnapshotJson).HasColumnType("text");
+            entity.HasOne(x => x.Member)
+                .WithMany()
+                .HasForeignKey(x => x.MemberId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Event)
+                .WithMany()
+                .HasForeignKey(x => x.EventId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.ApprovedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ApprovedBy)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

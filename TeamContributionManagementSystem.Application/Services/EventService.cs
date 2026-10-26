@@ -703,6 +703,24 @@ public class EventService : IEventService
             await _contributionRepository.AddRangeAsync(contributions, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Sync Send-Off Beneficiaries if event is published/planned
+            if (eventItem.Status != EventStatus.Draft)
+            {
+                try
+                {
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var exitClearanceService = scope.ServiceProvider.GetService<IExitClearanceService>();
+                    if (exitClearanceService != null)
+                    {
+                        await exitClearanceService.SyncSendOffBeneficiariesAsync(eventItem.EventId, cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to sync send-off beneficiaries for new event {EventId}", eventItem.EventId);
+                }
+            }
+
             // Fetch the created event to ensure it is fully committed
             var createdEvent = await GetByIdAsync(eventItem.EventId, cancellationToken);
 
@@ -1727,6 +1745,24 @@ public class EventService : IEventService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Sync Send-Off Beneficiaries if event is published/planned
+            if (eventItem.Status != EventStatus.Draft)
+            {
+                try
+                {
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var exitClearanceService = scope.ServiceProvider.GetService<IExitClearanceService>();
+                    if (exitClearanceService != null)
+                    {
+                        await exitClearanceService.SyncSendOffBeneficiariesAsync(eventItem.EventId, cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to sync send-off beneficiaries for updated event {EventId}", eventItem.EventId);
+                }
+            }
+
             // If new participants were added, dispatch notification emails ONLY if event is published (never for Drafts)
             if (participantIdsToAdd.Count > 0 && eventItem.Status != EventStatus.Draft)
             {
@@ -1834,6 +1870,21 @@ public class EventService : IEventService
                 }
             }
 
+            // Handle exit clearances on event deletion
+            try
+            {
+                using var scope = _serviceScopeFactory.CreateScope();
+                var exitClearanceService = scope.ServiceProvider.GetService<IExitClearanceService>();
+                if (exitClearanceService != null)
+                {
+                    await exitClearanceService.HandleEventDeletedAsync(eventId, cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to handle exit clearances on delete for event {EventId}", eventId);
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -1896,6 +1947,20 @@ public class EventService : IEventService
             eventItem.ModifiedOn = DateTime.UtcNow;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                using var scope = _serviceScopeFactory.CreateScope();
+                var exitClearanceService = scope.ServiceProvider.GetService<IExitClearanceService>();
+                if (exitClearanceService != null)
+                {
+                    await exitClearanceService.SyncSendOffBeneficiariesAsync(eventItem.EventId, cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to sync send-off beneficiaries for published event {EventId}", eventItem.EventId);
+            }
 
             // Send notification emails to all active participant contributors
             var participantMemberIds = activeParticipants.Select(p => p.UserId).Distinct().ToList();

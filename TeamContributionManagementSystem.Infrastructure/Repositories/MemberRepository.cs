@@ -29,7 +29,7 @@ public class MemberRepository : IMemberRepository
                 .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
 
             var items = await _context.Users
-                .Where(x => !x.IsDeleted)
+                .Where(x => !x.IsDeleted && x.Email.ToLower() != "admin@gmail.com" && x.Email.ToLower() != "member@gmail.com")
                 .OrderBy(x => x.FullName)
                 .Select(x => new MemberDto
                 {
@@ -145,7 +145,7 @@ public class MemberRepository : IMemberRepository
                 .AsNoTracking()
                 .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(x => x.WorkTypeNavigation)
-                .Where(x => ids.Contains(x.UserId) && !x.IsDeleted)
+                .Where(x => ids.Contains(x.UserId) && !x.IsDeleted && x.IsActive && !x.IsExited)
                 .ToListAsync(cancellationToken);
 
             return users.Select(user => new Member

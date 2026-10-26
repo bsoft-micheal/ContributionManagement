@@ -385,8 +385,8 @@ public class ExpenseRepository : IExpenseRepository
             {
                 var prefix = $"EXP{year:D4}{month:D2}";
                 var allExpenseNos = await _context.Expenses
-                    .Where(e => e.ExpenseNumber != null && e.ExpenseNumber.StartsWith(prefix))
-                    .Select(e => e.ExpenseNumber)
+                    .Where(e => e.ExpenseNo != null && e.ExpenseNo.StartsWith(prefix))
+                    .Select(e => e.ExpenseNo)
                     .ToListAsync(cancellationToken);
 
                 int maxInMemoryExpenseNum = 0;

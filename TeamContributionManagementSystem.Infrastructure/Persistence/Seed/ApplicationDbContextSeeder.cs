@@ -132,6 +132,56 @@ CREATE TABLE IF NOT EXISTS expense_sequences (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ix_expense_sequences_year_month ON expense_sequences (year, month);
+
+CREATE TABLE IF NOT EXISTS exit_clearances (
+    clearance_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    member_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    event_id UUID NOT NULL REFERENCES events(event_id) ON DELETE RESTRICT,
+    status VARCHAR(50) NOT NULL DEFAULT 'PendingClearance',
+    planned_exit_date TIMESTAMPTZ NULL,
+    notes TEXT NULL,
+    approval_remarks TEXT NULL,
+    approved_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
+    approved_at TIMESTAMPTZ NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_exit_clearances_member_event
+ON exit_clearances (member_id, event_id)
+WHERE is_deleted = false;
+CREATE INDEX IF NOT EXISTS ix_exit_clearances_member_id ON exit_clearances(member_id);
+CREATE INDEX IF NOT EXISTS ix_exit_clearances_event_id ON exit_clearances(event_id);
+CREATE INDEX IF NOT EXISTS ix_exit_clearances_status ON exit_clearances(status);
+
+CREATE TABLE IF NOT EXISTS exit_clearance_histories (
+    history_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clearance_id UUID NOT NULL REFERENCES exit_clearances(clearance_id) ON DELETE RESTRICT,
+    member_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    event_id UUID NOT NULL REFERENCES events(event_id) ON DELETE RESTRICT,
+    member_name_snapshot VARCHAR(200) NOT NULL,
+    member_code_snapshot VARCHAR(100) NULL,
+    event_name_snapshot VARCHAR(200) NOT NULL,
+    joining_date TIMESTAMPTZ NULL,
+    exit_approval_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    approved_by UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    approved_by_name VARCHAR(200) NOT NULL,
+    total_obligations NUMERIC(12,2) NOT NULL DEFAULT 0,
+    total_verified_paid NUMERIC(12,2) NOT NULL DEFAULT 0,
+    total_approved_adjustments NUMERIC(12,2) NOT NULL DEFAULT 0,
+    outstanding_at_approval NUMERIC(12,2) NOT NULL DEFAULT 0,
+    payment_verification_summary TEXT NULL,
+    approval_remarks TEXT NULL,
+    snapshot_json TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_member_id ON exit_clearance_histories(member_id);
+CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_event_id ON exit_clearance_histories(event_id);
+CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_clearance_id ON exit_clearance_histories(clearance_id);
 ", cancellationToken);
             }
             catch { /* Non-fatal */ }
@@ -141,11 +191,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS ix_expense_sequences_year_month ON expense_seq
             var memberRole = await EnsureRoleAsync(CommonRoles.Member, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // 5. Ensure default admin user exists
-            await EnsureAdminUserAsync(adminRole.RoleId, cancellationToken);
-
-            // 6. Ensure default member user exists
-            await EnsureMemberUserAsync(memberRole.RoleId, cancellationToken);
+            // 5. Clean up demo users from users and user_roles
+            try
+            {
+                await _context.Database.ExecuteSqlRawAsync(@"
+                    DELETE FROM user_roles WHERE user_id IN (SELECT user_id FROM users WHERE LOWER(email) IN ('admin@gmail.com', 'member@gmail.com'));
+                    DELETE FROM users WHERE LOWER(email) IN ('admin@gmail.com', 'member@gmail.com');
+                ", cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Non-fatal error removing seed demo users: {Message}", ex.Message);
+            }
 
             await _context.SaveChangesAsync(cancellationToken);
 
@@ -265,66 +322,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS ix_expense_sequences_year_month ON expense_seq
             await _context.Roles.AddAsync(role, cancellationToken);
         }
         return role;
-    }
-
-    private async Task EnsureAdminUserAsync(Guid adminRoleId, CancellationToken cancellationToken)
-    {
-        var adminEmail = _configuration?[ConfigKeys.AdminEmail] ?? SeedDefaults.AdminEmail;
-        var fallbackEmail = _configuration?[ConfigKeys.AdminFallbackEmail] ?? SeedDefaults.FallbackAdminEmail;
-        var adminFullName = _configuration?[ConfigKeys.AdminFullName] ?? SeedDefaults.AdminFullName;
-        var adminPassword = _configuration?[ConfigKeys.AdminPassword] ?? SeedDefaults.AdminPassword;
-
-        var adminUser = await _context.Users.FirstOrDefaultAsync(
-            u => u.Email == adminEmail || (!string.IsNullOrEmpty(fallbackEmail) && u.Email == fallbackEmail),
-            cancellationToken);
-
-        if (adminUser == null)
-        {
-            adminUser = new AppUser
-            {
-                UserId = Guid.NewGuid(),
-                FullName = adminFullName,
-                Email = adminEmail,
-                PasswordHash = _passwordHasher.HashPassword(adminPassword),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-            await _context.Users.AddAsync(adminUser, cancellationToken);
-            await _context.UserRoles.AddAsync(new AppUserRole
-            {
-                UserId = adminUser.UserId,
-                RoleId = adminRoleId,
-                IsPrimary = true
-            }, cancellationToken);
-        }
-    }
-
-    private async Task EnsureMemberUserAsync(Guid memberRoleId, CancellationToken cancellationToken)
-    {
-        var memberEmail = _configuration?[ConfigKeys.MemberEmail] ?? SeedDefaults.MemberEmail;
-        var memberFullName = _configuration?[ConfigKeys.MemberFullName] ?? SeedDefaults.MemberFullName;
-        var memberPassword = _configuration?[ConfigKeys.MemberPassword] ?? SeedDefaults.MemberPassword;
-
-        var memberUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == memberEmail, cancellationToken);
-        if (memberUser == null)
-        {
-            memberUser = new AppUser
-            {
-                UserId = Guid.NewGuid(),
-                FullName = memberFullName,
-                Email = memberEmail,
-                PasswordHash = _passwordHasher.HashPassword(memberPassword),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-            await _context.Users.AddAsync(memberUser, cancellationToken);
-            await _context.UserRoles.AddAsync(new AppUserRole
-            {
-                UserId = memberUser.UserId,
-                RoleId = memberRoleId,
-                IsPrimary = true
-            }, cancellationToken);
-        }
     }
 
     private async Task ExecuteScriptIfExistsAsync(string scriptFileName, CancellationToken cancellationToken)
