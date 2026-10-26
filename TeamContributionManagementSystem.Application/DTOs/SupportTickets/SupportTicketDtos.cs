@@ -21,6 +21,7 @@ public class SupportTicketDto
     public string? Utr { get; set; }
     public string? Attachment { get; set; }
     public string? ResolutionNotes { get; set; }
+    public List<TicketResolutionNoteDto> ResolutionNotesHistory { get; set; } = new();
     public bool IsActive { get; set; }
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
@@ -28,6 +29,18 @@ public class SupportTicketDto
     public string? ModifiedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
     public string? VerifiedBy { get; set; }
+}
+
+public class TicketResolutionNoteDto
+{
+    public Guid NoteId { get; set; }
+    public Guid TicketId { get; set; }
+    public Guid? UserId { get; set; }
+    public string SenderName { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
+    public Guid? StatusId { get; set; }
+    public string? StatusName { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class CreateSupportTicketRequestDto

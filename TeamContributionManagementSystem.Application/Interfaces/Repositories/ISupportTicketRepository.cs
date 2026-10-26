@@ -15,6 +15,9 @@ public interface ISupportTicketRepository
     void Update(SupportTicket ticket);
     void Delete(SupportTicket ticket);
 
+    Task AddResolutionNoteAsync(TicketResolutionNote note, CancellationToken cancellationToken = default);
+    Task<List<TicketResolutionNoteDto>> GetResolutionNotesByTicketIdAsync(Guid ticketId, CancellationToken cancellationToken = default);
+
     // Standardized naming
     Task<List<SupportTicketDto>> GetAllSupportTicketAsync(string? status = null, string? ticketType = null, string? priority = null, CancellationToken cancellationToken = default) => GetAllAsync(status, ticketType, priority, cancellationToken);
     Task<SupportTicket?> GetSupportTicketAsyncById(Guid ticketId, CancellationToken cancellationToken = default) => GetByIdAsync(ticketId, cancellationToken);

@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace TeamContributionManagementSystem.Domain.Entities
 {
     /// <summary>
-    /// Represents the UPI Payment & QR Code configuration per Event Type.
+    /// Represents the UPI Payment &amp; QR Code configuration per Event Type.
     /// Stores independent UPI settings for each Event Type (e.g. Birthday, Farewell, Team Dinner, Teamouting).
     /// </summary>
     [Table("PaymentQRSettings")]
