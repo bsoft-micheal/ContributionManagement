@@ -13,6 +13,10 @@ public class Expense
     public string Description { get; set; } = string.Empty;
     public string? FileName { get; set; }
 
+    public decimal BudgetAmount { get; set; } = 0m;
+    public decimal ExtraAmount { get; set; } = 0m;
+    public string? AdditionalExpenses { get; set; }
+
     // Default Audit Fields
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
