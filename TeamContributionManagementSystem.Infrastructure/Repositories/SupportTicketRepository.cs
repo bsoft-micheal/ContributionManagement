@@ -10,6 +10,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Repositories;
 
 public class SupportTicketRepository : ISupportTicketRepository
 {
+    private static readonly SemaphoreSlim _ticketLock = new(1, 1);
     private readonly ApplicationDbContext _context;
     private readonly ILogger<SupportTicketRepository> _logger;
 
@@ -23,30 +24,18 @@ public class SupportTicketRepository : ISupportTicketRepository
     {
         try
         {
-            var prefix = CommonConstants.Defaults.TicketPrefix;
             var allDbTickets = await _context.SupportTickets
                 .OrderBy(x => x.CreatedAt)
                 .ToListAsync(cancellationToken);
 
             bool needsSave = false;
-            int currentSeq = 1;
             foreach (var ticket in allDbTickets)
             {
-                bool isStandard = !string.IsNullOrWhiteSpace(ticket.TicketNo) &&
-                                  ticket.TicketNo.StartsWith(prefix) &&
-                                  ticket.TicketNo.Length == 7 &&
-                                  int.TryParse(ticket.TicketNo.Substring(prefix.Length), out _);
-
-                if (!isStandard)
+                if (string.IsNullOrWhiteSpace(ticket.TicketNo))
                 {
-                    ticket.TicketNo = $"{prefix}{currentSeq:D4}";
+                    ticket.TicketNo = await GenerateNextTicketNoAsync(cancellationToken);
                     needsSave = true;
                 }
-                else if (int.TryParse(ticket.TicketNo.Substring(prefix.Length), out int parsedSeq) && parsedSeq >= currentSeq)
-                {
-                    currentSeq = parsedSeq;
-                }
-                currentSeq++;
             }
 
             if (needsSave)
@@ -253,32 +242,57 @@ public class SupportTicketRepository : ISupportTicketRepository
 
     public async Task<string> GenerateNextTicketNoAsync(CancellationToken cancellationToken = default)
     {
+        await _ticketLock.WaitAsync(cancellationToken);
         try
         {
-            var prefix = CommonConstants.Defaults.TicketPrefix;
+            var baseDate = DateTime.UtcNow;
+            var yearMonth = baseDate.ToString(CommonConstants.Defaults.TxnDateFormat); // "yyyyMM", e.g. "202610"
+            var prefix = $"{CommonConstants.Defaults.TxnPrefix}{yearMonth}"; // e.g. "TXN202610"
 
-            var ticketNumbers = await _context.SupportTickets
+            var existingTicketNumbers = await _context.SupportTickets
                 .IgnoreQueryFilters()
                 .Where(x => x.TicketNo.StartsWith(prefix))
                 .Select(x => x.TicketNo)
                 .ToListAsync(cancellationToken);
 
-            int maxSeq = 0;
-            foreach (var tNo in ticketNumbers)
+            long highestNumber = 0;
+
+            foreach (var tNo in existingTicketNumbers)
             {
-                var digits = new string(tNo.Skip(prefix.Length).Where(char.IsDigit).ToArray());
-                if (int.TryParse(digits, out int seq) && seq > maxSeq)
+                if (string.IsNullOrWhiteSpace(tNo)) continue;
+                string numPart = tNo.Length > prefix.Length ? tNo.Substring(prefix.Length) : tNo;
+                var match = System.Text.RegularExpressions.Regex.Match(numPart, @"^\d+");
+                if (match.Success && long.TryParse(match.Value, out var num))
                 {
-                    maxSeq = seq;
+                    if (num > highestNumber) highestNumber = num;
                 }
             }
 
-            return $"{prefix}{(maxSeq + 1):D4}";
+            // Also check in-memory tracked entities in DbContext
+            foreach (var local in _context.SupportTickets.Local)
+            {
+                if (!string.IsNullOrWhiteSpace(local.TicketNo) && local.TicketNo.StartsWith(prefix))
+                {
+                    string numPart = local.TicketNo.Length > prefix.Length ? local.TicketNo.Substring(prefix.Length) : local.TicketNo;
+                    var match = System.Text.RegularExpressions.Regex.Match(numPart, @"^\d+");
+                    if (match.Success && long.TryParse(match.Value, out var num))
+                    {
+                        if (num > highestNumber) highestNumber = num;
+                    }
+                }
+            }
+
+            long nextVal = highestNumber + 1;
+            return $"{prefix}{nextVal:D4}";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GenerateNextTicketNoAsync));
             throw;
+        }
+        finally
+        {
+            _ticketLock.Release();
         }
     }
 
