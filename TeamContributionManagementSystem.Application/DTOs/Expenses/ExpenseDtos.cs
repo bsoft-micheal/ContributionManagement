@@ -2,12 +2,28 @@ using System.ComponentModel.DataAnnotations;
 
 namespace TeamContributionManagementSystem.Application.DTOs.Expenses;
 
+public class ExpenseAdditionalItemDto
+{
+    public Guid? Id { get; set; }
+
+    [Required]
+    [MaxLength(500)]
+    public string Reason { get; set; } = string.Empty;
+
+    [Required]
+    [Range(0.01, 10000000)]
+    public decimal Amount { get; set; }
+}
+
 public class ExpenseDto
 {
     public Guid ExpenseId { get; set; }
     public string EventName { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public decimal? BudgetAmount { get; set; }
+    public decimal ExtraAmount { get; set; }
+    public List<ExpenseAdditionalItemDto> AdditionalExpenses { get; set; } = new();
     public DateTime ExpenseDate { get; set; }
     public string Status { get; set; } = string.Empty;
     public string SubmittedBy { get; set; } = string.Empty;
@@ -35,9 +51,14 @@ public class CreateExpenseRequestDto
     [MaxLength(100)]
     public string Category { get; set; } = string.Empty;
 
+    [Range(0, 10000000)]
+    public decimal? BudgetAmount { get; set; }
+
     [Required]
     [Range(0.01, 10000000)]
     public decimal Amount { get; set; }
+
+    public List<ExpenseAdditionalItemDto>? AdditionalExpenses { get; set; } = new();
 
     [Required]
     public DateTime ExpenseDate { get; set; } = DateTime.UtcNow;
@@ -65,3 +86,4 @@ public class UpdateExpenseRequestDto : CreateExpenseRequestDto
 {
     public DateTime? ModifiedOn { get; set; }
 }
+

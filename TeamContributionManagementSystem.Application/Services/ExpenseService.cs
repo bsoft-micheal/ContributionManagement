@@ -92,7 +92,7 @@ public class ExpenseService : IExpenseService
                 }
                 throw new RecordDeletedException();
             }
-            return _mapper.Map<ExpenseDto>(expense);
+            return MapToExpenseDtoWithMetadata(expense);
         }
         catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
         {
@@ -109,6 +109,34 @@ public class ExpenseService : IExpenseService
     {
         try
         {
+            // Validate any additional expense rows
+            if (request.AdditionalExpenses != null && request.AdditionalExpenses.Count > 0)
+            {
+                foreach (var extra in request.AdditionalExpenses)
+                {
+                    if (string.IsNullOrWhiteSpace(extra.Reason))
+                    {
+                        throw new InvalidOperationException("Reason is required for each additional expense row.");
+                    }
+                    if (extra.Amount <= 0)
+                    {
+                        throw new InvalidOperationException("Amount must be greater than zero for each additional expense row.");
+                    }
+                }
+            }
+
+            var extraSum = request.AdditionalExpenses?.Sum(x => x.Amount) ?? 0m;
+            var budgetPart = request.BudgetAmount ?? Math.Max(0m, request.Amount - extraSum);
+            var calculatedTotal = budgetPart + extraSum;
+
+            if (calculatedTotal <= 0)
+            {
+                throw new InvalidOperationException("Total expense amount must be greater than zero.");
+            }
+
+            request.BudgetAmount = budgetPart;
+            request.Amount = calculatedTotal;
+
             var existingExpenses = await _expenseRepository.GetAllAsync(cancellationToken: cancellationToken);
             var rapidDup = existingExpenses.FirstOrDefault(e =>
                 string.Equals(e.EventName, request.EventName.Trim(), StringComparison.OrdinalIgnoreCase) &&
@@ -149,7 +177,8 @@ public class ExpenseService : IExpenseService
                 }
             }
 
-            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, request.Amount, null, cancellationToken);
+            // Strictly validate main budget amount against remaining event budget
+            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, budgetPart, null, cancellationToken);
 
             var attachment = !string.IsNullOrWhiteSpace(request.FileData)
                 ? request.FileData.Trim()
@@ -168,17 +197,19 @@ public class ExpenseService : IExpenseService
                 status = "Pending";
             }
 
+            var packedDescription = ExpenseMetadataHelper.PackDescription(request.Description, budgetPart, request.AdditionalExpenses, calculatedTotal);
+
             var expense = new Expense
             {
                 ExpenseId = Guid.NewGuid(),
                 EventName = request.EventName.Trim(),
                 Category = request.Category.Trim(),
-                Amount = request.Amount,
+                Amount = calculatedTotal,
                 ExpenseDate = request.ExpenseDate,
                 Status = status ?? "Pending",
                 SubmittedBy = request.SubmittedBy.Trim(),
                 ApprovedBy = request.ApprovedBy?.Trim(),
-                Description = request.Description.Trim(),
+                Description = packedDescription,
                 FileName = attachment,
                 IsActive = true,
                 IsDeleted = false,
@@ -195,7 +226,7 @@ public class ExpenseService : IExpenseService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(CommonLogMessages.Expenses.ExpenseCreated, expense.ExpenseId, expense.Amount);
-            return _mapper.Map<ExpenseDto>(expense);
+            return MapToExpenseDtoWithMetadata(expense);
         }
         catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
         {
@@ -231,11 +262,39 @@ public class ExpenseService : IExpenseService
                 }
             }
 
+            // Validate any additional expense rows
+            if (request.AdditionalExpenses != null && request.AdditionalExpenses.Count > 0)
+            {
+                foreach (var extra in request.AdditionalExpenses)
+                {
+                    if (string.IsNullOrWhiteSpace(extra.Reason))
+                    {
+                        throw new InvalidOperationException("Reason is required for each additional expense row.");
+                    }
+                    if (extra.Amount <= 0)
+                    {
+                        throw new InvalidOperationException("Amount must be greater than zero for each additional expense row.");
+                    }
+                }
+            }
+
+            var extraSum = request.AdditionalExpenses?.Sum(x => x.Amount) ?? 0m;
+            var budgetPart = request.BudgetAmount ?? Math.Max(0m, request.Amount - extraSum);
+            var calculatedTotal = budgetPart + extraSum;
+
+            if (calculatedTotal <= 0)
+            {
+                throw new InvalidOperationException("Total expense amount must be greater than zero.");
+            }
+
+            request.BudgetAmount = budgetPart;
+            request.Amount = calculatedTotal;
+
             if (!string.IsNullOrWhiteSpace(request.Status) &&
                 string.Equals(expense.Status, request.Status.Trim(), StringComparison.OrdinalIgnoreCase) &&
                 !expense.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
             {
-                if (expense.Amount == request.Amount &&
+                if (expense.Amount == calculatedTotal &&
                     string.Equals(expense.EventName, request.EventName?.Trim(), StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(expense.Category, request.Category?.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
@@ -243,15 +302,18 @@ public class ExpenseService : IExpenseService
                 }
             }
 
-            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, request.Amount, expenseId, cancellationToken);
+            // Strictly validate main budget amount against remaining event budget (excluding this expense)
+            await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, budgetPart, expenseId, cancellationToken);
 
             var attachment = !string.IsNullOrWhiteSpace(request.FileData)
                 ? request.FileData.Trim()
                 : (!string.IsNullOrWhiteSpace(request.FileName) ? request.FileName.Trim() : expense.FileName);
 
+            var packedDescription = ExpenseMetadataHelper.PackDescription(request.Description, budgetPart, request.AdditionalExpenses, calculatedTotal);
+
             expense.EventName = request.EventName.Trim();
             expense.Category = request.Category.Trim();
-            expense.Amount = request.Amount;
+            expense.Amount = calculatedTotal;
             expense.ExpenseDate = request.ExpenseDate;
             expense.Status = string.IsNullOrWhiteSpace(request.Status) ? expense.Status : request.Status.Trim();
             expense.SubmittedBy = request.SubmittedBy.Trim();
@@ -272,7 +334,7 @@ public class ExpenseService : IExpenseService
                 }
             }
 
-            expense.Description = request.Description?.Trim() ?? string.Empty;
+            expense.Description = packedDescription;
             expense.FileName = attachment;
             expense.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             expense.ModifiedOn = DateTime.UtcNow;
@@ -281,7 +343,7 @@ public class ExpenseService : IExpenseService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(CommonLogMessages.Expenses.ExpenseUpdated, expense.ExpenseId);
-            return _mapper.Map<ExpenseDto>(expense);
+            return MapToExpenseDtoWithMetadata(expense);
         }
         catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
         {
@@ -294,11 +356,29 @@ public class ExpenseService : IExpenseService
         }
     }
 
+    private ExpenseDto MapToExpenseDtoWithMetadata(Expense expense)
+    {
+        var dto = _mapper.Map<ExpenseDto>(expense);
+        ExpenseMetadataHelper.UnpackDescription(
+            expense.Description,
+            expense.Amount,
+            out var cleanDesc,
+            out var budgetAmt,
+            out var extraAmt,
+            out var addRows);
+
+        dto.Description = cleanDesc;
+        dto.BudgetAmount = budgetAmt;
+        dto.ExtraAmount = extraAmt;
+        dto.AdditionalExpenses = addRows;
+        return dto;
+    }
+
     private async Task ValidateExpenseAmountAgainstEventBudgetAsync(
         Guid? eventId,
         string eventName,
         string? category,
-        decimal requestedAmount,
+        decimal requestedBudgetAmount,
         Guid? currentExpenseId,
         CancellationToken cancellationToken)
     {
@@ -321,20 +401,16 @@ public class ExpenseService : IExpenseService
         var expectedAmount = eventDetails?.TotalExpectedAmount ?? eventItem.BaseAmount;
 
         var existingExpenses = await _expenseRepository.GetAllAsync(eventName: eventItem.EventName, cancellationToken: cancellationToken);
-        var spentAmount = existingExpenses
+        var spentBudgetAmount = existingExpenses
             .Where(e => (currentExpenseId == null || e.ExpenseId != currentExpenseId.Value) && !string.Equals(e.Status, "Rejected", StringComparison.OrdinalIgnoreCase))
-            .Sum(e => e.Amount);
+            .Sum(e => e.BudgetAmount ?? e.Amount);
 
-        var remainingBudget = expectedAmount - spentAmount;
-        if (expectedAmount > 0 && requestedAmount > remainingBudget)
+        var remainingBudget = Math.Max(0m, expectedAmount - spentBudgetAmount);
+
+        if (expectedAmount > 0 && requestedBudgetAmount > remainingBudget)
         {
-            var extraAmount = (spentAmount + requestedAmount) - expectedAmount;
-            _logger.LogWarning(
-                "Expense amount {RequestedAmount} exceeds the remaining budget of {RemainingBudget} for event '{EventName}'. Total projected spending exceeds expected budget by {ExtraAmount}.",
-                requestedAmount,
-                Math.Max(0, remainingBudget),
-                eventItem.EventName,
-                extraAmount);
+            throw new InvalidOperationException(
+                $"The main expense amount (₹{requestedBudgetAmount:N0}) exceeds the remaining expected budget of ₹{remainingBudget:N0} for event '{eventItem.EventName}'. Please enter a budget amount up to ₹{remainingBudget:N0} and record any extra spending using 'Add Row'.");
         }
     }
 
