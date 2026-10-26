@@ -43,7 +43,7 @@ public class PaymentsController : ControllerBase
             var result = await _transactionService.GetAllPaymentAsync(eventName, mode, status, startDate, endDate, cancellationToken);
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<PaymentTransactionDto>>.SuccessResult(result, CommonMessages.Payments.GetAllSuccess, CommonStatusCodes.Status200OK));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<IReadOnlyCollection<PaymentTransactionDto>>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -69,7 +69,7 @@ public class PaymentsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentTransactionDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -93,7 +93,7 @@ public class PaymentsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -117,7 +117,7 @@ public class PaymentsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -145,7 +145,7 @@ public class PaymentsController : ControllerBase
             }
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<PaymentContextDto>.SuccessResult(result, CommonMessages.Payments.GetContextSuccess, CommonStatusCodes.Status200OK));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentContextDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -181,7 +181,7 @@ public class PaymentsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<PaymentTransactionDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -216,7 +216,7 @@ public class PaymentsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }

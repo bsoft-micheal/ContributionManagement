@@ -18,10 +18,12 @@ namespace TeamContributionManagementSystem.API.Controllers;
 public class SupportTicketsController : ControllerBase
 {
     private readonly ISupportTicketService _ticketService;
+    private readonly ILogger<SupportTicketsController> _logger;
 
-    public SupportTicketsController(ISupportTicketService ticketService)
+    public SupportTicketsController(ISupportTicketService ticketService, ILogger<SupportTicketsController> logger)
     {
         _ticketService = ticketService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -40,7 +42,7 @@ public class SupportTicketsController : ControllerBase
             var result = await _ticketService.GetAllSupportTicketAsync(status, ticketType, priority, cancellationToken);
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<SupportTicketDto>>.SuccessResult(result, CommonMessages.SupportTickets.GetAllSuccess, CommonStatusCodes.Status200OK));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<IReadOnlyCollection<SupportTicketDto>>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -128,9 +130,10 @@ public class SupportTicketsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<SupportTicketDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+            _logger.LogError(ex, "Error in {Action}: {Message}", nameof(UpdateSupportTicketAsyncById), ex.Message);
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult(ex.Message ?? "Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
     }
 
@@ -163,9 +166,10 @@ public class SupportTicketsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<SupportTicketDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
+            _logger.LogError(ex, "Error in {Action}: {Message}", nameof(ReplySupportTicketAsync), ex.Message);
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult(ex.Message ?? "Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
     }
 
