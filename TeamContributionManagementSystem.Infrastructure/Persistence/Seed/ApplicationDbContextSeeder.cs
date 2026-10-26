@@ -67,7 +67,7 @@ public class ApplicationDbContextSeeder
             if (File.Exists(initScriptPath))
             {
                 var initSql = await File.ReadAllTextAsync(initScriptPath, cancellationToken);
-                await _context.Database.ExecuteSqlRawAsync(initSql, cancellationToken);
+                await _context.Database.ExecuteSqlRawAsync(initSql, Array.Empty<object>(), cancellationToken);
             }
 
             await ExecuteScriptIfExistsAsync(SeedDefaults.NavigationMenusScript, cancellationToken);
@@ -249,7 +249,7 @@ WHERE is_deleted = false;
             var sql = await File.ReadAllTextAsync(scriptPath, cancellationToken);
             if (!string.IsNullOrWhiteSpace(sql))
             {
-                await _context.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+                await _context.Database.ExecuteSqlRawAsync(sql, Array.Empty<object>(), cancellationToken);
             }
         }
     }
