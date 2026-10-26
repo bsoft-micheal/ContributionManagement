@@ -66,8 +66,22 @@ public class ApplicationDbContextSeeder
             }
             if (File.Exists(initScriptPath))
             {
-                var initSql = await File.ReadAllTextAsync(initScriptPath, cancellationToken);
-                await _context.Database.ExecuteSqlRawAsync(initSql, Array.Empty<object>(), cancellationToken);
+                try
+                {
+                    var initSql = await File.ReadAllTextAsync(initScriptPath, cancellationToken);
+                    var conn = _context.Database.GetDbConnection();
+                    if (conn.State != System.Data.ConnectionState.Open)
+                    {
+                        await conn.OpenAsync(cancellationToken);
+                    }
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = initSql;
+                    await cmd.ExecuteNonQueryAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to run init.sql via raw command: {Message}", ex.Message);
+                }
             }
 
             await ExecuteScriptIfExistsAsync(SeedDefaults.NavigationMenusScript, cancellationToken);
@@ -98,6 +112,26 @@ ON birthday_reminder_logs (celebration_date, celebrant_user_id, recipient_user_i
 CREATE UNIQUE INDEX IF NOT EXISTS ix_events_unique_event_type_month_year
 ON events (event_type_id, EXTRACT(YEAR FROM event_date), EXTRACT(MONTH FROM event_date))
 WHERE is_deleted = false;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'expenses' AND column_name = 'expense_number') THEN
+        ALTER TABLE expenses RENAME COLUMN expense_number TO expense_no;
+    END IF;
+END $$;
+ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS expense_no VARCHAR(30);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_expenses_expense_no
+ON expenses (expense_no)
+WHERE is_deleted = false AND expense_no IS NOT NULL AND expense_no <> '';
+
+CREATE TABLE IF NOT EXISTS expense_sequences (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    year INT NOT NULL,
+    month INT NOT NULL,
+    last_sequence INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_expense_sequences_year_month ON expense_sequences (year, month);
 ", cancellationToken);
             }
             catch { /* Non-fatal */ }
@@ -155,6 +189,58 @@ WHERE is_deleted = false;
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Non-fatal error backfilling legacy expenses: {Message}", ex.Message);
+            }
+
+            // 8. Safe backfill for legacy expense records without an expense_number
+            try
+            {
+                var expensesWithoutNumber = await _context.Expenses
+                    .Where(e => string.IsNullOrEmpty(e.ExpenseNo))
+                    .OrderBy(e => e.CreatedAt ?? e.ExpenseDate)
+                    .ToListAsync(cancellationToken);
+
+                if (expensesWithoutNumber.Count > 0)
+                {
+                    var grouped = expensesWithoutNumber.GroupBy(e => new { e.ExpenseDate.Year, e.ExpenseDate.Month });
+                    foreach (var group in grouped)
+                    {
+                        int y = group.Key.Year;
+                        int m = group.Key.Month;
+                        var seq = await _context.ExpenseSequences.FirstOrDefaultAsync(s => s.Year == y && s.Month == m, cancellationToken);
+                        int currentSeq = seq?.LastSequence ?? 0;
+
+                        foreach (var exp in group)
+                        {
+                            currentSeq++;
+                            exp.ExpenseNo = $"EXP{y:D4}{m:D2}{currentSeq:D4}";
+                        }
+
+                        if (seq == null)
+                        {
+                            _context.ExpenseSequences.Add(new ExpenseSequence
+                            {
+                                Id = Guid.NewGuid(),
+                                Year = y,
+                                Month = m,
+                                LastSequence = currentSeq,
+                                UpdatedAt = DateTime.UtcNow
+                            });
+                        }
+                        else
+                        {
+                            seq.LastSequence = currentSeq;
+                            seq.UpdatedAt = DateTime.UtcNow;
+                            _context.ExpenseSequences.Update(seq);
+                        }
+                    }
+
+                    await _context.SaveChangesAsync(cancellationToken);
+                    _logger?.LogInformation("Successfully backfilled {Count} expenses with generated expense numbers.", expensesWithoutNumber.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Non-fatal error backfilling expense numbers: {Message}", ex.Message);
             }
         }
         catch (Exception ex)

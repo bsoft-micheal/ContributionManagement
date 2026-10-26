@@ -238,6 +238,7 @@ CREATE TABLE IF NOT EXISTS role_rights (
 -- 12. Expenses Table
 CREATE TABLE IF NOT EXISTS expenses (
     expense_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    expense_no VARCHAR(30) NULL,
     event_name VARCHAR(200) NOT NULL,
     category VARCHAR(100) NOT NULL,
     amount NUMERIC(12,2) NOT NULL DEFAULT 0,
@@ -255,6 +256,17 @@ CREATE TABLE IF NOT EXISTS expenses (
     modified_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
     modified_on TIMESTAMPTZ NULL
 );
+
+-- 12b. Expense Sequences Table (Scoped by Year and Month)
+CREATE TABLE IF NOT EXISTS expense_sequences (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    year INT NOT NULL,
+    month INT NOT NULL,
+    last_sequence INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_expense_sequences_year_month ON expense_sequences (year, month);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_expenses_expense_no ON expenses (expense_no) WHERE is_deleted = false AND expense_no IS NOT NULL AND expense_no <> '';
 
 -- 13. Support Tickets Table
 CREATE TABLE IF NOT EXISTS support_tickets (

@@ -187,18 +187,7 @@ public class ExpenseService : IExpenseService
                 }
             }
 
-            // Check if a main budget has already been recorded for this event
-            var eventExpenses = await _expenseRepository.GetAllAsync(eventName: request.EventName.Trim(), cancellationToken: cancellationToken);
-            bool hasRecordedBudget = eventExpenses.Any(e =>
-                !string.Equals(e.Status, "Rejected", StringComparison.OrdinalIgnoreCase) &&
-                ((e.BudgetAmount.HasValue && e.BudgetAmount.Value > 0) || (!e.BudgetAmount.HasValue && e.Amount > 0)));
-
-            if (hasRecordedBudget && budgetPart > 0)
-            {
-                throw new InvalidOperationException($"A main budget has already been recorded for event '{request.EventName.Trim()}'. Additional expenses must be added using additional expense items.");
-            }
-
-            // Strictly validate main budget amount against remaining event budget
+            // Strictly validate main budget amount against remaining event budget (allows multiple entries up to remaining budget)
             await ValidateExpenseAmountAgainstEventBudgetAsync(request.EventId, request.EventName, request.Category, budgetPart, null, cancellationToken);
 
             var attachment = !string.IsNullOrWhiteSpace(request.FileData)
@@ -230,9 +219,13 @@ public class ExpenseService : IExpenseService
                 cleanDescription = request.Description.Trim();
             }
 
+            var effectiveDate = request.ExpenseDate == default ? DateTime.UtcNow : request.ExpenseDate;
+            var expenseNumber = await _expenseRepository.GetNextExpenseNumberAsync(effectiveDate, cancellationToken);
+
             var expense = new Expense
             {
                 ExpenseId = Guid.NewGuid(),
+                ExpenseNo = expenseNumber,
                 EventName = request.EventName.Trim(),
                 Category = request.Category.Trim(),
                 Amount = calculatedTotal,
