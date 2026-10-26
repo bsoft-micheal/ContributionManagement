@@ -86,6 +86,8 @@ public class MappingProfile : Profile
 
 
         CreateMap<Expense, ExpenseDto>()
+            .ForMember(dest => dest.ExpenseNo, opt => opt.MapFrom(src => src.ExpenseNo))
+            .ForMember(dest => dest.ExpenseNumber, opt => opt.MapFrom(src => src.ExpenseNo))
             .ForMember(dest => dest.FileUrl, opt => opt.MapFrom(src => src.FileName))
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt))
             .ForMember(dest => dest.AdditionalExpenses, opt => opt.Ignore());

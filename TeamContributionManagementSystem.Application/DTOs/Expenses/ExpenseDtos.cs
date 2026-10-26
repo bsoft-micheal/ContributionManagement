@@ -18,6 +18,8 @@ public class ExpenseAdditionalItemDto
 public class ExpenseDto
 {
     public Guid ExpenseId { get; set; }
+    public string ExpenseNumber { get; set; } = string.Empty;
+    public string ExpenseNo { get => ExpenseNumber; set => ExpenseNumber = value; }
     public string EventName { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public decimal Amount { get; set; }

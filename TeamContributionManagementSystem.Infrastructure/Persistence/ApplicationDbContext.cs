@@ -27,6 +27,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<AppUserRole> UserRoles => Set<AppUserRole>();
     public DbSet<RoleRight> RoleRights => Set<RoleRight>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<ExpenseSequence> ExpenseSequences => Set<ExpenseSequence>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<TicketResolutionNote> TicketResolutionNotes => Set<TicketResolutionNote>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
@@ -248,6 +249,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<Expense>(entity =>
         {
             entity.HasKey(x => x.ExpenseId);
+            entity.Property(x => x.ExpenseNo).HasColumnName("expense_no").HasMaxLength(30);
+            entity.Ignore(x => x.ExpenseNumber);
             entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Category).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Amount).HasPrecision(12, 2);
@@ -260,6 +263,19 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.FileName).HasColumnType("text");
             entity.HasIndex(x => new { x.ExpenseDate, x.Status });
+            entity.HasIndex(x => x.ExpenseNo);
+        });
+
+        modelBuilder.Entity<ExpenseSequence>(entity =>
+        {
+            entity.ToTable("expense_sequences");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Year).HasColumnName("year").IsRequired();
+            entity.Property(x => x.Month).HasColumnName("month").IsRequired();
+            entity.Property(x => x.LastSequence).HasColumnName("last_sequence").IsRequired();
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            entity.HasIndex(x => new { x.Year, x.Month }).IsUnique();
         });
 
         modelBuilder.Entity<SupportTicket>(entity =>

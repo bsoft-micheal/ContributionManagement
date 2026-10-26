@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Expenses;
@@ -23,6 +24,7 @@ public class ExpenseRepository : IExpenseRepository
     {
         try
         {
+            await EnsureSchemaAsync(cancellationToken);
             var query = _context.Expenses.Where(x => !x.IsDeleted).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(eventName) && !eventName.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
@@ -63,6 +65,8 @@ public class ExpenseRepository : IExpenseRepository
                     Expense = new ExpenseDto
                     {
                         ExpenseId = x.ExpenseId,
+                        ExpenseNo = x.ExpenseNo,
+                        ExpenseNumber = x.ExpenseNo,
                         EventName = x.EventName,
                         Category = x.Category,
                         Amount = x.Amount,
@@ -153,6 +157,7 @@ public class ExpenseRepository : IExpenseRepository
     {
         try
         {
+            await EnsureSchemaAsync(cancellationToken);
             return await _context.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == expenseId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
@@ -179,6 +184,7 @@ public class ExpenseRepository : IExpenseRepository
     {
         try
         {
+            await EnsureSchemaAsync(cancellationToken);
             await _context.Expenses.AddAsync(expense, cancellationToken);
         }
         catch (Exception ex)
@@ -212,6 +218,229 @@ public class ExpenseRepository : IExpenseRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(Delete));
+            throw;
+        }
+    }
+
+    private static bool _schemaEnsured = false;
+    private static readonly SemaphoreSlim _schemaLock = new(1, 1);
+
+    private async Task EnsureSchemaAsync(CancellationToken cancellationToken)
+    {
+        if (_schemaEnsured) return;
+        await _schemaLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_schemaEnsured) return;
+            if (_context.Database.IsNpgsql())
+            {
+                var conn = _context.Database.GetDbConnection();
+                if (conn.State != System.Data.ConnectionState.Open)
+                {
+                    await conn.OpenAsync(cancellationToken);
+                }
+
+                using var cmd = conn.CreateCommand();
+                var currentTx = _context.Database.CurrentTransaction?.GetDbTransaction();
+                if (currentTx != null)
+                {
+                    cmd.Transaction = currentTx;
+                }
+
+                cmd.CommandText = @"
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'expenses' AND column_name = 'expense_number') THEN
+                            ALTER TABLE expenses RENAME COLUMN expense_number TO expense_no;
+                        END IF;
+                    END $$;
+                    ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS expense_no VARCHAR(30);
+                    CREATE TABLE IF NOT EXISTS expense_sequences (
+                        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                        year INT NOT NULL,
+                        month INT NOT NULL,
+                        last_sequence INT NOT NULL DEFAULT 0,
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS ix_expense_sequences_year_month ON expense_sequences (year, month);
+                    CREATE UNIQUE INDEX IF NOT EXISTS ix_expenses_expense_no ON expenses (expense_no) WHERE is_deleted = false AND expense_no IS NOT NULL AND expense_no <> '';
+                ";
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            _schemaEnsured = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to automatically ensure expense schema: {Message}", ex.Message);
+        }
+        finally
+        {
+            _schemaLock.Release();
+        }
+    }
+
+    private static readonly SemaphoreSlim _sequenceLock = new(1, 1);
+
+    public async Task<string> GetNextExpenseNumberAsync(DateTime expenseDate, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await EnsureSchemaAsync(cancellationToken);
+            int year = expenseDate.Year;
+            int month = expenseDate.Month;
+
+            // Check if any active expenses exist for this month in the database
+            bool hasExistingForMonth = await _context.Expenses
+                .AnyAsync(e => !e.IsDeleted && e.ExpenseDate.Year == year && e.ExpenseDate.Month == month, cancellationToken);
+
+            // In PostgreSQL runtime, execute atomic upsert with row-lock to guarantee concurrency safety
+            if (_context.Database.IsNpgsql())
+            {
+                var conn = _context.Database.GetDbConnection();
+                if (conn.State != System.Data.ConnectionState.Open)
+                {
+                    await conn.OpenAsync(cancellationToken);
+                }
+
+                using var cmd = conn.CreateCommand();
+                var currentTx = _context.Database.CurrentTransaction?.GetDbTransaction();
+                if (currentTx != null)
+                {
+                    cmd.Transaction = currentTx;
+                }
+
+                // Get max numeric suffix from all existing expenses for this year and month in the database (including soft-deleted)
+                // Format: EXPyyyyMMdddd (e.g., EXP2026100003 -> prefix length is 9, suffix is 4 digits)
+                var prefix = $"EXP{year:D4}{month:D2}";
+                cmd.CommandText = @"
+                    SELECT COALESCE(MAX(
+                        CASE 
+                            WHEN length(expense_no) = 13 AND substring(expense_no from 10) ~ '^[0-9]+$' 
+                            THEN substring(expense_no from 10)::INTEGER 
+                            ELSE 0 
+                        END
+                    ), 0)
+                    FROM expenses 
+                    WHERE expense_no LIKE @prefix || '%';
+                ";
+                var pPref = cmd.CreateParameter();
+                pPref.ParameterName = "@prefix";
+                pPref.Value = prefix;
+                cmd.Parameters.Add(pPref);
+
+                var maxExpenseNumScalar = await cmd.ExecuteScalarAsync(cancellationToken);
+                int maxExistingExpenseNum = Convert.ToInt32(maxExpenseNumScalar);
+                cmd.Parameters.Clear();
+
+                if (!hasExistingForMonth && maxExistingExpenseNum == 0)
+                {
+                    // If all expenses were deleted/cleared completely from the database, reset sequence counter for this month
+                    cmd.CommandText = "DELETE FROM expense_sequences WHERE year = @year AND month = @month;";
+                    var pY = cmd.CreateParameter();
+                    pY.ParameterName = "@year";
+                    pY.Value = year;
+                    cmd.Parameters.Add(pY);
+
+                    var pM = cmd.CreateParameter();
+                    pM.ParameterName = "@month";
+                    pM.Value = month;
+                    cmd.Parameters.Add(pM);
+
+                    await cmd.ExecuteNonQueryAsync(cancellationToken);
+                    cmd.Parameters.Clear();
+                }
+
+                // Increment sequence ensuring it is always strictly greater than both last_sequence and maxExistingExpenseNum
+                cmd.CommandText = @"
+                    INSERT INTO expense_sequences (id, year, month, last_sequence, updated_at)
+                    VALUES (gen_random_uuid(), @year, @month, GREATEST(@maxExisting, 0) + 1, timezone('utc', now()))
+                    ON CONFLICT (year, month)
+                    DO UPDATE SET last_sequence = GREATEST(expense_sequences.last_sequence, @maxExisting) + 1, updated_at = timezone('utc', now())
+                    RETURNING last_sequence;
+                ";
+
+                var pYear = cmd.CreateParameter();
+                pYear.ParameterName = "@year";
+                pYear.Value = year;
+                cmd.Parameters.Add(pYear);
+
+                var pMonth = cmd.CreateParameter();
+                pMonth.ParameterName = "@month";
+                pMonth.Value = month;
+                cmd.Parameters.Add(pMonth);
+
+                var pMax = cmd.CreateParameter();
+                pMax.ParameterName = "@maxExisting";
+                pMax.Value = maxExistingExpenseNum;
+                cmd.Parameters.Add(pMax);
+
+                var scalar = await cmd.ExecuteScalarAsync(cancellationToken);
+                int nextSequence = Convert.ToInt32(scalar);
+                return $"EXP{year:D4}{month:D2}{nextSequence:D4}";
+            }
+
+            // Fallback for InMemory / SQLite / Test contexts:
+            await _sequenceLock.WaitAsync(cancellationToken);
+            try
+            {
+                var prefix = $"EXP{year:D4}{month:D2}";
+                var allExpenseNos = await _context.Expenses
+                    .Where(e => e.ExpenseNumber != null && e.ExpenseNumber.StartsWith(prefix))
+                    .Select(e => e.ExpenseNumber)
+                    .ToListAsync(cancellationToken);
+
+                int maxInMemoryExpenseNum = 0;
+                foreach (var expNo in allExpenseNos)
+                {
+                    if (expNo != null && expNo.Length == 13 && int.TryParse(expNo.Substring(9), out var parsedNum))
+                    {
+                        if (parsedNum > maxInMemoryExpenseNum) maxInMemoryExpenseNum = parsedNum;
+                    }
+                }
+
+                var seqRecord = await _context.ExpenseSequences
+                    .FirstOrDefaultAsync(s => s.Year == year && s.Month == month, cancellationToken);
+
+                if (!hasExistingForMonth && maxInMemoryExpenseNum == 0 && seqRecord != null)
+                {
+                    _context.ExpenseSequences.Remove(seqRecord);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    seqRecord = null;
+                }
+
+                int nextSequence;
+                if (seqRecord == null)
+                {
+                    nextSequence = Math.Max(maxInMemoryExpenseNum, 0) + 1;
+                    seqRecord = new ExpenseSequence
+                    {
+                        Id = Guid.NewGuid(),
+                        Year = year,
+                        Month = month,
+                        LastSequence = nextSequence,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    await _context.ExpenseSequences.AddAsync(seqRecord, cancellationToken);
+                }
+                else
+                {
+                    nextSequence = Math.Max(seqRecord.LastSequence, maxInMemoryExpenseNum) + 1;
+                    seqRecord.LastSequence = nextSequence;
+                    seqRecord.UpdatedAt = DateTime.UtcNow;
+                    _context.ExpenseSequences.Update(seqRecord);
+                }
+
+                await _context.SaveChangesAsync(cancellationToken);
+                return $"EXP{year:D4}{month:D2}{nextSequence:D4}";
+            }
+            finally
+            {
+                _sequenceLock.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetNextExpenseNumberAsync));
             throw;
         }
     }

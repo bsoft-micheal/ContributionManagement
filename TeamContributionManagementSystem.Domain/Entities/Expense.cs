@@ -1,8 +1,14 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace TeamContributionManagementSystem.Domain.Entities;
 
 public class Expense
 {
     public Guid ExpenseId { get; set; }
+    public string ExpenseNo { get; set; } = string.Empty;
+
+    [NotMapped]
+    public string ExpenseNumber { get => ExpenseNo; set => ExpenseNo = value; }
     public string EventName { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public decimal Amount { get; set; }

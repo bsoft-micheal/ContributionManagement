@@ -11,6 +11,7 @@ public interface IExpenseRepository
     Task AddAsync(Expense expense, CancellationToken cancellationToken = default);
     void Update(Expense expense);
     void Delete(Expense expense);
+    Task<string> GetNextExpenseNumberAsync(DateTime expenseDate, CancellationToken cancellationToken = default);
 
     // Standardized naming
     Task<List<ExpenseDto>> GetAllExpenseAsync(string? eventName = null, string? category = null, string? status = null, DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default) => GetAllAsync(eventName, category, status, startDate, endDate, cancellationToken);
