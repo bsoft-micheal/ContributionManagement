@@ -87,7 +87,8 @@ public class MappingProfile : Profile
 
         CreateMap<Expense, ExpenseDto>()
             .ForMember(dest => dest.FileUrl, opt => opt.MapFrom(src => src.FileName))
-            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt))
+            .ForMember(dest => dest.AdditionalExpenses, opt => opt.Ignore());
 
         CreateMap<SupportTicket, SupportTicketDto>()
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt))

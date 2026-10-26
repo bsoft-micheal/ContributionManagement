@@ -251,6 +251,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.EventName).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Category).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Amount).HasPrecision(12, 2);
+            entity.Property(x => x.BudgetAmount).HasPrecision(18, 2).HasDefaultValue(0m);
+            entity.Property(x => x.ExtraAmount).HasPrecision(18, 2).HasDefaultValue(0m);
+            entity.Property(x => x.AdditionalExpenses).HasColumnType("text");
             entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
             entity.Property(x => x.SubmittedBy).HasMaxLength(150).IsRequired();
             entity.Property(x => x.ApprovedBy).HasMaxLength(150);
