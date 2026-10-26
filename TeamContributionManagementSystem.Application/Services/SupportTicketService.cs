@@ -231,15 +231,55 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
+            Guid? eventId = request.EventId;
+            string? relatedEvent = request.RelatedEvent?.Trim();
+            if (!eventId.HasValue && !string.IsNullOrWhiteSpace(relatedEvent) && _eventRepository != null)
+            {
+                var eventObj = await _eventRepository.GetByNameAsync(relatedEvent, cancellationToken);
+                eventId = eventObj?.EventId;
+                if (eventObj != null)
+                {
+                    relatedEvent = eventObj.EventName;
+                }
+            }
+            else if (eventId.HasValue && string.IsNullOrWhiteSpace(relatedEvent) && _eventRepository != null)
+            {
+                var eventObj = await _eventRepository.GetByIdAsync(eventId.Value, cancellationToken);
+                if (eventObj != null)
+                {
+                    relatedEvent = eventObj.EventName;
+                }
+            }
+
             var existingTickets = await _ticketRepository.GetAllAsync(cancellationToken: cancellationToken);
 
             var reqMemberName = request.MemberName?.Trim();
             var reqMemberId = request.MemberId?.Trim();
 
-            // Business rule: A user/member can only create a new support ticket for a ticket type after their active ticket of that ticket type is verified
+            // Business rule: For each event and each ticket type, only one unresolved support ticket can exist until resolved
             var unverifiedTicketForType = existingTickets.FirstOrDefault(t =>
             {
                 if (CommonConstants.TicketStatuses.IsVerified(t.Status))
+                {
+                    return false;
+                }
+
+                // Check event match (by EventId or RelatedEvent)
+                bool matchesEvent = (eventId.HasValue && t.EventId.HasValue && t.EventId.Value == eventId.Value) ||
+                    (!string.IsNullOrWhiteSpace(relatedEvent) && !string.IsNullOrWhiteSpace(t.RelatedEvent) &&
+                     string.Equals(t.RelatedEvent.Trim(), relatedEvent, StringComparison.OrdinalIgnoreCase));
+
+                if (!matchesEvent)
+                {
+                    return false;
+                }
+
+                // Check ticket type match
+                bool matchesTicketType =
+                    (!string.IsNullOrWhiteSpace(ticketType) && string.Equals(t.TicketType?.Trim(), ticketType, StringComparison.OrdinalIgnoreCase)) ||
+                    (ticketTypeId.HasValue && t.TicketTypeId.HasValue && t.TicketTypeId.Value == ticketTypeId.Value);
+
+                if (!matchesTicketType)
                 {
                     return false;
                 }
@@ -263,25 +303,26 @@ public class SupportTicketService : ISupportTicketService
                         (!string.IsNullOrWhiteSpace(curUserName) && string.Equals(t.MemberName?.Trim(), curUserName, StringComparison.OrdinalIgnoreCase));
                 }
 
-                if (!matchesName && !matchesId && !matchesCurrentMember)
+                if (!string.IsNullOrWhiteSpace(reqMemberName) || !string.IsNullOrWhiteSpace(reqMemberId) || (_currentUserService != null && _currentUserService.IsMemberRole))
                 {
-                    return false;
+                    if (!matchesName && !matchesId && !matchesCurrentMember)
+                    {
+                        return false;
+                    }
                 }
 
-                bool matchesTicketType =
-                    (!string.IsNullOrWhiteSpace(ticketType) && string.Equals(t.TicketType?.Trim(), ticketType, StringComparison.OrdinalIgnoreCase)) ||
-                    (ticketTypeId.HasValue && t.TicketTypeId.HasValue && t.TicketTypeId.Value == ticketTypeId.Value);
-
-                return matchesTicketType;
+                return true;
             });
 
             if (unverifiedTicketForType != null)
             {
                 var displayType = !string.IsNullOrWhiteSpace(ticketType) ? ticketType : unverifiedTicketForType.TicketType;
+                var displayEvent = !string.IsNullOrWhiteSpace(relatedEvent) ? relatedEvent : unverifiedTicketForType.RelatedEvent ?? "this event";
                 throw new InvalidOperationException(string.Format(
-                    CommonValidationMessages.ActiveTicketForTypeExists,
+                    CommonValidationMessages.ActiveTicketForEventAndTypeExists,
                     unverifiedTicketForType.TicketNo,
-                    displayType));
+                    displayType,
+                    displayEvent));
             }
 
             if (!string.IsNullOrWhiteSpace(request.MemberName) && !string.IsNullOrWhiteSpace(request.Description))
@@ -374,7 +415,6 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            Guid? eventId = request.EventId;
             if (!eventId.HasValue && !string.IsNullOrWhiteSpace(request.RelatedEvent) && _eventRepository != null)
             {
                 var eventObj = await _eventRepository.GetByNameAsync(request.RelatedEvent.Trim(), cancellationToken);
@@ -562,6 +602,89 @@ public class SupportTicketService : ISupportTicketService
             ticket.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             ticket.ModifiedOn = DateTime.UtcNow;
 
+            // Business rule: If ticket is unresolved, verify no other unresolved ticket exists for the same event and ticket type
+            if (!CommonConstants.TicketStatuses.IsVerified(ticket.Status))
+            {
+                var allTickets = await _ticketRepository.GetAllAsync(cancellationToken: cancellationToken);
+                var conflictingTicket = allTickets.FirstOrDefault(t =>
+                {
+                    // Exclude current ticket being edited
+                    if (t.TicketId == ticketId || string.Equals(t.TicketNo, ticket.TicketNo, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+
+                    if (CommonConstants.TicketStatuses.IsVerified(t.Status))
+                    {
+                        return false;
+                    }
+
+                    // Check event match
+                    bool matchesEvent = (ticket.EventId.HasValue && t.EventId.HasValue && t.EventId.Value == ticket.EventId.Value) ||
+                        (!string.IsNullOrWhiteSpace(ticket.RelatedEvent) && !string.IsNullOrWhiteSpace(t.RelatedEvent) &&
+                         string.Equals(t.RelatedEvent.Trim(), ticket.RelatedEvent.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                    if (!matchesEvent)
+                    {
+                        return false;
+                    }
+
+                    // Check ticket type match
+                    bool matchesTicketType =
+                        (!string.IsNullOrWhiteSpace(ticket.TicketType) && string.Equals(t.TicketType?.Trim(), ticket.TicketType.Trim(), StringComparison.OrdinalIgnoreCase)) ||
+                        (ticket.TicketTypeId.HasValue && t.TicketTypeId.HasValue && t.TicketTypeId.Value == ticket.TicketTypeId.Value);
+
+                    if (!matchesTicketType)
+                    {
+                        return false;
+                    }
+
+                    // Check member/user match
+                    var reqMemName = ticket.MemberName?.Trim();
+                    var reqMemId = ticket.MemberId?.Trim();
+
+                    bool matchesName = !string.IsNullOrWhiteSpace(reqMemName) &&
+                        string.Equals(t.MemberName?.Trim(), reqMemName, StringComparison.OrdinalIgnoreCase);
+
+                    bool matchesId = !string.IsNullOrWhiteSpace(reqMemId) &&
+                        string.Equals(t.MemberId?.Trim(), reqMemId, StringComparison.OrdinalIgnoreCase);
+
+                    bool matchesCurrentMember = false;
+                    if (_currentUserService != null && _currentUserService.IsMemberRole)
+                    {
+                        var curMemberIdStr = _currentUserService.MemberId?.ToString();
+                        var curUserEmail = _currentUserService.Email?.Trim();
+                        var curUserName = _currentUserService.UserName?.Trim();
+
+                        matchesCurrentMember =
+                            (!string.IsNullOrWhiteSpace(curMemberIdStr) && (string.Equals(t.MemberId?.Trim(), curMemberIdStr, StringComparison.OrdinalIgnoreCase) || string.Equals(t.CreatedBy?.Trim(), curMemberIdStr, StringComparison.OrdinalIgnoreCase))) ||
+                            (!string.IsNullOrWhiteSpace(curUserEmail) && string.Equals(t.CreatedBy?.Trim(), curUserEmail, StringComparison.OrdinalIgnoreCase)) ||
+                            (!string.IsNullOrWhiteSpace(curUserName) && string.Equals(t.MemberName?.Trim(), curUserName, StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(reqMemName) || !string.IsNullOrWhiteSpace(reqMemId) || (_currentUserService != null && _currentUserService.IsMemberRole))
+                    {
+                        if (!matchesName && !matchesId && !matchesCurrentMember)
+                        {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                });
+
+                if (conflictingTicket != null)
+                {
+                    var displayType = !string.IsNullOrWhiteSpace(ticket.TicketType) ? ticket.TicketType : conflictingTicket.TicketType;
+                    var displayEvent = !string.IsNullOrWhiteSpace(ticket.RelatedEvent) ? ticket.RelatedEvent : conflictingTicket.RelatedEvent ?? "this event";
+                    throw new InvalidOperationException(string.Format(
+                        CommonValidationMessages.ActiveTicketForEventAndTypeExists,
+                        conflictingTicket.TicketNo,
+                        displayType,
+                        displayEvent));
+                }
+            }
+
             _ticketRepository.Update(ticket);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -609,6 +732,10 @@ public class SupportTicketService : ISupportTicketService
                     ? _currentUserService.UserName
                     : (string.IsNullOrWhiteSpace(ticket.MemberName) ? "Admin" : ticket.MemberName));
             var newNote = request.Message.Trim();
+            if (newNote.Length > 250)
+            {
+                throw new ArgumentException(CommonValidationMessages.ReplyMessageMaxLength);
+            }
 
             ticket.AssignedTo = sender;
 

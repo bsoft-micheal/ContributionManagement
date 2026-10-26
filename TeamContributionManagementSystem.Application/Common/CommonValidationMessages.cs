@@ -49,8 +49,10 @@ public static class CommonValidationMessages
     public const string SubjectRequired = "Subject is required.";
     public const string DescriptionRequired = "Description is required.";
     public const string MessageRequired = "Message is required.";
+    public const string ReplyMessageMaxLength = "Reply message cannot exceed 250 characters.";
     public const string ActiveTicketExists = "Member already has an active support ticket ({0}). A new ticket can only be created after the existing ticket is verified.";
     public const string ActiveTicketForTypeExists = "You already have an active support ticket ({0}) for ticket type '{1}'. A new ticket for this type can only be created after the existing ticket is verified.";
+    public const string ActiveTicketForEventAndTypeExists = "You already have an active support ticket ({0}) for ticket type '{1}' on event '{2}'. A new ticket for this type can only be created after the existing ticket is resolved.";
 
     // Expense Validations
     public const string ExpenseAmountExceedsExpected = "Expense amount cannot exceed the event's expected budget.";
