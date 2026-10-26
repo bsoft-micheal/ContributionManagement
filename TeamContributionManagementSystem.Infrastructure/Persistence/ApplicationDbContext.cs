@@ -520,7 +520,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(x => x.StatusId);
             entity.Property(x => x.StatusName).HasMaxLength(100).IsRequired();
-            entity.Property(x => x.Module).HasMaxLength(100).HasDefaultValue("General");
+            entity.Property(x => x.Module).HasMaxLength(100).IsRequired(false).HasDefaultValue("General");
             entity.Property(x => x.ModuleId).HasColumnName("module_id");
             entity.HasIndex(x => new { x.StatusName, x.Module }).IsUnique();
         });

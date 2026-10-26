@@ -145,7 +145,7 @@ public class MemberRepository : IMemberRepository
                 .AsNoTracking()
                 .Include(x => x.UserRoles).ThenInclude(ur => ur.Role)
                 .Include(x => x.WorkTypeNavigation)
-                .Where(x => ids.Contains(x.UserId) && !x.IsDeleted)
+                .Where(x => ids.Contains(x.UserId) && !x.IsDeleted && x.IsActive && !x.IsExited)
                 .ToListAsync(cancellationToken);
 
             return users.Select(user => new Member

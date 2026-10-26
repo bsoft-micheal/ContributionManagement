@@ -38,13 +38,15 @@ public class StatusRepository : IStatusRepository
             var plural = cleanModule.EndsWith("s") ? cleanModule : cleanModule + "s";
 
             query = query.Where(x =>
-                x.Module.ToLower() == cleanModule ||
-                x.Module.ToLower() == singular ||
-                x.Module.ToLower() == plural ||
-                x.Module.ToLower().Contains(cleanModule) ||
-                x.Module.ToLower().Contains(singular) ||
-                x.Module.ToLower().Contains(plural) ||
-                x.Module.ToLower() == "general");
+                x.Module != null && (
+                    x.Module.ToLower() == cleanModule ||
+                    x.Module.ToLower() == singular ||
+                    x.Module.ToLower() == plural ||
+                    x.Module.ToLower().Contains(cleanModule) ||
+                    x.Module.ToLower().Contains(singular) ||
+                    x.Module.ToLower().Contains(plural) ||
+                    x.Module.ToLower() == "general"
+                ));
         }
 
         var usedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -95,7 +97,7 @@ public class StatusRepository : IStatusRepository
             {
                 StatusId = x.StatusId,
                 StatusName = x.StatusName,
-                Module = x.Module,
+                Module = x.Module ?? "General",
                 ModuleId = x.ModuleId,
                 IsActive = x.IsActive,
                 CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
@@ -165,13 +167,15 @@ public class StatusRepository : IStatusRepository
             var singular = cleanModule.EndsWith("s") && cleanModule.Length > 3 ? cleanModule.Substring(0, cleanModule.Length - 1) : cleanModule;
             var plural = cleanModule.EndsWith("s") ? cleanModule : cleanModule + "s";
             query = query.Where(x =>
-                x.Module.ToLower() == cleanModule ||
-                x.Module.ToLower() == singular ||
-                x.Module.ToLower() == plural ||
-                x.Module.ToLower().Contains(cleanModule) ||
-                x.Module.ToLower().Contains(singular) ||
-                x.Module.ToLower().Contains(plural) ||
-                x.Module.ToLower() == "general");
+                x.Module != null && (
+                    x.Module.ToLower() == cleanModule ||
+                    x.Module.ToLower() == singular ||
+                    x.Module.ToLower() == plural ||
+                    x.Module.ToLower().Contains(cleanModule) ||
+                    x.Module.ToLower().Contains(singular) ||
+                    x.Module.ToLower().Contains(plural) ||
+                    x.Module.ToLower() == "general"
+                ));
         }
         return await query.FirstOrDefaultAsync(cancellationToken);
     }

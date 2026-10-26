@@ -16,6 +16,10 @@ public class ExitClearanceSummaryDto
     public string EventName { get; set; } = string.Empty;
     public DateTime EventDate { get; set; }
 
+    public Guid? UnpaidEventId { get; set; }
+    public string? UnpaidEventName { get; set; }
+    public IReadOnlyCollection<EventDueItemDto> UnpaidEvents { get; set; } = new List<EventDueItemDto>();
+
     public decimal TotalObligations { get; set; }
     public decimal TotalVerifiedPaid { get; set; }
     public decimal OutstandingAmount { get; set; }

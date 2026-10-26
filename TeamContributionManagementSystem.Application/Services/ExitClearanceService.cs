@@ -39,10 +39,31 @@ public class ExitClearanceService : IExitClearanceService
         CancellationToken cancellationToken = default)
     {
         // 1. Ensure any newly published or existing Send-Off events have their clearances registered
-        await SyncAllSendOffEventsAsync(cancellationToken);
+        try
+        {
+            await SyncAllSendOffEventsAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GetQueueAsync: non-fatal send-off sync warning: {Message}", ex.Message);
+        }
 
         // 2. Fetch all active clearances
-        var clearances = await _clearanceRepo.GetAllAsync(cancellationToken);
+        IReadOnlyCollection<ExitClearance> clearances;
+        try
+        {
+            clearances = await _clearanceRepo.GetAllAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex.Message.Contains("42P01") || ex.Message.IndexOf("does not exist", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            _logger.LogWarning(ex, "GetQueueAsync: exit_clearances table not yet created.");
+            return new ExitClearanceQueueResponseDto
+            {
+                Items = new List<ExitClearanceSummaryDto>(),
+                TotalCount = 0,
+                Kpis = new ExitClearanceKpiDto()
+            };
+        }
 
         var items = new List<ExitClearanceSummaryDto>();
 
@@ -71,6 +92,9 @@ public class ExitClearanceService : IExitClearanceService
                 ?? c.Member?.UserRoles?.FirstOrDefault()?.Role?.RoleName
                 ?? "Member";
 
+            var firstUnpaid = dues.EventDues.FirstOrDefault(e => e.OutstandingBalance > 0);
+            var unpaidList = dues.EventDues.Where(e => e.OutstandingBalance > 0).ToList();
+
             var summary = new ExitClearanceSummaryDto
             {
                 ClearanceId = c.ClearanceId,
@@ -85,10 +109,13 @@ public class ExitClearanceService : IExitClearanceService
                 EventId = c.EventId,
                 EventName = c.Event?.EventName ?? "Send-Off Event",
                 EventDate = c.Event?.EventDate ?? DateTime.UtcNow,
+                UnpaidEventId = firstUnpaid?.EventId,
+                UnpaidEventName = firstUnpaid?.EventName,
+                UnpaidEvents = unpaidList,
                 TotalObligations = dues.TotalObligations,
                 TotalVerifiedPaid = dues.TotalVerifiedPaid,
                 OutstandingAmount = dues.TotalOutstanding,
-                PendingObligationsCount = dues.EventDues.Count(e => e.OutstandingBalance > 0),
+                PendingObligationsCount = unpaidList.Count,
                 HasUnverifiedPayments = hasUnverified,
                 PaymentVerificationStatus = paymentVerificationStatus,
                 ClearanceStatus = computedStatus,
@@ -319,12 +346,14 @@ public class ExitClearanceService : IExitClearanceService
         };
         await _clearanceRepo.AddHistoryAsync(history, cancellationToken);
 
-        // 5. Update Member Status (mark IsExited without damaging login/roles)
-        if (clearance.Member != null)
+        // 5. Update Member Status (mark IsActive = false and IsExited = true)
+        var memberToUpdate = clearance.Member ?? await _clearanceRepo.GetUserByIdAsync(clearance.MemberId, cancellationToken);
+        if (memberToUpdate != null)
         {
-            clearance.Member.IsExited = true;
-            clearance.Member.ModifiedBy = adminUserId;
-            clearance.Member.ModifiedOn = approvalTime;
+            memberToUpdate.IsActive = false;
+            memberToUpdate.IsExited = true;
+            memberToUpdate.ModifiedBy = adminUserId;
+            memberToUpdate.ModifiedOn = approvalTime;
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -367,7 +396,17 @@ public class ExitClearanceService : IExitClearanceService
         DateTime? toDate = null,
         CancellationToken cancellationToken = default)
     {
-        var list = await _clearanceRepo.GetAllHistoryAsync(cancellationToken);
+        IReadOnlyCollection<ExitClearanceHistory> list;
+        try
+        {
+            list = await _clearanceRepo.GetAllHistoryAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex.Message.Contains("42P01") || ex.Message.IndexOf("does not exist", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            _logger.LogWarning(ex, "GetHistoryAsync: exit_clearance_histories table not yet created.");
+            return Array.Empty<ExitClearanceHistoryDto>();
+        }
+
         var query = list.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -557,19 +596,21 @@ public class ExitClearanceService : IExitClearanceService
             var memberExists = await _clearanceRepo.MemberExistsAsync(memberId, cancellationToken);
             if (!memberExists) continue;
 
+            var effectiveDate = plannedDate ?? ev.EventDate;
+
             if (existingMap.TryGetValue(memberId, out var existing))
             {
                 if (existing.IsDeleted && !string.Equals(existing.Status, "Approved", StringComparison.OrdinalIgnoreCase))
                 {
                     existing.IsDeleted = false;
                     existing.Status = "PendingClearance";
-                    existing.PlannedExitDate = plannedDate ?? existing.PlannedExitDate;
+                    existing.PlannedExitDate = effectiveDate;
                     existing.ModifiedOn = DateTime.UtcNow;
                     _clearanceRepo.Update(existing);
                 }
-                else if (plannedDate.HasValue && !existing.PlannedExitDate.HasValue)
+                else if (!existing.PlannedExitDate.HasValue)
                 {
-                    existing.PlannedExitDate = plannedDate;
+                    existing.PlannedExitDate = effectiveDate;
                     existing.ModifiedOn = DateTime.UtcNow;
                     _clearanceRepo.Update(existing);
                 }
@@ -582,7 +623,7 @@ public class ExitClearanceService : IExitClearanceService
                     MemberId = memberId,
                     EventId = ev.EventId,
                     Status = "PendingClearance",
-                    PlannedExitDate = plannedDate,
+                    PlannedExitDate = effectiveDate,
                     CreatedBy = ev.CreatedBy,
                     CreatedAt = DateTime.UtcNow,
                     CreatedOn = DateTime.UtcNow,
@@ -596,6 +637,7 @@ public class ExitClearanceService : IExitClearanceService
     private static Dictionary<Guid, DateTime?> ExtractBeneficiaries(Event ev)
     {
         var result = new Dictionary<Guid, DateTime?>();
+        DateTime? singleSendOffDate = null;
 
         // 1. From EventDates JSON
         if (!string.IsNullOrWhiteSpace(ev.EventDates) && ev.EventDates.Trim().StartsWith("{"))
@@ -619,6 +661,15 @@ public class ExitClearanceService : IExitClearanceService
                                 }
                                 result[mId] = parsedDate;
                             }
+                        }
+                    }
+                    else if (prop.Value.ValueKind == JsonValueKind.String &&
+                             DateTime.TryParse(prop.Value.GetString(), out var singleDt))
+                    {
+                        var key = prop.Name.ToLowerInvariant();
+                        if (key.Contains("send") || key.Contains("farewell") || key.Contains("relieving") || prop.Name == ev.EventTypeId.ToString())
+                        {
+                            singleSendOffDate = singleDt;
                         }
                     }
                 }
@@ -650,7 +701,7 @@ public class ExitClearanceService : IExitClearanceService
                                     {
                                         if (!result.ContainsKey(mId))
                                         {
-                                            result[mId] = null;
+                                            result[mId] = singleSendOffDate ?? ev.EventDate;
                                         }
                                     }
                                 }
@@ -674,8 +725,17 @@ public class ExitClearanceService : IExitClearanceService
             {
                 if (!result.ContainsKey(mId))
                 {
-                    result[mId] = null;
+                    result[mId] = singleSendOffDate ?? ev.EventDate;
                 }
+            }
+        }
+
+        // Ensure any entry with null date defaults to singleSendOffDate or ev.EventDate
+        foreach (var key in result.Keys.ToList())
+        {
+            if (!result[key].HasValue)
+            {
+                result[key] = singleSendOffDate ?? ev.EventDate;
             }
         }
 
@@ -714,9 +774,18 @@ public class ExitClearanceService : IExitClearanceService
             decimal pendingPaymentAmount = 0m;
             bool eventHasPendingPayment = false;
 
+            bool isContributionDirectlyPaid = c.PaymentDate != null ||
+                (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
+                (c.UpiAmount.HasValue && c.UpiAmount.Value > 0) ||
+                c.PaymentStatus == TeamContributionManagementSystem.Domain.Enums.PaymentStatus.Paid ||
+                (c.StatusItem != null && (
+                    string.Equals(c.StatusItem.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(c.StatusItem.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(c.StatusItem.StatusName, "Approved", StringComparison.OrdinalIgnoreCase)));
+
             if (paymentsByEvent.TryGetValue(ev.EventId, out var eventPayments))
             {
-                verifiedPaid = eventPayments
+                var txnVerifiedPaid = eventPayments
                     .Where(p => string.Equals(p.Status, CommonConstants.PaymentStatuses.Verified, StringComparison.OrdinalIgnoreCase) ||
                                 string.Equals(p.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
                                 string.Equals(p.Status, "Paid", StringComparison.OrdinalIgnoreCase))
@@ -727,18 +796,15 @@ public class ExitClearanceService : IExitClearanceService
                     .Sum(p => p.Amount);
 
                 eventHasPendingPayment = pendingPaymentAmount > 0;
+
+                // If transaction is verified OR the contribution record itself is marked Paid, count as paid
+                verifiedPaid = isContributionDirectlyPaid
+                    ? Math.Max(obligationAmount, txnVerifiedPaid)
+                    : txnVerifiedPaid;
             }
             else
             {
-                bool isPaidStatus = c.PaymentDate != null ||
-                    (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                    (c.UpiAmount.HasValue && c.UpiAmount.Value > 0) ||
-                    (c.StatusItem != null && (
-                        string.Equals(c.StatusItem.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(c.StatusItem.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(c.StatusItem.StatusName, "Approved", StringComparison.OrdinalIgnoreCase)));
-
-                if (isPaidStatus)
+                if (isContributionDirectlyPaid)
                 {
                     verifiedPaid = obligationAmount;
                 }
@@ -751,6 +817,8 @@ public class ExitClearanceService : IExitClearanceService
             string paymentStatus = outstanding == 0 ? "Paid"
                 : (verifiedPaid > 0 ? "Partially Paid" : "Unpaid");
 
+            bool isPendingRelevant = outstanding > 0 && eventHasPendingPayment;
+
             eventDues.Add(new EventDueItemDto
             {
                 EventId = ev.EventId,
@@ -760,11 +828,13 @@ public class ExitClearanceService : IExitClearanceService
                 VerifiedPaidAmount = verifiedPaid,
                 OutstandingBalance = outstanding,
                 PaymentStatus = paymentStatus,
-                HasPendingPayment = eventHasPendingPayment,
-                PendingPaymentAmount = pendingPaymentAmount
+                HasPendingPayment = isPendingRelevant,
+                PendingPaymentAmount = isPendingRelevant ? pendingPaymentAmount : 0m
             });
         }
 
-        return (totalObligations, totalVerifiedPaid, totalOutstanding, hasAnyUnverifiedPayments, eventDues);
+        bool hasActualUnverified = eventDues.Any(e => e.HasPendingPayment);
+
+        return (totalObligations, totalVerifiedPaid, totalOutstanding, hasActualUnverified, eventDues);
     }
 }
