@@ -242,4 +242,16 @@ public static class CommonRoutes
         public const string Update = "updatePaymentModeAsyncById/{id:guid}";
         public const string Delete = "deletePaymentModeAsyncById/{id:guid}";
     }
+
+    public static class ExitClearance
+    {
+        public const string Base = $"{ApiBase}/exit-clearance";
+        public const string GetQueue = "";
+        public const string GetQueueNamed = "getQueueAsync";
+        public const string GetDetails = "{id:guid}";
+        public const string GetDues = "{id:guid}/dues";
+        public const string Approve = "{id:guid}/approve";
+        public const string GetHistory = "history";
+        public const string GetHistoryDetail = "history/{id:guid}";
+    }
 }

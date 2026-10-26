@@ -29,7 +29,7 @@ public class MemberRepository : IMemberRepository
                 .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
 
             var items = await _context.Users
-                .Where(x => !x.IsDeleted)
+                .Where(x => !x.IsDeleted && x.Email.ToLower() != "admin@gmail.com" && x.Email.ToLower() != "member@gmail.com")
                 .OrderBy(x => x.FullName)
                 .Select(x => new MemberDto
                 {

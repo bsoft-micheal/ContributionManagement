@@ -617,5 +617,55 @@ CREATE INDEX IF NOT EXISTS ix_support_tickets_status_priority ON support_tickets
 CREATE INDEX IF NOT EXISTS ix_payment_transactions_date_status ON payment_transactions(payment_date, status);
 CREATE INDEX IF NOT EXISTS ix_gallery_photos_event_category ON gallery_photos(event_name, category);
 CREATE INDEX IF NOT EXISTS ix_budget_calculations_expense_item ON budget_calculations(expense_item);
-CREATE UNIQUE INDEX IF NOT EXISTS ix_role_rights_role_module_sub_module_page ON role_rights(role, module, sub_module, page);
 CREATE INDEX IF NOT EXISTS ix_payment_modes_active ON payment_modes(is_active, is_deleted);
+
+-- 4. Exit Clearance Tables
+CREATE TABLE IF NOT EXISTS exit_clearances (
+    clearance_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    member_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    event_id UUID NOT NULL REFERENCES events(event_id) ON DELETE RESTRICT,
+    status VARCHAR(50) NOT NULL DEFAULT 'PendingClearance',
+    planned_exit_date TIMESTAMPTZ NULL,
+    notes TEXT NULL,
+    approval_remarks TEXT NULL,
+    approved_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
+    approved_at TIMESTAMPTZ NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL,
+    modified_on TIMESTAMPTZ NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_exit_clearances_member_event
+ON exit_clearances (member_id, event_id)
+WHERE is_deleted = false;
+CREATE INDEX IF NOT EXISTS ix_exit_clearances_member_id ON exit_clearances(member_id);
+CREATE INDEX IF NOT EXISTS ix_exit_clearances_event_id ON exit_clearances(event_id);
+CREATE INDEX IF NOT EXISTS ix_exit_clearances_status ON exit_clearances(status);
+
+CREATE TABLE IF NOT EXISTS exit_clearance_histories (
+    history_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clearance_id UUID NOT NULL REFERENCES exit_clearances(clearance_id) ON DELETE RESTRICT,
+    member_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    event_id UUID NOT NULL REFERENCES events(event_id) ON DELETE RESTRICT,
+    member_name_snapshot VARCHAR(200) NOT NULL,
+    member_code_snapshot VARCHAR(100) NULL,
+    event_name_snapshot VARCHAR(200) NOT NULL,
+    joining_date TIMESTAMPTZ NULL,
+    exit_approval_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    approved_by UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+    approved_by_name VARCHAR(200) NOT NULL,
+    total_obligations NUMERIC(12,2) NOT NULL DEFAULT 0,
+    total_verified_paid NUMERIC(12,2) NOT NULL DEFAULT 0,
+    total_approved_adjustments NUMERIC(12,2) NOT NULL DEFAULT 0,
+    outstanding_at_approval NUMERIC(12,2) NOT NULL DEFAULT 0,
+    payment_verification_summary TEXT NULL,
+    approval_remarks TEXT NULL,
+    snapshot_json TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by UUID NULL REFERENCES users(user_id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_member_id ON exit_clearance_histories(member_id);
+CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_event_id ON exit_clearance_histories(event_id);
+CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_clearance_id ON exit_clearance_histories(clearance_id);

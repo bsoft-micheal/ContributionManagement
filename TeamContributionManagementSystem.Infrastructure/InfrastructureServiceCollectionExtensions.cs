@@ -48,6 +48,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IPriorityRepository, PriorityRepository>();
         services.AddScoped<IPaymentModeRepository, PaymentModeRepository>();
         services.AddScoped<IBirthdayReminderLogRepository, BirthdayReminderLogRepository>();
+        services.AddScoped<IExitClearanceRepository, ExitClearanceRepository>();
 
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IRoleService, RoleService>();
@@ -73,6 +74,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IWorkTypeService, WorkTypeService>();
         services.AddScoped<IPriorityService, PriorityService>();
         services.AddScoped<IPaymentModeService, PaymentModeService>();
+        services.AddScoped<IExitClearanceService, ExitClearanceService>();
 
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
