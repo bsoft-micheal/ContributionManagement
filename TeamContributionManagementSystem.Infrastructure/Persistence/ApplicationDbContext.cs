@@ -45,6 +45,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<EventTypePaymentSetting> EventTypePaymentSettings => Set<EventTypePaymentSetting>();
     public DbSet<BirthdayReminderLog> BirthdayReminderLogs => Set<BirthdayReminderLog>();
 
+ 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Ignore<Member>();

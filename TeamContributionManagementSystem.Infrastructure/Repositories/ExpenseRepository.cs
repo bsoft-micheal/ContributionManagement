@@ -90,6 +90,19 @@ public class ExpenseRepository : IExpenseRepository
                 {
                     item.ModifiedBy = mName;
                 }
+
+                TeamContributionManagementSystem.Application.Common.ExpenseMetadataHelper.UnpackDescription(
+                    item.Description,
+                    item.Amount,
+                    out var cleanDesc,
+                    out var budgetAmt,
+                    out var extraAmt,
+                    out var addRows);
+
+                item.Description = cleanDesc;
+                item.BudgetAmount = budgetAmt;
+                item.ExtraAmount = extraAmt;
+                item.AdditionalExpenses = addRows;
             }
 
             return items;
