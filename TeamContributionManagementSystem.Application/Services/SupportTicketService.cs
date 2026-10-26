@@ -174,6 +174,7 @@ public class SupportTicketService : ISupportTicketService
             }
 
             var dto = _mapper.Map<SupportTicketDto>(ticket);
+            dto.ResolutionNotesHistory = await _ticketRepository.GetResolutionNotesByTicketIdAsync(ticket.TicketId, cancellationToken);
             dto.VerifiedBy = !string.IsNullOrWhiteSpace(ticket.AssignedTo) ? ticket.AssignedTo : null;
             if (ticket.ModifiedBy.HasValue && _userRepository != null)
             {
@@ -556,7 +557,26 @@ public class SupportTicketService : ISupportTicketService
 
             if (!string.IsNullOrWhiteSpace(request.ResolutionNotes))
             {
-                ticket.ResolutionNotes = request.ResolutionNotes.Trim();
+                var trimmedNote = request.ResolutionNotes.Trim();
+                ticket.ResolutionNotes = trimmedNote;
+
+                var modifierGuid = CommonMethods.ParseNullableGuid(user)
+                    ?? (_currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : null);
+                var modifierName = !string.IsNullOrWhiteSpace(_currentUserService?.UserName)
+                    ? _currentUserService.UserName
+                    : "Admin";
+
+                await _ticketRepository.AddResolutionNoteAsync(new TicketResolutionNote
+                {
+                    NoteId = Guid.NewGuid(),
+                    TicketId = ticket.TicketId,
+                    UserId = modifierGuid,
+                    SenderName = modifierName,
+                    Notes = trimmedNote,
+                    StatusId = ticket.StatusId,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = modifierGuid
+                }, cancellationToken);
             }
 
             ticket.ModifiedBy = CommonMethods.ParseNullableGuid(user);
@@ -566,8 +586,9 @@ public class SupportTicketService : ISupportTicketService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(CommonLogMessages.SupportTickets.TicketUpdated, ticket.TicketNo, ticket.Status);
-
-            return _mapper.Map<SupportTicketDto>(ticket);
+            var updatedDto = _mapper.Map<SupportTicketDto>(ticket);
+            updatedDto.ResolutionNotesHistory = await _ticketRepository.GetResolutionNotesByTicketIdAsync(ticket.TicketId, cancellationToken);
+            return updatedDto;
         }
         catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
         {
@@ -631,14 +652,30 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
-            ticket.ModifiedBy = CommonMethods.ParseNullableGuid(user)
+            var actorGuid = CommonMethods.ParseNullableGuid(user)
                 ?? (_currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : null);
+
+            ticket.ModifiedBy = actorGuid;
             ticket.ModifiedOn = DateTime.UtcNow;
+
+            await _ticketRepository.AddResolutionNoteAsync(new TicketResolutionNote
+            {
+                NoteId = Guid.NewGuid(),
+                TicketId = ticket.TicketId,
+                UserId = actorGuid,
+                SenderName = sender,
+                Notes = newNote,
+                StatusId = ticket.StatusId,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = actorGuid
+            }, cancellationToken);
 
             _ticketRepository.Update(ticket);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return _mapper.Map<SupportTicketDto>(ticket);
+            var resultDto = _mapper.Map<SupportTicketDto>(ticket);
+            resultDto.ResolutionNotesHistory = await _ticketRepository.GetResolutionNotesByTicketIdAsync(ticket.TicketId, cancellationToken);
+            return resultDto;
         }
         catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
         {

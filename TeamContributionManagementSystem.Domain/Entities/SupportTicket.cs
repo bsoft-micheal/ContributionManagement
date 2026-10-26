@@ -30,6 +30,7 @@ public class SupportTicket
     public string? Utr { get; set; }
     public string? Attachment { get; set; }
     public string? ResolutionNotes { get; set; }
+    public ICollection<TicketResolutionNote> ResolutionNotesHistory { get; set; } = new List<TicketResolutionNote>();
 
     // Unmapped properties preserved for business logic and DTO compatibility
     [NotMapped]

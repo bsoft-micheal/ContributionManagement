@@ -19,7 +19,7 @@ public class RateLimitSettings
     };
 
     /// <summary>
-    /// General API endpoints & navigation (Default: 300 requests per minute).
+    /// General API endpoints &amp; navigation (Default: 300 requests per minute).
     /// </summary>
     public PolicySettings General { get; set; } = new()
     {

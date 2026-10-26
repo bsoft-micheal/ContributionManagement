@@ -28,6 +28,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<RoleRight> RoleRights => Set<RoleRight>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<TicketResolutionNote> TicketResolutionNotes => Set<TicketResolutionNote>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<GalleryPhoto> GalleryPhotos => Set<GalleryPhoto>();
@@ -305,6 +306,39 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .HasForeignKey(x => x.StatusId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TicketResolutionNote>(entity =>
+        {
+            entity.ToTable("ticket_resolution_notes");
+            entity.HasKey(x => x.NoteId).HasName("pk_ticket_resolution_notes");
+            entity.Property(x => x.NoteId).HasColumnName("note_id");
+            entity.Property(x => x.TicketId).HasColumnName("ticket_id").IsRequired();
+            entity.Property(x => x.UserId).HasColumnName("user_id");
+            entity.Property(x => x.SenderName).HasColumnName("sender_name").HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Notes).HasColumnName("notes").HasColumnType("text").IsRequired();
+            entity.Property(x => x.StatusId).HasColumnName("status_id");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("timezone('utc', now())");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+
+            entity.HasOne(x => x.Ticket)
+                .WithMany(t => t.ResolutionNotesHistory)
+                .HasForeignKey(x => x.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.StatusItem)
+                .WithMany()
+                .HasForeignKey(x => x.StatusId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TicketId).HasDatabaseName("ix_ticket_resolution_notes_ticket_id");
         });
 
         modelBuilder.Entity<SystemSetting>(entity =>

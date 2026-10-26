@@ -99,6 +99,19 @@ public class SupportTicketRepository : ISupportTicketRepository
                     Utr = x.Utr,
                     Attachment = x.Attachment,
                     ResolutionNotes = x.ResolutionNotes,
+                    ResolutionNotesHistory = x.ResolutionNotesHistory
+                        .OrderBy(n => n.CreatedAt)
+                        .Select(n => new TicketResolutionNoteDto
+                        {
+                            NoteId = n.NoteId,
+                            TicketId = n.TicketId,
+                            UserId = n.UserId,
+                            SenderName = n.SenderName,
+                            Notes = n.Notes,
+                            StatusId = n.StatusId,
+                            StatusName = n.StatusItem != null ? n.StatusItem.StatusName : null,
+                            CreatedAt = n.CreatedAt
+                        }).ToList(),
                     IsActive = x.IsActive,
                     CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
                     CreatedAt = x.CreatedAt,
@@ -144,6 +157,8 @@ public class SupportTicketRepository : ISupportTicketRepository
                 .Include(x => x.TicketTypeItem)
                 .Include(x => x.PriorityItem)
                 .Include(x => x.StatusItem)
+                .Include(x => x.ResolutionNotesHistory)
+                    .ThenInclude(n => n.StatusItem)
                 .FirstOrDefaultAsync(x => x.TicketId == ticketId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
@@ -163,6 +178,8 @@ public class SupportTicketRepository : ISupportTicketRepository
                 .Include(x => x.TicketTypeItem)
                 .Include(x => x.PriorityItem)
                 .Include(x => x.StatusItem)
+                .Include(x => x.ResolutionNotesHistory)
+                    .ThenInclude(n => n.StatusItem)
                 .FirstOrDefaultAsync(x => x.TicketId == ticketId, cancellationToken);
         }
         catch (Exception ex)
@@ -182,6 +199,8 @@ public class SupportTicketRepository : ISupportTicketRepository
                 .Include(x => x.TicketTypeItem)
                 .Include(x => x.PriorityItem)
                 .Include(x => x.StatusItem)
+                .Include(x => x.ResolutionNotesHistory)
+                    .ThenInclude(n => n.StatusItem)
                 .FirstOrDefaultAsync(x => x.TicketNo.ToLower() == ticketNo.ToLower() && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
@@ -291,6 +310,46 @@ public class SupportTicketRepository : ISupportTicketRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GenerateNextRefNoAsync));
+            throw;
+        }
+    }
+
+    public async Task AddResolutionNoteAsync(TicketResolutionNote note, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _context.TicketResolutionNotes.AddAsync(note, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(AddResolutionNoteAsync));
+            throw;
+        }
+    }
+
+    public async Task<List<TicketResolutionNoteDto>> GetResolutionNotesByTicketIdAsync(Guid ticketId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _context.TicketResolutionNotes
+                .Where(x => x.TicketId == ticketId)
+                .OrderBy(x => x.CreatedAt)
+                .Select(x => new TicketResolutionNoteDto
+                {
+                    NoteId = x.NoteId,
+                    TicketId = x.TicketId,
+                    UserId = x.UserId,
+                    SenderName = x.SenderName,
+                    Notes = x.Notes,
+                    StatusId = x.StatusId,
+                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : null,
+                    CreatedAt = x.CreatedAt
+                })
+                .ToListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetResolutionNotesByTicketIdAsync));
             throw;
         }
     }

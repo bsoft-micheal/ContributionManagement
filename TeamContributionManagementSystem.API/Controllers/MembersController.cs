@@ -99,9 +99,9 @@ public class MembersController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult($"{CommonMessages.General.DeserializationFailed}: {jsonEx.Message}", CommonStatusCodes.Status400BadRequest));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult(ex.Message, CommonStatusCodes.Status500InternalServerError));
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<IReadOnlyCollection<MemberDto>>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
     }
 

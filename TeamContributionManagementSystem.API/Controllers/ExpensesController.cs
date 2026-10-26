@@ -42,7 +42,7 @@ public class ExpensesController : ControllerBase
             var result = await _expenseService.GetAllExpenseAsync(eventName, category, status, startDate, endDate, cancellationToken);
             return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<ExpenseDto>>.SuccessResult(result, CommonMessages.Expenses.GetAllSuccess, CommonStatusCodes.Status200OK));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<IReadOnlyCollection<ExpenseDto>>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -68,7 +68,7 @@ public class ExpensesController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<ExpenseDto>.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<ExpenseDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -95,7 +95,7 @@ public class ExpensesController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<ExpenseDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<ExpenseDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -134,7 +134,7 @@ public class ExpensesController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<ExpenseDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<ExpenseDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
@@ -168,7 +168,7 @@ public class ExpensesController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse.FailureResult("This record no longer exists. Please refresh the page.", CommonStatusCodes.Status404NotFound));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }

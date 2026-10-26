@@ -90,7 +90,11 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
 
         CreateMap<SupportTicket, SupportTicketDto>()
-            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
+            .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt))
+            .ForMember(dest => dest.ResolutionNotesHistory, opt => opt.Ignore());
+
+        CreateMap<TicketResolutionNote, TicketResolutionNoteDto>()
+            .ForMember(dest => dest.StatusName, opt => opt.MapFrom(src => src.StatusItem != null ? src.StatusItem.StatusName : null));
 
         CreateMap<SystemSetting, SettingItemDto>()
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
