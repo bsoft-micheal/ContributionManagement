@@ -505,21 +505,10 @@ public class EventService : IEventService
                 .Distinct()
                 .ToList();
 
-            foreach (var typeId in allTypesToCheck)
-            {
-                var checkType = typeId == eventType.EventTypeId ? eventType : await _eventTypeRepository.GetByIdAsync(typeId, cancellationToken);
-                var typeName = checkType?.EventTypeName ?? "Event Type";
-
-                foreach (var (month, year) in distinctMonthYears)
-                {
-                    var isDuplicate = await _eventRepository.HasDuplicateEventTypeInMonthAsync(typeId, month, year, null, cancellationToken);
-                    if (isDuplicate)
-                    {
-                        var monthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
-                        throw new DuplicateEventException($"A {typeName} event already exists for {monthName}. Only one event per event type is allowed per calendar month.");
-                    }
-                }
-            }
+            // Validate Monthly Event Restrictions:
+            // Rule A: Birthday is allowed only once per calendar month
+            // Rule B: Non-Birthday prevents duplicate celebrants for the same event type in the same calendar month
+            await ValidateMonthlyEventRulesAsync(request, eventType, null, cancellationToken);
 
             var participantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
             if (participantIds.Count == 0)
@@ -1454,21 +1443,10 @@ public class EventService : IEventService
                 .Distinct()
                 .ToList();
 
-            foreach (var typeId in allTypesToCheck)
-            {
-                var checkType = typeId == eventType.EventTypeId ? eventType : await _eventTypeRepository.GetByIdAsync(typeId, cancellationToken);
-                var typeName = checkType?.EventTypeName ?? "Event Type";
-
-                foreach (var (month, year) in distinctMonthYears)
-                {
-                    var isDuplicate = await _eventRepository.HasDuplicateEventTypeInMonthAsync(typeId, month, year, eventId, cancellationToken);
-                    if (isDuplicate)
-                    {
-                        var monthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
-                        throw new DuplicateEventException($"A {typeName} event already exists for {monthName}. Only one event per event type is allowed per calendar month.");
-                    }
-                }
-            }
+            // Validate Monthly Event Restrictions:
+            // Rule A: Birthday is allowed only once per calendar month
+            // Rule B: Non-Birthday prevents duplicate celebrants for the same event type in the same calendar month
+            await ValidateMonthlyEventRulesAsync(request, eventType, eventId, cancellationToken);
 
             if (request.BaseAmount <= 0)
             {
@@ -2587,4 +2565,313 @@ public class EventService : IEventService
             throw;
         }
     }
+
+    public async Task<MonthlyEventRestrictionsDto> GetMonthlyEventRestrictionsAsync(int month, int year, Guid? excludeEventId = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = new MonthlyEventRestrictionsDto
+            {
+                Month = month,
+                Year = year
+            };
+
+            var activeEvents = await _eventRepository.GetActiveEventsInMonthAsync(month, year, excludeEventId, cancellationToken);
+            var allMembers = await _memberRepository.GetAllAsync(cancellationToken);
+            var activeMembers = allMembers.Where(m => m.IsActive && !m.IsDeleted).ToList();
+
+            var takenTypeIds = new HashSet<Guid>();
+            var takenTypeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var celebratingMembersList = new List<CelebratingMemberDto>();
+
+            foreach (var ev in activeEvents)
+            {
+                var evTypeName = ev.EventType?.EventTypeName?.Trim() ?? string.Empty;
+                var evName = ev.EventName?.Trim() ?? string.Empty;
+                var isBday = evTypeName.ToLower().Contains("birthday") || evName.ToLower().Contains("birthday");
+
+                if (isBday)
+                {
+                    result.IsBirthdayTaken = true;
+                    if (ev.EventTypeId != Guid.Empty) takenTypeIds.Add(ev.EventTypeId);
+                    if (!string.IsNullOrWhiteSpace(evTypeName)) takenTypeNames.Add(evTypeName);
+
+                    // Every active member whose birthday falls in this month is celebrating birthday
+                    foreach (var member in activeMembers)
+                    {
+                        if (member.DateOfBirth != default && member.DateOfBirth.Month == month)
+                        {
+                            celebratingMembersList.Add(new CelebratingMemberDto
+                            {
+                                MemberId = member.MemberId,
+                                MemberName = member.Name,
+                                EventTypeId = ev.EventTypeId,
+                                EventTypeName = "Birthday",
+                                EventId = ev.EventId,
+                                EventName = ev.EventName,
+                                EventDate = ev.EventDate,
+                                CelebrationReason = $"Birthday Celebration ({ev.EventName})"
+                            });
+                        }
+                    }
+                }
+                else
+                {
+                    // Non-Birthday event: extract celebrants with this event's event type
+                    // Check celebrants from EventDates JSON
+                    if (!string.IsNullOrWhiteSpace(ev.EventDates) && ev.EventDates.Trim().StartsWith("{"))
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(ev.EventDates);
+                            foreach (var prop in doc.RootElement.EnumerateObject())
+                            {
+                                var typeKey = prop.Name;
+                                Guid parsedTypeId = Guid.TryParse(typeKey, out var tid) ? tid : ev.EventTypeId;
+
+                                if (prop.Value.ValueKind == JsonValueKind.Object)
+                                {
+                                    foreach (var subProp in prop.Value.EnumerateObject())
+                                    {
+                                        if (Guid.TryParse(subProp.Name, out var mId))
+                                        {
+                                            var m = activeMembers.FirstOrDefault(x => x.MemberId == mId);
+                                            celebratingMembersList.Add(new CelebratingMemberDto
+                                            {
+                                                MemberId = mId,
+                                                MemberName = m?.Name ?? "Member",
+                                                EventTypeId = parsedTypeId,
+                                                EventTypeName = evTypeName,
+                                                EventId = ev.EventId,
+                                                EventName = ev.EventName,
+                                                EventDate = ev.EventDate,
+                                                CelebrationReason = $"{evTypeName} ({ev.EventName})"
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // Check celebrants from Description <!--celebrants:...-->
+                    if (!string.IsNullOrWhiteSpace(ev.Description))
+                    {
+                        var match = System.Text.RegularExpressions.Regex.Match(ev.Description, @"<!--celebrants:(.*?)-->");
+                        if (match.Success)
+                        {
+                            try
+                            {
+                                using var doc = JsonDocument.Parse(match.Groups[1].Value);
+                                foreach (var prop in doc.RootElement.EnumerateObject())
+                                {
+                                    var typeKey = prop.Name;
+                                    Guid parsedTypeId = Guid.TryParse(typeKey, out var tid) ? tid : ev.EventTypeId;
+                                    if (prop.Value.ValueKind == JsonValueKind.Array)
+                                    {
+                                        foreach (var item in prop.Value.EnumerateArray())
+                                        {
+                                            var mStr = item.GetString();
+                                            if (Guid.TryParse(mStr, out var mId))
+                                            {
+                                                var m = activeMembers.FirstOrDefault(x => x.MemberId == mId);
+                                                celebratingMembersList.Add(new CelebratingMemberDto
+                                                {
+                                                    MemberId = mId,
+                                                    MemberName = m?.Name ?? "Member",
+                                                    EventTypeId = parsedTypeId,
+                                                    EventTypeName = !string.IsNullOrWhiteSpace(evTypeName) ? evTypeName : typeKey,
+                                                    EventId = ev.EventId,
+                                                    EventName = ev.EventName,
+                                                    EventDate = ev.EventDate,
+                                                    CelebrationReason = $"{evTypeName} ({ev.EventName})"
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+            }
+
+            result.TakenEventTypeIds = takenTypeIds.ToList();
+            result.TakenEventTypeNames = takenTypeNames.ToList();
+            result.CelebratingMembers = celebratingMembersList;
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetMonthlyEventRestrictionsAsync));
+            throw;
+        }
+    }
+
+    private async Task ValidateMonthlyEventRulesAsync(
+        CreateEventRequestDto request,
+        EventType mainEventType,
+        Guid? excludeEventId,
+        CancellationToken cancellationToken)
+    {
+        var targetDate = request.EventDate.Date;
+        var month = targetDate.Month;
+        var year = targetDate.Year;
+        var monthName = targetDate.ToString("MMMM yyyy");
+
+        var restrictions = await GetMonthlyEventRestrictionsAsync(month, year, excludeEventId, cancellationToken);
+
+        // 1. Detect if Birthday is requested in this event
+        var isBirthdayRequested = (mainEventType?.EventTypeName?.Trim().ToLower().Contains("birthday") == true) ||
+            (request.EventName?.Trim().ToLower().Contains("birthday") == true);
+
+        if (!isBirthdayRequested && request.EventTypeIds != null && request.EventTypeIds.Count > 0)
+        {
+            foreach (var tId in request.EventTypeIds)
+            {
+                var t = tId == mainEventType?.EventTypeId ? mainEventType : await _eventTypeRepository.GetByIdAsync(tId, cancellationToken);
+                if (t?.EventTypeName?.Trim().ToLower().Contains("birthday") == true)
+                {
+                    isBirthdayRequested = true;
+                    break;
+                }
+            }
+        }
+
+        // Rule A: Birthday Event — Only once per calendar month
+        if (isBirthdayRequested && restrictions.IsBirthdayTaken)
+        {
+            throw new DuplicateEventException($"A Birthday event already exists for {monthName}. Only one Birthday event is allowed per calendar month.");
+        }
+
+        // Rule B: All Other Event Types — Prevent duplicate celebrants for the same event type
+        var requestedTypeCelebrants = new Dictionary<Guid, (string TypeName, HashSet<Guid> Celebrants)>();
+
+        void AddCelebrantsForType(Guid tId, string tName, IEnumerable<Guid>? memIds)
+        {
+            if (tId == Guid.Empty || memIds == null) return;
+            if (!requestedTypeCelebrants.TryGetValue(tId, out var entry))
+            {
+                entry = (tName, new HashSet<Guid>());
+                requestedTypeCelebrants[tId] = entry;
+            }
+            foreach (var mId in memIds)
+            {
+                if (mId != Guid.Empty) entry.Celebrants.Add(mId);
+            }
+        }
+
+
+
+        // EventTypeMembers dictionary
+        if (request.EventTypeMembers != null)
+        {
+            foreach (var (key, list) in request.EventTypeMembers)
+            {
+                if (list != null && list.Count > 0)
+                {
+                    Guid typeId = Guid.Empty;
+                    string typeName = key;
+                    if (Guid.TryParse(key, out var parsedGuid))
+                    {
+                        typeId = parsedGuid;
+                        var t = await _eventTypeRepository.GetByIdAsync(typeId, cancellationToken);
+                        if (t != null) typeName = t.EventTypeName;
+                    }
+                    else if (mainEventType != null && mainEventType.EventTypeName.Equals(key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        typeId = mainEventType.EventTypeId;
+                        typeName = mainEventType.EventTypeName;
+                    }
+                    else
+                    {
+                        var allTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
+                        var matched = allTypes.FirstOrDefault(t => t.EventTypeName.Equals(key, StringComparison.OrdinalIgnoreCase));
+                        if (matched != null)
+                        {
+                            typeId = matched.EventTypeId;
+                            typeName = matched.EventTypeName;
+                        }
+                    }
+
+                    if (typeId != Guid.Empty)
+                    {
+                        AddCelebrantsForType(typeId, typeName, list);
+                    }
+                }
+            }
+        }
+
+        // Description <!--celebrants:{...}-->
+        if (!string.IsNullOrWhiteSpace(request.Description))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(request.Description, @"<!--celebrants:(.*?)-->");
+            if (match.Success)
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(match.Groups[1].Value);
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        var key = prop.Name;
+                        var mIds = new List<Guid>();
+                        if (prop.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var item in prop.Value.EnumerateArray())
+                            {
+                                if (Guid.TryParse(item.GetString(), out var mId)) mIds.Add(mId);
+                            }
+                        }
+
+                        if (mIds.Count > 0)
+                        {
+                            Guid typeId = Guid.Empty;
+                            string typeName = key;
+                            if (Guid.TryParse(key, out var parsedGuid))
+                            {
+                                typeId = parsedGuid;
+                                var t = await _eventTypeRepository.GetByIdAsync(typeId, cancellationToken);
+                                if (t != null) typeName = t.EventTypeName;
+                            }
+                            else if (mainEventType != null && mainEventType.EventTypeName.Equals(key, StringComparison.OrdinalIgnoreCase))
+                            {
+                                typeId = mainEventType.EventTypeId;
+                                typeName = mainEventType.EventTypeName;
+                            }
+
+                            if (typeId != Guid.Empty)
+                            {
+                                AddCelebrantsForType(typeId, typeName, mIds);
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+
+        // Validate: reject only when the same celebrant already has a conflicting event of THAT same event type
+        foreach (var (typeId, info) in requestedTypeCelebrants)
+        {
+            if (info.TypeName.Trim().ToLower().Contains("birthday")) continue;
+
+            foreach (var cId in info.Celebrants)
+            {
+                var conflict = restrictions.CelebratingMembers.FirstOrDefault(c =>
+                    c.MemberId == cId &&
+                    (c.EventTypeId == typeId ||
+                     (!string.IsNullOrWhiteSpace(c.EventTypeName) && !string.IsNullOrWhiteSpace(info.TypeName) &&
+                      c.EventTypeName.Trim().Equals(info.TypeName.Trim(), StringComparison.OrdinalIgnoreCase))));
+
+                if (conflict != null)
+                {
+                    throw new InvalidOperationException($"Member '{conflict.MemberName}' already has a {info.TypeName} event in {monthName}. Duplicate events for the same member and event type are not allowed in the same calendar month.");
+                }
+            }
+        }
+    }
 }
+
