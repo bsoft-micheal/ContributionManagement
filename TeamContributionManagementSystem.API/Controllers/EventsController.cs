@@ -177,9 +177,11 @@ public class EventsController : ControllerBase
     [HttpGet(CommonRoutes.Events.GetAvailableAmountInHand)]
     [HttpGet(CommonRoutes.Events.GetAvailableBalance)]
     [ActionName(nameof(GetAvailableAmountInHandAsync))]
-    public async Task<ActionResult<ApiResponse<AvailableAmountInHandDto>>> GetAvailableAmountInHandAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<AvailableAmountInHandDto>>> GetAvailableAmountInHandAsync(
+        [FromQuery] Guid? excludeEventId,
+        CancellationToken cancellationToken)
     {
-        var result = await _eventService.GetAvailableAmountInHandAsync(cancellationToken);
+        var result = await _eventService.GetAvailableAmountInHandAsync(excludeEventId, cancellationToken);
         return StatusCode(
             CommonStatusCodes.Status200OK,
             ApiResponse<AvailableAmountInHandDto>.SuccessResult(

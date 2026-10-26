@@ -114,6 +114,48 @@ WHERE is_deleted = false;
             await EnsureMemberUserAsync(memberRole.RoleId, cancellationToken);
 
             await _context.SaveChangesAsync(cancellationToken);
+
+            // 7. Safe backfill for legacy expense records to populate budget_amount, extra_amount, and additional_expenses columns
+            try
+            {
+                var legacyExpenses = await _context.Expenses
+                    .Where(e => e.BudgetAmount == 0 && e.ExtraAmount == 0)
+                    .ToListAsync(cancellationToken);
+
+                if (legacyExpenses.Count > 0)
+                {
+                    bool anyModified = false;
+                    foreach (var leg in legacyExpenses)
+                    {
+                        ExpenseMetadataHelper.UnpackDescription(
+                            leg.Description,
+                            leg.Amount,
+                            out var cleanDesc,
+                            out var budgetAmt,
+                            out var extraAmt,
+                            out var addRows);
+
+                        leg.BudgetAmount = budgetAmt;
+                        leg.ExtraAmount = extraAmt;
+                        leg.Description = cleanDesc;
+                        if (addRows != null && addRows.Count > 0)
+                        {
+                            leg.AdditionalExpenses = System.Text.Json.JsonSerializer.Serialize(addRows);
+                        }
+                        anyModified = true;
+                    }
+
+                    if (anyModified)
+                    {
+                        await _context.SaveChangesAsync(cancellationToken);
+                        _logger?.LogInformation("Successfully backfilled {Count} legacy expense records to use budget_amount, extra_amount, and additional_expenses columns.", legacyExpenses.Count);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Non-fatal error backfilling legacy expenses: {Message}", ex.Message);
+            }
         }
         catch (Exception ex)
         {

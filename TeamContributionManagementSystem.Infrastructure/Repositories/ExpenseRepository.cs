@@ -58,30 +58,38 @@ public class ExpenseRepository : IExpenseRepository
             var items = await query
                 .OrderByDescending(x => x.ExpenseDate)
                 .ThenByDescending(x => x.ModifiedOn ?? x.CreatedAt)
-                .Select(x => new ExpenseDto
+                .Select(x => new
                 {
-                    ExpenseId = x.ExpenseId,
-                    EventName = x.EventName,
-                    Category = x.Category,
-                    Amount = x.Amount,
-                    ExpenseDate = x.ExpenseDate,
-                    Status = x.Status,
-                    SubmittedBy = x.SubmittedBy,
-                    ApprovedBy = x.ApprovedBy,
-                    Description = x.Description,
-                    FileName = x.FileName,
-                    FileUrl = x.FileName,
-                    IsActive = x.IsActive,
-                    CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
-                    CreatedAt = x.CreatedAt,
-                    CreatedOn = x.CreatedAt,
-                    ModifiedBy = x.ModifiedBy.HasValue ? x.ModifiedBy.Value.ToString() : null,
-                    ModifiedOn = x.ModifiedOn
+                    Expense = new ExpenseDto
+                    {
+                        ExpenseId = x.ExpenseId,
+                        EventName = x.EventName,
+                        Category = x.Category,
+                        Amount = x.Amount,
+                        BudgetAmount = x.BudgetAmount,
+                        ExtraAmount = x.ExtraAmount,
+                        ExpenseDate = x.ExpenseDate,
+                        Status = x.Status,
+                        SubmittedBy = x.SubmittedBy,
+                        ApprovedBy = x.ApprovedBy,
+                        Description = x.Description,
+                        FileName = x.FileName,
+                        FileUrl = x.FileName,
+                        IsActive = x.IsActive,
+                        CreatedBy = x.CreatedBy.HasValue ? x.CreatedBy.Value.ToString() : null,
+                        CreatedAt = x.CreatedAt,
+                        CreatedOn = x.CreatedAt,
+                        ModifiedBy = x.ModifiedBy.HasValue ? x.ModifiedBy.Value.ToString() : null,
+                        ModifiedOn = x.ModifiedOn
+                    },
+                    AdditionalExpensesJson = x.AdditionalExpenses
                 })
                 .ToListAsync(cancellationToken);
 
-            foreach (var item in items)
+            var result = new List<ExpenseDto>(items.Count);
+            foreach (var wrapper in items)
             {
+                var item = wrapper.Expense;
                 if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
                 {
                     item.CreatedBy = cName;
@@ -95,17 +103,44 @@ public class ExpenseRepository : IExpenseRepository
                     item.Description,
                     item.Amount,
                     out var cleanDesc,
-                    out var budgetAmt,
-                    out var extraAmt,
-                    out var addRows);
+                    out var legacyBudgetAmt,
+                    out var legacyExtraAmt,
+                    out var legacyAddRows);
 
                 item.Description = cleanDesc;
-                item.BudgetAmount = budgetAmt;
-                item.ExtraAmount = extraAmt;
-                item.AdditionalExpenses = addRows;
+
+                if (item.BudgetAmount > 0 || item.ExtraAmount > 0 || !string.IsNullOrWhiteSpace(wrapper.AdditionalExpensesJson))
+                {
+                    if (!string.IsNullOrWhiteSpace(wrapper.AdditionalExpensesJson))
+                    {
+                        try
+                        {
+                            item.AdditionalExpenses = System.Text.Json.JsonSerializer.Deserialize<List<ExpenseAdditionalItemDto>>(
+                                wrapper.AdditionalExpensesJson,
+                                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                            ) ?? new List<ExpenseAdditionalItemDto>();
+                        }
+                        catch
+                        {
+                            item.AdditionalExpenses = legacyAddRows;
+                        }
+                    }
+                    else
+                    {
+                        item.AdditionalExpenses = legacyAddRows;
+                    }
+                }
+                else
+                {
+                    item.BudgetAmount = legacyBudgetAmt;
+                    item.ExtraAmount = legacyExtraAmt;
+                    item.AdditionalExpenses = legacyAddRows;
+                }
+
+                result.Add(item);
             }
 
-            return items;
+            return result;
         }
         catch (Exception ex)
         {

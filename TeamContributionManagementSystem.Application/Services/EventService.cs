@@ -535,8 +535,34 @@ public class EventService : IEventService
             }
 
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
+            decimal effectiveBudget = plannedBudget;
             decimal allocatedAmount = 0m;
-            if (request.UseAvailableBalance)
+            decimal appliedAdjustment = 0m;
+            string appliedAdjustmentType = "None";
+            string? prevEventName = null;
+
+            if (request.UsePreviousEventBalance)
+            {
+                var balanceInfo = await GetAvailableAmountInHandAsync(null, cancellationToken);
+                if (balanceInfo.EligibleAdjustmentAmount > 0)
+                {
+                    appliedAdjustment = balanceInfo.EligibleAdjustmentAmount;
+                    appliedAdjustmentType = balanceInfo.AdjustmentType;
+                    prevEventName = balanceInfo.PreviousEventName;
+
+                    if (appliedAdjustmentType == "DeficitRecovery")
+                    {
+                        effectiveBudget = plannedBudget + appliedAdjustment;
+                        allocatedAmount = 0m;
+                    }
+                    else if (appliedAdjustmentType == "SurplusCredit")
+                    {
+                        appliedAdjustment = Math.Min(appliedAdjustment, plannedBudget);
+                        allocatedAmount = appliedAdjustment;
+                    }
+                }
+            }
+            else if (request.UseAvailableBalance)
             {
                 allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
                     ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value)
@@ -547,7 +573,7 @@ public class EventService : IEventService
                     throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the planned budget (₹{plannedBudget:N0}).");
                 }
 
-                var balanceInfo = await GetAvailableAmountInHandAsync(cancellationToken);
+                var balanceInfo = await GetAvailableAmountInHandAsync(null, cancellationToken);
                 if (allocatedAmount > balanceInfo.AvailableAmountInHand)
                 {
                     throw new InvalidOperationException($"The selected deduction (₹{allocatedAmount:N0}) exceeds the available Amount In Hand (₹{balanceInfo.AvailableAmountInHand:N0}).");
@@ -565,10 +591,18 @@ public class EventService : IEventService
             }
 
             var cleanDesc = (request.Description ?? string.Empty).Trim();
-            if (cleanDesc.Length > 1000)
+            if (cleanDesc.Length > 900)
             {
-                cleanDesc = cleanDesc.Substring(0, 1000);
+                cleanDesc = cleanDesc.Substring(0, 900);
             }
+
+            var packedDescription = EventMetadataHelper.PackDescription(
+                cleanDesc,
+                request.UsePreviousEventBalance && appliedAdjustment > 0,
+                appliedAdjustment,
+                appliedAdjustmentType,
+                plannedBudget,
+                prevEventName);
 
             var eventItem = new Event
             {
@@ -579,10 +613,10 @@ public class EventService : IEventService
                 EventDates = eventDatesSerialized,
                 CreatedBy = user.UserId,
                 CreatedAt = DateTime.UtcNow,
-                Description = cleanDesc,
+                Description = packedDescription,
                 Status = request.Status != 0 ? request.Status : EventStatus.Planned,
-                BaseAmount = plannedBudget,
-                UseAvailableBalance = request.UseAvailableBalance,
+                BaseAmount = effectiveBudget,
+                UseAvailableBalance = (request.UsePreviousEventBalance && appliedAdjustmentType == "SurplusCredit") || request.UseAvailableBalance,
                 AllocatedAmount = allocatedAmount
             };
 
@@ -601,9 +635,9 @@ public class EventService : IEventService
                 });
             }
 
-            var remainingBudgetToCollect = request.UseAvailableBalance
-                ? Math.Max(0m, plannedBudget - allocatedAmount)
-                : plannedBudget;
+            var remainingBudgetToCollect = (request.UsePreviousEventBalance && appliedAdjustmentType == "DeficitRecovery")
+                ? effectiveBudget
+                : (eventItem.UseAvailableBalance ? Math.Max(0m, effectiveBudget - allocatedAmount) : effectiveBudget);
 
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
@@ -1457,19 +1491,40 @@ public class EventService : IEventService
                 eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
             }
             var cleanDesc = (request.Description ?? string.Empty).Trim();
-            if (cleanDesc.Length > 1000)
+            if (cleanDesc.Length > 900)
             {
-                cleanDesc = cleanDesc.Substring(0, 1000);
+                cleanDesc = cleanDesc.Substring(0, 900);
             }
-            eventItem.Description = cleanDesc;
-            if (request.Status != 0)
-            {
-                eventItem.Status = request.Status;
-            }
+
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
-            eventItem.BaseAmount = plannedBudget;
+            decimal effectiveBudget = plannedBudget;
             decimal allocatedAmount = 0m;
-            if (request.UseAvailableBalance)
+            decimal appliedAdjustment = 0m;
+            string appliedAdjustmentType = "None";
+            string? prevEventName = null;
+
+            if (request.UsePreviousEventBalance)
+            {
+                var balanceInfo = await GetAvailableAmountInHandAsync(eventId, cancellationToken);
+                if (balanceInfo.EligibleAdjustmentAmount > 0)
+                {
+                    appliedAdjustment = balanceInfo.EligibleAdjustmentAmount;
+                    appliedAdjustmentType = balanceInfo.AdjustmentType;
+                    prevEventName = balanceInfo.PreviousEventName;
+
+                    if (appliedAdjustmentType == "DeficitRecovery")
+                    {
+                        effectiveBudget = plannedBudget + appliedAdjustment;
+                        allocatedAmount = 0m;
+                    }
+                    else if (appliedAdjustmentType == "SurplusCredit")
+                    {
+                        appliedAdjustment = Math.Min(appliedAdjustment, plannedBudget);
+                        allocatedAmount = appliedAdjustment;
+                    }
+                }
+            }
+            else if (request.UseAvailableBalance)
             {
                 allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
                     ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value)
@@ -1481,8 +1536,22 @@ public class EventService : IEventService
                 }
             }
 
-            eventItem.BaseAmount = plannedBudget;
-            eventItem.UseAvailableBalance = request.UseAvailableBalance;
+            var packedDescription = EventMetadataHelper.PackDescription(
+                cleanDesc,
+                request.UsePreviousEventBalance && appliedAdjustment > 0,
+                appliedAdjustment,
+                appliedAdjustmentType,
+                plannedBudget,
+                prevEventName);
+
+            eventItem.Description = packedDescription;
+            if (request.Status != 0)
+            {
+                eventItem.Status = request.Status;
+            }
+
+            eventItem.BaseAmount = effectiveBudget;
+            eventItem.UseAvailableBalance = (request.UsePreviousEventBalance && appliedAdjustmentType == "SurplusCredit") || request.UseAvailableBalance;
             eventItem.AllocatedAmount = allocatedAmount;
             eventItem.ModifiedOn = DateTime.UtcNow;
 
@@ -1498,9 +1567,9 @@ public class EventService : IEventService
                 throw new InvalidOperationException(CommonMessages.Events.ParticipantsNotFound);
             }
 
-            var remainingBudgetToCollect = request.UseAvailableBalance
-                ? Math.Max(0m, plannedBudget - allocatedAmount)
-                : plannedBudget;
+            var remainingBudgetToCollect = (request.UsePreviousEventBalance && appliedAdjustmentType == "DeficitRecovery")
+                ? effectiveBudget
+                : (eventItem.UseAvailableBalance ? Math.Max(0m, effectiveBudget - allocatedAmount) : effectiveBudget);
 
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
@@ -2083,12 +2152,51 @@ public class EventService : IEventService
 
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
             var memberLookup = members.ToDictionary(m => m.MemberId);
-            var allocatedAmount = request.UseAvailableBalance
-                ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value) : plannedBudget)
-                : 0m;
-            var remainingBudgetToCollect = request.UseAvailableBalance
-                ? Math.Max(0m, plannedBudget - allocatedAmount)
-                : plannedBudget;
+
+            decimal effectiveBudget = plannedBudget;
+            decimal eligibleAdj = 0m;
+            string adjType = "None";
+
+            var balanceInfo = await GetAvailableAmountInHandAsync(null, cancellationToken);
+            if (request.UsePreviousEventBalance && balanceInfo.EligibleAdjustmentAmount > 0)
+            {
+                adjType = balanceInfo.AdjustmentType;
+                eligibleAdj = balanceInfo.EligibleAdjustmentAmount;
+
+                if (adjType == "DeficitRecovery")
+                {
+                    effectiveBudget = plannedBudget + eligibleAdj;
+                }
+                else if (adjType == "SurplusCredit")
+                {
+                    eligibleAdj = Math.Min(eligibleAdj, plannedBudget);
+                }
+            }
+
+            decimal allocatedAmount = 0m;
+            decimal remainingBudgetToCollect;
+
+            if (request.UsePreviousEventBalance && adjType == "DeficitRecovery")
+            {
+                // Deficit recovery increases collection requirement to recover previous overspend
+                remainingBudgetToCollect = effectiveBudget;
+            }
+            else if (request.UsePreviousEventBalance && adjType == "SurplusCredit")
+            {
+                // Surplus credit acts as allocated amount deduction
+                allocatedAmount = eligibleAdj;
+                remainingBudgetToCollect = Math.Max(0m, plannedBudget - allocatedAmount);
+            }
+            else
+            {
+                // Normal available balance deduction logic
+                allocatedAmount = request.UseAvailableBalance
+                    ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value) : plannedBudget)
+                    : 0m;
+                remainingBudgetToCollect = request.UseAvailableBalance
+                    ? Math.Max(0m, plannedBudget - allocatedAmount)
+                    : plannedBudget;
+            }
 
             var detailedCalculations = CalculateDetailedMemberContributions(
                 eventType,
@@ -2133,6 +2241,10 @@ public class EventService : IEventService
                 PlannedBudget = plannedBudget,
                 ExpectedCollection = RoundingHelper.RoundToWhole(totalCalculated),
                 StandardContributionAmount = RoundingHelper.RoundToWhole(standardAmt),
+                UsePreviousEventBalance = request.UsePreviousEventBalance,
+                EligibleAdjustmentAmount = eligibleAdj,
+                AdjustmentType = adjType,
+                EffectiveBudget = effectiveBudget,
                 Members = orderedPreview
             };
         }
@@ -2332,7 +2444,7 @@ public class EventService : IEventService
         return (fallbackSubject, fallbackDesc);
     }
 
-    public async Task<AvailableAmountInHandDto> GetAvailableAmountInHandAsync(CancellationToken cancellationToken = default)
+    public async Task<AvailableAmountInHandDto> GetAvailableAmountInHandAsync(Guid? excludeEventId = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -2365,14 +2477,15 @@ public class EventService : IEventService
 
             var totalExpenses = allExpenses.Sum(e => e.Amount);
 
-            // 3. Actual Amount In Hand
-            var actualAmountInHand = Math.Max(0m, totalCollections - totalExpenses);
+            // 3. Raw Amount In Hand (can be negative if overspent!)
+            var rawAmountInHand = totalCollections - totalExpenses;
+            var actualAmountInHand = Math.Max(0m, rawAmountInHand);
 
             // 4. Calculate unspent reservations for active/planned events using available balance
             var allEvents = await _eventRepository.GetAllAsync(null, null, cancellationToken);
             decimal totalReserved = 0m;
 
-            foreach (var ev in allEvents.Where(e => e.UseAvailableBalance && e.AllocatedAmount > 0))
+            foreach (var ev in allEvents.Where(e => e.UseAvailableBalance && e.AllocatedAmount > 0 && (!excludeEventId.HasValue || e.EventId != excludeEventId.Value)))
             {
                 var eventExpenses = allExpenses
                     .Where(ex => string.Equals(ex.EventName?.Trim(), ev.EventName?.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -2385,11 +2498,87 @@ public class EventService : IEventService
 
             var availableAmountInHand = Math.Max(0m, actualAmountInHand - totalReserved);
 
+            // 5. Calculate Total Pending Collections across active/published events
+            var totalPending = allEvents.Sum(e => Math.Max(0m, e.TotalExpectedAmount - e.TotalPaidAmount));
+
+            // 6. Find most recent previous event
+            var previousEvent = allEvents
+                .Where(e => (!excludeEventId.HasValue || e.EventId != excludeEventId.Value) && (e.Status == EventStatus.Completed || e.Status == EventStatus.Active || e.PublishedAt.HasValue))
+                .OrderByDescending(e => e.EventDate)
+                .ThenByDescending(e => e.CreatedAt)
+                .FirstOrDefault();
+
+            // 7. Check if any planned/active event has already absorbed/scheduled deficit recovery
+            decimal alreadyRecoveredDeficits = 0m;
+            foreach (var ev in allEvents.Where(e => e.Status != EventStatus.Cancelled && (!excludeEventId.HasValue || e.EventId != excludeEventId.Value)))
+            {
+                var (_, usePrev, adjAmt, adjType, _, _) = EventMetadataHelper.UnpackDescription(ev.Description);
+                if (usePrev && adjType == "DeficitRecovery" && adjAmt > 0)
+                {
+                    alreadyRecoveredDeficits += adjAmt;
+                }
+            }
+
+            // 8. Calculate Eligible Carry-Forward / Adjustment Amount C
+            decimal eligibleAdjustment = 0m;
+            string adjustmentType = "None";
+
+            if (rawAmountInHand < 0m)
+            {
+                // Deficit Recovery: A < 0
+                // But pending collections (P) from in-progress events will cover their own
+                // expenses once collected. Only the portion that exceeds pending is a true deficit.
+                // Uncovered Deficit = max(0, |A| - P - alreadyRecoveredDeficits)
+                var rawDeficit = Math.Abs(rawAmountInHand);
+                var netUnrecoveredDeficit = Math.Max(0m, rawDeficit - totalPending - alreadyRecoveredDeficits);
+                if (netUnrecoveredDeficit > 0m)
+                {
+                    eligibleAdjustment = netUnrecoveredDeficit;
+                    adjustmentType = "DeficitRecovery";
+                }
+                else
+                {
+                    eligibleAdjustment = 0m;
+                    adjustmentType = "None";
+                }
+            }
+            else if (rawAmountInHand > 0m)
+            {
+                // Surplus: A >= 0 -> C = max(0, A - P)
+                if (rawAmountInHand > totalPending)
+                {
+                    eligibleAdjustment = rawAmountInHand - totalPending;
+                    adjustmentType = "SurplusCredit";
+                }
+                else
+                {
+                    eligibleAdjustment = 0m;
+                    adjustmentType = "None";
+                }
+            }
+
+            // Compute a display-adjusted Amount In Hand:
+            // Only offset by already-recovered deficits (deficit recovery already baked into next event's budget).
+            // Do NOT add totalPending here — pending collections are not yet received cash.
+            // Do NOT clamp to zero — a negative value means there is still an uncovered shortfall.
+            // Formula: netRawAmountInHand = rawAmountInHand + alreadyRecoveredDeficits
+            // Example: rawAIH = -2600, recovered = 100  →  -2600 + 100 = -2500 (correct display)
+            var netRawAmountInHand = rawAmountInHand < 0m && alreadyRecoveredDeficits > 0m
+                ? rawAmountInHand + alreadyRecoveredDeficits
+                : rawAmountInHand;
+
             return new AvailableAmountInHandDto
             {
                 ActualAmountInHand = RoundingHelper.RoundToWhole(actualAmountInHand),
                 TotalReservedAmount = RoundingHelper.RoundToWhole(totalReserved),
-                AvailableAmountInHand = RoundingHelper.RoundToWhole(availableAmountInHand)
+                AvailableAmountInHand = RoundingHelper.RoundToWhole(availableAmountInHand),
+                RawAmountInHand = RoundingHelper.RoundToWhole(netRawAmountInHand),
+                TotalPendingAmount = RoundingHelper.RoundToWhole(totalPending),
+                EligibleAdjustmentAmount = RoundingHelper.RoundToWhole(eligibleAdjustment),
+                TotalRecoveredDeficits = RoundingHelper.RoundToWhole(alreadyRecoveredDeficits),
+                AdjustmentType = adjustmentType,
+                PreviousEventName = previousEvent?.EventName,
+                PreviousEventId = previousEvent?.EventId
             };
         }
         catch (Exception ex)
