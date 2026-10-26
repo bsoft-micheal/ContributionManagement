@@ -173,6 +173,42 @@ public class SupportTicketService : ISupportTicketService
                 }
             }
 
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue && _eventRepository != null)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    var orgUserIdStr = orgUserId.Value.ToString();
+                    var orgUserName = _currentUserService.UserName?.Trim();
+
+                    bool isAllowed =
+                        (ticket.EventId.HasValue && myEventIds.Contains(ticket.EventId.Value)) ||
+                        (!string.IsNullOrWhiteSpace(ticket.RelatedEvent) && myEventNames.Contains(ticket.RelatedEvent.Trim().ToLower())) ||
+                        (orgUserIdStr != null && string.Equals(ticket.MemberId, orgUserIdStr, StringComparison.OrdinalIgnoreCase)) ||
+                        (ticket.UserId.HasValue && ticket.UserId.Value == orgUserId.Value) ||
+                        (ticket.CreatedBy.HasValue && ticket.CreatedBy.Value == orgUserId.Value) ||
+                        (orgUserName != null && string.Equals(ticket.MemberName, orgUserName, StringComparison.OrdinalIgnoreCase));
+
+                    if (!isAllowed)
+                    {
+                        throw new UnauthorizedAccessException("Access denied to requested support ticket.");
+                    }
+                }
+            }
+
             var dto = _mapper.Map<SupportTicketDto>(ticket);
             dto.ResolutionNotesHistory = await _ticketRepository.GetResolutionNotesByTicketIdAsync(ticket.TicketId, cancellationToken);
             dto.VerifiedBy = !string.IsNullOrWhiteSpace(ticket.AssignedTo) ? ticket.AssignedTo : null;

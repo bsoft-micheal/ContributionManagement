@@ -91,6 +91,10 @@ public class PaymentsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
         }
+        catch (ArgumentException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
+        }
         catch (Exception)
         {
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<PaymentTransactionDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
@@ -113,6 +117,10 @@ public class PaymentsController : ControllerBase
         catch (AlreadyProcessedException ex)
         {
             return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
+        }
+        catch (ArgumentException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status400BadRequest, ApiResponse<PaymentTransactionDto>.FailureResult(ex.Message, CommonStatusCodes.Status400BadRequest));
         }
         catch (Exception)
         {

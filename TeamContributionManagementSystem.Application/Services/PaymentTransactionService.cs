@@ -167,6 +167,16 @@ public class PaymentTransactionService : IPaymentTransactionService
     {
         try
         {
+            if (request.Amount <= 0)
+            {
+                throw new ArgumentException("Payment amount must be greater than zero.");
+            }
+
+            if (request.Amount % 1 != 0)
+            {
+                throw new ArgumentException("Payment amount cannot contain decimal or point values. Only whole numbers (₹) are allowed.");
+            }
+
             if (!string.IsNullOrWhiteSpace(request.Utr))
             {
                 var existingTxns = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
@@ -278,6 +288,21 @@ public class PaymentTransactionService : IPaymentTransactionService
                 throw new ArgumentException("Contribution amount must be greater than zero.");
             }
 
+            if (request.Amount % 1 != 0)
+            {
+                throw new ArgumentException("Contribution amount cannot contain decimal or point values. Only whole numbers (₹) are allowed.");
+            }
+
+            if (request.CashAmount.HasValue && request.CashAmount.Value % 1 != 0)
+            {
+                throw new ArgumentException("Cash amount cannot contain decimal or point values. Only whole numbers (₹) are allowed.");
+            }
+
+            if (request.UpiAmount.HasValue && request.UpiAmount.Value % 1 != 0)
+            {
+                throw new ArgumentException("UPI amount cannot contain decimal or point values. Only whole numbers (₹) are allowed.");
+            }
+
             if (!string.IsNullOrWhiteSpace(request.Utr))
             {
                 var existingTxns = await _transactionRepository.GetAllAsync(cancellationToken: cancellationToken);
@@ -317,6 +342,11 @@ public class PaymentTransactionService : IPaymentTransactionService
                     if (split.Amount <= 0)
                     {
                         throw new ArgumentException("Each split payment amount must be greater than zero.");
+                    }
+
+                    if (split.Amount % 1 != 0)
+                    {
+                        throw new ArgumentException("Split payment amount cannot contain decimal or point values. Only whole numbers (₹) are allowed.");
                     }
 
                     if (string.IsNullOrWhiteSpace(split.Mode))
@@ -823,6 +853,24 @@ public class PaymentTransactionService : IPaymentTransactionService
                     throw new RecordDeletedException();
                 }
                 throw new RecordDeletedException();
+            }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet();
+
+                    var isMyEvent = (entity.EventId.HasValue && myEventIds.Contains(entity.EventId.Value)) ||
+                                    (!string.IsNullOrWhiteSpace(entity.EventName) && myEventNames.Contains(entity.EventName.Trim().ToLower()));
+                    if (!isMyEvent)
+                    {
+                        throw new UnauthorizedAccessException("You are only permitted to delete transactions for events you organize.");
+                    }
+                }
             }
 
             _transactionRepository.Delete(entity);

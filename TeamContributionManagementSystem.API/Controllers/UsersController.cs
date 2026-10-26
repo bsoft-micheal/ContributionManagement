@@ -176,6 +176,34 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Enables or disables two-factor authentication (MFA) for a user.
+    /// </summary>
+    /// <param name="id">The unique identifier of the user.</param>
+    /// <param name="request">Optional target state.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpPut(CommonRoutes.Users.ToggleTwoFactor)]
+    [ActionName(nameof(ToggleTwoFactorAsync))]
+    public async Task<ActionResult<ApiResponse<bool>>> ToggleTwoFactorAsync(Guid id, [FromBody] ToggleTwoFactorRequestDto? request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _userService.ToggleTwoFactorAsync(id, request?.Enable, cancellationToken);
+            var message = result
+                ? "Two-Factor Authentication (2FA) enabled successfully."
+                : "Two-Factor Authentication (2FA) disabled successfully.";
+            return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<bool>.SuccessResult(result, message, CommonStatusCodes.Status200OK));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return StatusCode(CommonStatusCodes.Status404NotFound, ApiResponse<bool>.FailureResult(ex.Message, CommonStatusCodes.Status404NotFound));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<bool>.FailureResult(ex.Message, CommonStatusCodes.Status500InternalServerError));
+        }
+    }
+
+    /// <summary>
     /// Retrieves the profile of the currently authenticated user.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

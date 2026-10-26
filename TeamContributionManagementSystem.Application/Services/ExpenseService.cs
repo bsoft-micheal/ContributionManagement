@@ -64,8 +64,7 @@ public class ExpenseService : IExpenseService
                     var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
 
                     expenses = expenses.Where(ex =>
-                        (!string.IsNullOrWhiteSpace(ex.EventName) && myEventNames.Contains(ex.EventName.Trim().ToLower())) ||
-                        (!string.IsNullOrWhiteSpace(ex.SubmittedBy) && string.Equals(ex.SubmittedBy.Trim(), _currentUserService.UserName?.Trim(), StringComparison.OrdinalIgnoreCase))
+                        !string.IsNullOrWhiteSpace(ex.EventName) && myEventNames.Contains(ex.EventName.Trim().ToLower())
                     ).ToList();
                 }
             }
@@ -92,6 +91,31 @@ public class ExpenseService : IExpenseService
                 }
                 throw new RecordDeletedException();
             }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    if (string.IsNullOrWhiteSpace(expense.EventName) || !myEventNames.Contains(expense.EventName.Trim().ToLower()))
+                    {
+                        throw new UnauthorizedAccessException("Organizers can only view expenses for events they created.");
+                    }
+                }
+            }
+
             return MapToExpenseDtoWithMetadata(expense);
         }
         catch (Exception ex) when (ex is RecordDeletedException or RecordModifiedException or AlreadyProcessedException)
@@ -182,7 +206,7 @@ public class ExpenseService : IExpenseService
 
                     if (!isMyEvent)
                     {
-                        throw new UnauthorizedAccessException("Organizers can only submit expenses for events they organize.");
+                        throw new UnauthorizedAccessException("Organizers can only submit expenses for events they created.");
                     }
                 }
             }
@@ -279,6 +303,35 @@ public class ExpenseService : IExpenseService
                     throw new RecordDeletedException();
                 }
                 throw new RecordDeletedException();
+            }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+
+                    bool isExistingExpenseAllowed = !string.IsNullOrWhiteSpace(expense.EventName) && myEventNames.Contains(expense.EventName.Trim().ToLower());
+                    bool isNewEventAllowed = (request.EventId.HasValue && myEventIds.Contains(request.EventId.Value)) ||
+                        (!string.IsNullOrWhiteSpace(request.EventName) && myEventNames.Contains(request.EventName.Trim().ToLower()));
+
+                    if (!isExistingExpenseAllowed || !isNewEventAllowed)
+                    {
+                        throw new UnauthorizedAccessException("Organizers can only edit expenses for events they created.");
+                    }
+                }
             }
 
             if (request.ModifiedOn.HasValue && expense.ModifiedOn.HasValue)
@@ -531,6 +584,30 @@ public class ExpenseService : IExpenseService
                     throw new RecordDeletedException();
                 }
                 throw new RecordDeletedException();
+            }
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    if (string.IsNullOrWhiteSpace(expense.EventName) || !myEventNames.Contains(expense.EventName.Trim().ToLower()))
+                    {
+                        throw new UnauthorizedAccessException("Organizers can only delete expenses for events they created.");
+                    }
+                }
             }
 
             _expenseRepository.Delete(expense);

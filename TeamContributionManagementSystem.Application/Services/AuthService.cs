@@ -130,7 +130,10 @@ public class AuthService : IAuthService
                 }
             }
 
-            if (user.MfaDevices != null && user.MfaDevices.Any())
+            // Two-Factor Authentication check:
+            // Only require 2FA OTP verification if MFA is enabled (IsTwoFactorEnabled) AND the user has a configured MFA device.
+            // If MFA is disabled (IsTwoFactorEnabled == false), user can log in directly without 2FA even if a device is registered.
+            if (user.IsTwoFactorEnabled && user.MfaDevices != null && user.MfaDevices.Any())
             {
                 return new AuthResponseDto
                 {
@@ -197,7 +200,7 @@ public class AuthService : IAuthService
                 }
             }
 
-            if (user.MfaDevices == null || !user.MfaDevices.Any())
+            if (!user.IsTwoFactorEnabled || user.MfaDevices == null || !user.MfaDevices.Any())
             {
                 throw new InvalidOperationException(CommonMessages.Mfa.NotEnabled);
             }
