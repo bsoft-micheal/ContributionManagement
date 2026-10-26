@@ -487,6 +487,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
         var isQrConfigured = !string.IsNullOrWhiteSpace(effectiveUpiId) || isUploadedMode;
 
         var qrCodeCardHtml = string.Empty;
+        InlineEmailImage? inlineImage = null;
 
         if (isQrConfigured)
         {
@@ -496,7 +497,6 @@ public class ContributionReminderJobService : IContributionReminderJobService
             var qrContentId = $"qr_{Guid.NewGuid():N}";
             var tempDir = Path.Combine(Path.GetTempPath(), "ContributionManagement_EmailQr");
             Directory.CreateDirectory(tempDir);
-            InlineEmailImage? inlineImage = null;
 
             if (isUploadedMode && !string.IsNullOrWhiteSpace(paymentSetting?.QrImageUrl))
             {
@@ -568,10 +568,10 @@ public class ContributionReminderJobService : IContributionReminderJobService
 
         var (resolvedSubject, resolvedDescription, qrEmbeddedInDesc) = ResolveEmailTemplate(
             systemSettings,
-            eventTypeName,
-            memberName,
-            eventName,
-            eventDescription,
+            eventTypeName ?? "Event",
+            memberName ?? "Member",
+            eventName ?? "Event",
+            eventDescription ?? string.Empty,
             formattedAmount,
             formattedDueDate,
             orgName,
@@ -582,7 +582,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
 
         var subject = !string.IsNullOrWhiteSpace(resolvedSubject)
             ? resolvedSubject
-            : $"Payment Reminder: {eventName} - Contribution Due ({formattedAmount})";
+            : $"Payment Reminder: {eventName ?? "Event"} - Contribution Due ({formattedAmount})";
 
         var body = $@"<!DOCTYPE html>
 <html lang=""en"">
