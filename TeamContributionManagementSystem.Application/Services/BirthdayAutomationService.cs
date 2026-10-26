@@ -146,12 +146,12 @@ public class BirthdayAutomationService : IBirthdayAutomationService
             return;
         }
 
-        // Determine the user's celebration date in tomorrow's month/year
-        var celebrationDate = await ResolveMemberCelebrationDateAsync(user.UserId, user.DateOfBirth, tomorrowIst.Year, tomorrowIst.Month, cancellationToken);
-        if (celebrationDate.Date != tomorrowIst.Date)
+        // Determine if the user's birthday is tomorrow based on their DateOfBirth
+        var dob = user.DateOfBirth;
+        if (dob.Month != tomorrowIst.Month || dob.Day != tomorrowIst.Day)
         {
-            _logger.LogInformation("User {UserId}'s celebration date ({Date:yyyy-MM-dd}) does not match tomorrow ({Tomorrow:yyyy-MM-dd}). No catch-up required.",
-                newUserId, celebrationDate, tomorrowIst);
+            _logger.LogInformation("User {UserId}'s DateOfBirth ({Date:yyyy-MM-dd}) does not match tomorrow ({Tomorrow:yyyy-MM-dd}). No catch-up required.",
+                newUserId, dob, tomorrowIst);
             return;
         }
 
@@ -168,6 +168,7 @@ public class BirthdayAutomationService : IBirthdayAutomationService
 
         // 1. Retrieve all active, eligible users in the organization
         var allUsers = await _userRepository.GetAllAsync(cancellationToken);
+
         var activeRecipients = allUsers
             .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited && !string.IsNullOrWhiteSpace(u.Email))
             .DistinctBy(u => u.Email.Trim().ToLowerInvariant())
@@ -181,7 +182,7 @@ public class BirthdayAutomationService : IBirthdayAutomationService
 
         // 2. Resolve all celebrants whose celebration date is targetDateOnly
         var candidateUsers = allUsers
-            .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited && u.DateOfBirth != default)
+            .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited && u.DateOfBirth.HasValue && u.DateOfBirth.Value != default)
             .ToList();
 
         if (specificCelebrantId.HasValue)
@@ -192,8 +193,11 @@ public class BirthdayAutomationService : IBirthdayAutomationService
         var matchingCelebrants = new List<CelebrantInfo>();
         foreach (var candidate in candidateUsers)
         {
-            var celDate = await ResolveMemberCelebrationDateAsync(candidate.UserId, candidate.DateOfBirth, targetDateOnly.Year, targetDateOnly.Month, cancellationToken);
-            if (celDate.Date == targetDateOnly)
+            if (!candidate.DateOfBirth.HasValue || candidate.DateOfBirth.Value == default) continue;
+
+            var dob = candidate.DateOfBirth.Value;
+            // Strict check: Date of Birth month & day must match the target date (October 27)
+            if (dob.Month == targetDateOnly.Month && dob.Day == targetDateOnly.Day)
             {
                 var displayName = !string.IsNullOrWhiteSpace(candidate.FullName) ? candidate.FullName.Trim() : candidate.Username?.Trim() ?? "Team Member";
                 matchingCelebrants.Add(new CelebrantInfo(candidate.UserId, displayName, candidate.Email));
@@ -264,7 +268,6 @@ public class BirthdayAutomationService : IBirthdayAutomationService
                     }, cancellationToken);
                 }
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation("Sent birthday reminder to {RecipientEmail} for celebrant(s): {Celebrants}", recipient.Email, celebrantNamesList);
             }
             catch (Exception ex)
@@ -287,14 +290,12 @@ public class BirthdayAutomationService : IBirthdayAutomationService
                         ErrorMessage = ex.Message
                     }, cancellationToken);
                 }
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
         }
     }
 
     /// <summary>
     /// Resolves actual configured celebration date for a member in a specific year and month.
-    /// First inspects existing published/planned Birthday event's EventDates mapping.
     /// If not explicitly configured, falls back to the member's DateOfBirth calendar day.
     /// </summary>
     private async Task<DateTime> ResolveMemberCelebrationDateAsync(
