@@ -21,9 +21,9 @@ public interface IEventRepository
     Task<bool> HasGalleryPhotosAsync(string eventName, CancellationToken cancellationToken = default);
     Task AddAsync(Event eventItem, CancellationToken cancellationToken = default);
     Task AddParticipantsAsync(IEnumerable<EventParticipant> participants, CancellationToken cancellationToken = default);
-    Task AddParticipantAsync(EventParticipant participant, CancellationToken cancellationToken = default) => AddParticipantsAsync(new[] { participant }, cancellationToken);
     void Update(Event eventItem);
     void DeleteParticipants(IEnumerable<EventParticipant> participants);
+    Task<List<Event>> GetActiveEventsInMonthAsync(int month, int year, Guid? excludeEventId = null, CancellationToken cancellationToken = default);
 
     // Standardized naming
     Task<List<EventSummaryDto>> GetAllEventAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetAllAsync(month, year, cancellationToken);

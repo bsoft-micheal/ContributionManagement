@@ -1035,11 +1035,14 @@ public class EventRepository : IEventRepository
 
             var existingEvents = await _context.Events
                 .AsNoTracking()
+                .Include(e => e.EventType)
                 .Where(e => !e.IsDeleted && (!excludeEventId.HasValue || e.EventId != excludeEventId.Value))
                 .Select(e => new
                 {
                     e.EventId,
                     e.EventTypeId,
+                    EventTypeName = e.EventType != null ? e.EventType.EventTypeName : string.Empty,
+                    e.EventName,
                     e.EventDate,
                     e.EventDates
                 })
@@ -1047,8 +1050,17 @@ public class EventRepository : IEventRepository
 
             foreach (var ev in existingEvents)
             {
+                var evTypeName = ev.EventTypeName.Trim().ToLowerInvariant();
+                var evName = (ev.EventName ?? string.Empty).Trim().ToLowerInvariant();
+                var isSameType = ev.EventTypeId == targetTypeId ||
+                    (!string.IsNullOrWhiteSpace(targetTypeName) && !string.IsNullOrWhiteSpace(evTypeName) &&
+                     evTypeName.Replace(" ", "").Replace("-", "").Replace("_", "").Equals(
+                         targetTypeName.Replace(" ", "").Replace("-", "").Replace("_", ""),
+                         StringComparison.OrdinalIgnoreCase)) ||
+                    (targetTypeName.Contains("birthday") && (evTypeName.Contains("birthday") || evName.Contains("birthday")));
+
                 // Check primary event type and primary date
-                if (ev.EventTypeId == targetTypeId && ev.EventDate.Month == month && ev.EventDate.Year == year)
+                if (isSameType && ev.EventDate.Month == month && ev.EventDate.Year == year)
                 {
                     return true;
                 }
@@ -1103,7 +1115,7 @@ public class EventRepository : IEventRepository
                             {
                                 // Even if type doesn't match prop.Name, check if this event has primary type == targetTypeId
                                 // and one of the sub-dates is in target month/year
-                                if (ev.EventTypeId == targetTypeId)
+                                if (isSameType)
                                 {
                                     if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.String)
                                     {
@@ -1140,6 +1152,75 @@ public class EventRepository : IEventRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(HasDuplicateEventTypeInMonthAsync));
+            throw;
+        }
+    }
+
+    public async Task<List<Event>> GetActiveEventsInMonthAsync(int month, int year, Guid? excludeEventId = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var query = _context.Events
+                .Include(e => e.EventType)
+                .Include(e => e.Participants)
+                    .ThenInclude(p => p.Member)
+                .Where(e => !e.IsDeleted && (!excludeEventId.HasValue || e.EventId != excludeEventId.Value));
+
+            var allCandidates = await query.ToListAsync(cancellationToken);
+            var results = new List<Event>();
+
+            foreach (var ev in allCandidates)
+            {
+                if (ev.EventDate.Month == month && ev.EventDate.Year == year)
+                {
+                    results.Add(ev);
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(ev.EventDates) && ev.EventDates.Trim().StartsWith("{"))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(ev.EventDates);
+                        bool inMonth = false;
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                if (DateTime.TryParse(prop.Value.GetString(), out var d) && d.Month == month && d.Year == year)
+                                {
+                                    inMonth = true;
+                                    break;
+                                }
+                            }
+                            else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                            {
+                                foreach (var sub in prop.Value.EnumerateObject())
+                                {
+                                    if (sub.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                                        DateTime.TryParse(sub.Value.GetString(), out var sd) && sd.Month == month && sd.Year == year)
+                                    {
+                                        inMonth = true;
+                                        break;
+                                    }
+                                }
+                                if (inMonth) break;
+                            }
+                        }
+                        if (inMonth)
+                        {
+                            results.Add(ev);
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            return results;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetActiveEventsInMonthAsync));
             throw;
         }
     }

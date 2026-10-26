@@ -55,6 +55,21 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves monthly event restrictions, including taken event types and already-celebrating members for a given month and year.
+    /// </summary>
+    [HttpGet("getMonthlyRestrictionsAsync")]
+    [ActionName(nameof(GetMonthlyRestrictionsAsync))]
+    public async Task<ActionResult<ApiResponse<MonthlyEventRestrictionsDto>>> GetMonthlyRestrictionsAsync(
+        [FromQuery] int month,
+        [FromQuery] int year,
+        [FromQuery] Guid? excludeEventId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _eventService.GetMonthlyRestrictionsAsync(month, year, excludeEventId, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<MonthlyEventRestrictionsDto>.SuccessResult(result, "Monthly event restrictions retrieved successfully.", CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
     /// Creates a new event and automatically adds the specified members as participants (Admin or Organizer).
     /// </summary>
     /// <param name="request">The event details and participant list.</param>
