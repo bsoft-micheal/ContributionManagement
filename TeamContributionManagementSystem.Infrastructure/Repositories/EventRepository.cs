@@ -81,11 +81,6 @@ public class EventRepository : IEventRepository
                         )) ||
                         !string.IsNullOrEmpty(x.VerifiedBy) ||
                         x.VerifiedOn != null
-                            x.Status.ToLower() == "verified" ||
-                            x.Status.ToLower() == "approved" ||
-                            x.Status.ToLower() == "completed"
-                        )) ||
-                        (!string.IsNullOrEmpty(x.VerifiedBy) && x.Status != "Rejected")
                     ) && x.Amount > 0)
                     .Select(x => new {
                         EventId = x.EventId,
@@ -341,19 +336,13 @@ public class EventRepository : IEventRepository
                     .Where(x => !x.IsDeleted && (
                         (x.StatusId.HasValue && paidStatusIds.Contains(x.StatusId.Value)) ||
                         (x.StatusItem != null && (
-                        (!string.IsNullOrEmpty(x.VerifiedBy) && (x.StatusItem == null || x.StatusItem.StatusName.ToLower() != "rejected"))
-                        !string.IsNullOrEmpty(x.VerifiedBy) ||
-                        x.VerifiedOn != null
+                            x.StatusItem.StatusName.ToLower() == "paid" ||
+                            x.StatusItem.StatusName.ToLower() == "verified" ||
                             x.StatusItem.StatusName.ToLower() == "approved" ||
                             x.StatusItem.StatusName.ToLower() == "completed"
                         )) ||
-                        (x.Status != null && (
-                            x.Status.ToLower() == "paid" ||
-                            x.Status.ToLower() == "verified" ||
-                            x.Status.ToLower() == "approved" ||
-                            x.Status.ToLower() == "completed"
-                        )) ||
-                        (!string.IsNullOrEmpty(x.VerifiedBy) && x.Status != "Rejected")
+                        !string.IsNullOrEmpty(x.VerifiedBy) ||
+                        x.VerifiedOn != null
                     ) && x.Amount > 0)
                     .Select(x => new {
                         EventId = x.EventId,
@@ -1114,6 +1103,16 @@ public class EventRepository : IEventRepository
                     var cleanEventName = details.EventName.Trim().ToLower();
                     details.SupportTicketRaisedCount = await _context.SupportTickets
                         .CountAsync(t => !t.IsDeleted &&
+                            (t.EventId == details.EventId || (t.Event != null && t.Event.EventId == details.EventId) || (t.Event != null && t.Event.EventName.ToLower() == cleanEventName)) &&
+                            (t.StatusItem == null || (
+                                !t.StatusItem.StatusName.ToLower().Contains("resolve") &&
+                                !t.StatusItem.StatusName.ToLower().Contains("close")
+                            )), cancellationToken);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to load support ticket count for event details."); }
+
+                var cleanName = details.EventName.Trim().ToLower();
                 decimal txSum = 0m;
                 try
                 {
@@ -1137,16 +1136,6 @@ public class EventRepository : IEventRepository
                 {
                     _logger.LogWarning(ex, "Failed to load payment transactions sum for event details.");
                 }
-                var cleanName = details.EventName.Trim().ToLower();
-                var txSum = await _context.PaymentTransactions
-                    .Where(x => !x.IsDeleted && x.Amount > 0 &&
-                        (
-                            (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "approved" || x.StatusItem.StatusName.ToLower() == "completed")) ||
-                            (x.Status != null && (x.Status.ToLower() == "paid" || x.Status.ToLower() == "verified" || x.Status.ToLower() == "approved" || x.Status.ToLower() == "completed")) ||
-                            (!string.IsNullOrEmpty(x.VerifiedBy) && x.Status != "Rejected")
-                        ) &&
-                        (x.EventId == details.EventId || (x.Event != null && x.Event.EventId == details.EventId) || (cleanName != null && x.Event != null && x.Event.EventName.ToLower() == cleanName)))
-                    .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
 
                 if (txSum > details.TotalPaidAmount)
                 {
