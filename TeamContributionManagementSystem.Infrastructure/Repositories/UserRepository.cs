@@ -175,7 +175,7 @@ public class UserRepository : IUserRepository
 
             var userEntities = await _context.Users
                 .AsNoTracking()
-                .Where(x => !x.IsDeleted)
+                .Where(x => !x.IsDeleted && x.Email.ToLower() != "admin@gmail.com" && x.Email.ToLower() != "member@gmail.com")
                 .Include(x => x.UserRoles)
                     .ThenInclude(ur => ur.Role)
                 .Include(x => x.WorkTypeNavigation)
