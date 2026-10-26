@@ -95,8 +95,9 @@ public class SupportTicketsController : ControllerBase
         {
             return StatusCode(CommonStatusCodes.Status409Conflict, ApiResponse<SupportTicketDto>.FailureResult(ex.Message, CommonStatusCodes.Status409Conflict));
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Error saving support ticket: {Message}", ex.Message);
             return StatusCode(CommonStatusCodes.Status500InternalServerError, ApiResponse<SupportTicketDto>.FailureResult("Something went wrong. Please try again.", CommonStatusCodes.Status500InternalServerError));
         }
     }
