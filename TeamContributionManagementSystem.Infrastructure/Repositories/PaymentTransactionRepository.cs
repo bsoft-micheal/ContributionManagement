@@ -43,7 +43,18 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
             if (!string.IsNullOrWhiteSpace(status) && !status.Equals(CommonConstants.PaymentStatuses.All, StringComparison.OrdinalIgnoreCase))
             {
                 var cleanStatus = status.Trim().ToLower();
-                query = query.Where(x => x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanStatus);
+                if (cleanStatus == CommonConstants.PaymentStatuses.Verified.ToLower())
+                {
+                    query = query.Where(x => (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanStatus) || (x.StatusItem == null && !string.IsNullOrWhiteSpace(x.VerifiedBy)));
+                }
+                else if (cleanStatus == CommonConstants.PaymentStatuses.Pending.ToLower())
+                {
+                    query = query.Where(x => (x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanStatus) || (x.StatusItem == null && string.IsNullOrWhiteSpace(x.VerifiedBy)));
+                }
+                else
+                {
+                    query = query.Where(x => x.StatusItem != null && x.StatusItem.StatusName.ToLower() == cleanStatus);
+                }
             }
 
             if (startDate.HasValue)
