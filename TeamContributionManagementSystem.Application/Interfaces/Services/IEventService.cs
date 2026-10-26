@@ -13,6 +13,7 @@ public interface IEventService
     Task<AvailableAmountInHandDto> GetAvailableAmountInHandAsync(Guid? excludeEventId = null, CancellationToken cancellationToken = default);
 
     Task<EventDetailsDto> PublishAsync(Guid eventId, Guid publishingUserId, CancellationToken cancellationToken = default);
+    Task<MonthlyEventRestrictionsDto> GetMonthlyEventRestrictionsAsync(int month, int year, Guid? excludeEventId = null, CancellationToken cancellationToken = default);
 
     // Standardized terminology
     Task<IReadOnlyCollection<EventSummaryDto>> GetAllEventAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetAllAsync(month, year, cancellationToken);
@@ -22,4 +23,5 @@ public interface IEventService
     Task DeleteEventAsyncById(Guid eventId, CancellationToken cancellationToken = default) => DeleteAsync(eventId, cancellationToken);
     Task<EventContributionPreviewResponseDto> PreviewContributionAsync(EventContributionPreviewRequestDto request, CancellationToken cancellationToken = default) => CalculateContributionPreviewAsync(request, cancellationToken);
     Task<EventDetailsDto> PublishEventAsyncById(Guid eventId, Guid publishingUserId, CancellationToken cancellationToken = default) => PublishAsync(eventId, publishingUserId, cancellationToken);
+    Task<MonthlyEventRestrictionsDto> GetMonthlyRestrictionsAsync(int month, int year, Guid? excludeEventId = null, CancellationToken cancellationToken = default) => GetMonthlyEventRestrictionsAsync(month, year, excludeEventId, cancellationToken);
 }

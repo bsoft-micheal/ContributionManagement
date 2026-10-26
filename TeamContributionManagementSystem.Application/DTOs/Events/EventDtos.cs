@@ -182,3 +182,25 @@ public class MemberContributionCalculationResult
     public decimal StandardAmount { get; set; }
 }
 
+public class CelebratingMemberDto
+{
+    public Guid MemberId { get; set; }
+    public string MemberName { get; set; } = string.Empty;
+    public Guid EventTypeId { get; set; }
+    public string EventTypeName { get; set; } = string.Empty;
+    public Guid EventId { get; set; }
+    public string EventName { get; set; } = string.Empty;
+    public DateTime EventDate { get; set; }
+    public string CelebrationReason { get; set; } = string.Empty;
+}
+
+public class MonthlyEventRestrictionsDto
+{
+    public int Month { get; set; }
+    public int Year { get; set; }
+    public bool IsBirthdayTaken { get; set; }
+    public List<Guid> TakenEventTypeIds { get; set; } = new();
+    public List<string> TakenEventTypeNames { get; set; } = new();
+    public List<CelebratingMemberDto> CelebratingMembers { get; set; } = new();
+}
+
