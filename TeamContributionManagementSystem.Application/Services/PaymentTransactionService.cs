@@ -855,6 +855,24 @@ public class PaymentTransactionService : IPaymentTransactionService
                 throw new RecordDeletedException();
             }
 
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole && _eventRepository != null)
+            {
+                var orgId = await GetOrganizerIdAsync(cancellationToken);
+                if (orgId.HasValue)
+                {
+                    var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgId.Value, null, null, cancellationToken);
+                    var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
+                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet();
+
+                    var isMyEvent = (entity.EventId.HasValue && myEventIds.Contains(entity.EventId.Value)) ||
+                                    (!string.IsNullOrWhiteSpace(entity.EventName) && myEventNames.Contains(entity.EventName.Trim().ToLower()));
+                    if (!isMyEvent)
+                    {
+                        throw new UnauthorizedAccessException("You are only permitted to delete transactions for events you organize.");
+                    }
+                }
+            }
+
             _transactionRepository.Delete(entity);
 
             // Revert contribution if it was linked

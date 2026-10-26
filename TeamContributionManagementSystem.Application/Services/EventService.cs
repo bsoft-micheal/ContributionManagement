@@ -308,6 +308,28 @@ public class EventService : IEventService
             var eventDetails = await _eventRepository.GetByIdWithDetailsAsync(eventId, cancellationToken)
                 ?? throw new KeyNotFoundException(CommonMessages.Events.NotFound);
 
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? curUserGuid = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    curUserGuid = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    curUserGuid = _currentUserService.MemberId.Value;
+                }
+
+                if (curUserGuid.HasValue)
+                {
+                    var rawEvent = await _eventRepository.GetByIdAsync(eventId, cancellationToken);
+                    if (rawEvent != null && rawEvent.CreatedBy != curUserGuid.Value)
+                    {
+                        throw new UnauthorizedAccessException("Organizers can only view details of events they created.");
+                    }
+                }
+            }
+
             if (_expenseRepository != null)
             {
                 try
@@ -1371,9 +1393,9 @@ public class EventService : IEventService
                 var curUserId = _currentUserService.UserId;
                 if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
                 {
-                    if (eventItem.CreatedBy != curUserGuid && !eventItem.Participants.Any(p => p.UserId == curUserGuid))
+                    if (eventItem.CreatedBy != curUserGuid)
                     {
-                        throw new UnauthorizedAccessException("Organizers can only edit events they created or organize.");
+                        throw new UnauthorizedAccessException("Organizers can only edit events they created.");
                     }
                 }
             }
@@ -1754,9 +1776,9 @@ public class EventService : IEventService
                 var curUserId = _currentUserService.UserId;
                 if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
                 {
-                    if (eventItem.CreatedBy != curUserGuid && !eventItem.Participants.Any(p => p.UserId == curUserGuid))
+                    if (eventItem.CreatedBy != curUserGuid)
                     {
-                        throw new UnauthorizedAccessException("Organizers can only delete events they created or organize.");
+                        throw new UnauthorizedAccessException("Organizers can only delete events they created.");
                     }
                 }
             }
@@ -1833,15 +1855,15 @@ public class EventService : IEventService
                 throw new InvalidOperationException("Cannot publish a deleted event.");
             }
 
-            // Verify Organizer permission: Organizers can only publish events they created or organize
+            // Verify Organizer permission: Organizers can only publish events they created
             if (_currentUserService != null && _currentUserService.IsOrganizerRole)
             {
                 var curUserId = _currentUserService.UserId;
                 if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
                 {
-                    if (eventItem.CreatedBy != curUserGuid && !eventItem.Participants.Any(p => p.UserId == curUserGuid))
+                    if (eventItem.CreatedBy != curUserGuid)
                     {
-                        throw new UnauthorizedAccessException("Organizers can only publish events they created or organize.");
+                        throw new UnauthorizedAccessException("Organizers can only publish events they created.");
                     }
                 }
             }

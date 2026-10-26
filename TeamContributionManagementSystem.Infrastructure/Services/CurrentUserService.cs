@@ -151,25 +151,42 @@ public class CurrentUserService : ICurrentUserService
         }
     }
 
-    public bool IsAdminRole =>
-        string.Equals(Role, CommonRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
-        HasRole(CommonRoles.Admin);
+    public bool IsAdminRole
+    {
+        get
+        {
+            var currentRole = Role;
+            if (!string.IsNullOrWhiteSpace(currentRole))
+            {
+                return string.Equals(currentRole, CommonRoles.Admin, StringComparison.OrdinalIgnoreCase);
+            }
+            return HasRole(CommonRoles.Admin);
+        }
+    }
 
-    public bool IsOrganizerRole =>
-        !IsAdminRole && (
-            string.Equals(Role, "Organizer", StringComparison.OrdinalIgnoreCase) ||
-            HasRole("Organizer")
-        );
+    public bool IsOrganizerRole
+    {
+        get
+        {
+            var currentRole = Role;
+            if (!string.IsNullOrWhiteSpace(currentRole))
+            {
+                return string.Equals(currentRole, "Organizer", StringComparison.OrdinalIgnoreCase);
+            }
+            return !HasRole(CommonRoles.Admin) && HasRole("Organizer");
+        }
+    }
 
     public bool IsMemberRole
     {
         get
         {
-            if (HasRole(CommonRoles.Admin) || HasRole("Organizer"))
+            var currentRole = Role;
+            if (!string.IsNullOrWhiteSpace(currentRole))
             {
-                return string.Equals(Role, CommonRoles.Member, StringComparison.OrdinalIgnoreCase);
+                return string.Equals(currentRole, CommonRoles.Member, StringComparison.OrdinalIgnoreCase);
             }
-            return HasRole(CommonRoles.Member) || string.Equals(Role, CommonRoles.Member, StringComparison.OrdinalIgnoreCase);
+            return !HasRole(CommonRoles.Admin) && !HasRole("Organizer") && HasRole(CommonRoles.Member);
         }
     }
 
