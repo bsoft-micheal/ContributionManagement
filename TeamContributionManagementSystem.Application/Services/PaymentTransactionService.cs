@@ -1040,6 +1040,19 @@ public class PaymentTransactionService : IPaymentTransactionService
                         otherEntity.PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow;
                         otherEntity.PaymentMode = modeEnum;
                         otherEntity.PaymentStatus = isAllVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
+                        if (alloc > 0)
+                        {
+                            if (modeEnum == PaymentMode.Cash)
+                            {
+                                otherEntity.CashAmount = alloc;
+                                otherEntity.UpiAmount = 0m;
+                            }
+                            else
+                            {
+                                otherEntity.UpiAmount = alloc;
+                                otherEntity.CashAmount = 0m;
+                            }
+                        }
                         otherEntity.ModifiedBy = primary.ModifiedBy ?? primary.CreatedBy;
                         otherEntity.ModifiedOn = DateTime.UtcNow;
 
