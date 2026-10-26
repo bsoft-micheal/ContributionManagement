@@ -233,6 +233,7 @@ public class EventRepository : IEventRepository
                 r.IsReferred = r.HasPaidContributions
                     || expenseEventNames.Contains(cleanName)
                     || photoEventNames.Contains(cleanName);
+                EnrichEventAdjustmentMetadata(r);
             }
 
             return results;
@@ -466,6 +467,7 @@ public class EventRepository : IEventRepository
                 r.IsReferred = r.HasPaidContributions
                     || expenseEventNames.Contains(cleanName)
                     || photoEventNames.Contains(cleanName);
+                EnrichEventAdjustmentMetadata(r);
             }
 
             return results;
@@ -611,6 +613,7 @@ public class EventRepository : IEventRepository
                 {
                     r.PaidContributionsCount = 1;
                 }
+                EnrichEventAdjustmentMetadata(r);
             }
 
             return results;
@@ -787,6 +790,7 @@ public class EventRepository : IEventRepository
                     || paymentTxnEventNames.Contains(cleanName)
                     || expenseEventNames.Contains(cleanName)
                     || photoEventNames.Contains(cleanName);
+                EnrichEventAdjustmentMetadata(r);
             }
 
             return results;
@@ -988,6 +992,7 @@ public class EventRepository : IEventRepository
                 {
                     details.PaidContributionsCount = 1;
                 }
+                EnrichEventAdjustmentMetadata(details);
             }
 
             return details;
@@ -1271,5 +1276,16 @@ public class EventRepository : IEventRepository
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeleteParticipants));
             throw;
         }
+    }
+
+    private static void EnrichEventAdjustmentMetadata(EventSummaryDto? dto)
+    {
+        if (dto == null) return;
+        var (cleanDesc, usePrev, adjAmt, adjType, origBudget, _) = EventMetadataHelper.UnpackDescription(dto.Description);
+        dto.Description = cleanDesc;
+        dto.UsePreviousEventBalance = usePrev;
+        dto.PreviousEventAdjustment = adjAmt;
+        dto.PreviousEventAdjustmentType = adjType;
+        dto.OriginalPlannedBudget = origBudget > 0 ? origBudget : dto.BaseAmount;
     }
 }

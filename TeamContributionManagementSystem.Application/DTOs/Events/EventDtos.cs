@@ -46,6 +46,10 @@ public class EventSummaryDto
     public int SupportTicketRaisedCount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal AllocatedAmount { get; set; }
+    public bool UsePreviousEventBalance { get; set; }
+    public decimal PreviousEventAdjustment { get; set; }
+    public string? PreviousEventAdjustmentType { get; set; }
+    public decimal OriginalPlannedBudget { get; set; }
     public List<Guid>? EventTypeIds { get; set; }
     public Dictionary<string, string>? EventTypeDates { get; set; }
     public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
@@ -72,6 +76,13 @@ public class AvailableAmountInHandDto
     public decimal ActualAmountInHand { get; set; }
     public decimal TotalReservedAmount { get; set; }
     public decimal AvailableAmountInHand { get; set; }
+    public decimal RawAmountInHand { get; set; }
+    public decimal TotalPendingAmount { get; set; }
+    public decimal EligibleAdjustmentAmount { get; set; }
+    public decimal TotalRecoveredDeficits { get; set; }
+    public string AdjustmentType { get; set; } = "None"; // "DeficitRecovery", "SurplusCredit", "None"
+    public string? PreviousEventName { get; set; }
+    public Guid? PreviousEventId { get; set; }
 }
 
 public class ContributionOverrideDto
@@ -107,6 +118,9 @@ public class CreateEventRequestDto
     public decimal BaseAmount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal? AllocatedAmount { get; set; }
+    public bool UsePreviousEventBalance { get; set; }
+    public decimal? PreviousEventAdjustment { get; set; }
+    public string? PreviousEventAdjustmentType { get; set; }
     public List<Guid>? EventTypeIds { get; set; }
     public Dictionary<string, string>? EventTypeDates { get; set; }
     public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
@@ -126,6 +140,9 @@ public class EventContributionPreviewRequestDto
     public decimal BaseAmount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal? AllocatedAmount { get; set; }
+    public bool UsePreviousEventBalance { get; set; }
+    public decimal? PreviousEventAdjustment { get; set; }
+    public string? PreviousEventAdjustmentType { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto>? ContributionOverrides { get; set; }
 }
@@ -149,6 +166,10 @@ public class EventContributionPreviewResponseDto
     public decimal PlannedBudget { get; set; }
     public decimal ExpectedCollection { get; set; }
     public decimal StandardContributionAmount { get; set; }
+    public bool UsePreviousEventBalance { get; set; }
+    public decimal EligibleAdjustmentAmount { get; set; }
+    public string AdjustmentType { get; set; } = "None";
+    public decimal EffectiveBudget { get; set; }
     public IReadOnlyCollection<EventContributionPreviewMemberDto> Members { get; set; } = Array.Empty<EventContributionPreviewMemberDto>();
 }
 

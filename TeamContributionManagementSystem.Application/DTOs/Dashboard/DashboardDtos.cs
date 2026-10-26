@@ -11,6 +11,7 @@ public class DashboardSummaryDto
     public decimal TotalPendingAmount { get; set; }
     public decimal TotalExpenses { get; set; }
     public decimal TotalAllocatedAmount { get; set; }
+    public decimal TotalRecoveredDeficitAmount { get; set; }
     public decimal TotalExpectedAmount
     {
         get => _totalExpectedAmount ?? (TotalContributions + TotalPendingAmount);
@@ -18,7 +19,7 @@ public class DashboardSummaryDto
     }
     public decimal TotalRemainingAmount
     {
-        get => _totalRemainingAmount ?? (TotalExpectedAmount - TotalExpenses - TotalAllocatedAmount);
+        get => _totalRemainingAmount ?? (TotalExpectedAmount - TotalExpenses - TotalAllocatedAmount + TotalRecoveredDeficitAmount);
         set => _totalRemainingAmount = value;
     }
     public IReadOnlyCollection<UpcomingEventDto> UpcomingEvents { get; set; } = Array.Empty<UpcomingEventDto>();
@@ -38,6 +39,10 @@ public class UpcomingEventDto
     public decimal ExpenseAmount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal AllocatedAmount { get; set; }
+    public bool UsePreviousEventBalance { get; set; }
+    public decimal PreviousEventAdjustment { get; set; }
+    public string? PreviousEventAdjustmentType { get; set; }
+    public decimal OriginalPlannedBudget { get; set; }
     public decimal RemainingAmount
     {
         get => _remainingAmount ?? (ExpectedAmount - ExpenseAmount);
