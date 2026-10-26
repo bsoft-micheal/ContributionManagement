@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -75,7 +74,6 @@ public class UsersController : ControllerBase
     /// </summary>
     /// <param name="jsonElement">A JSON array containing user details.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [EnableRateLimiting(CommonConstants.RateLimitPolicies.ImportExport)]
     [HttpPost(CommonRoutes.Users.SaveBulk)]
     [ActionName(nameof(SaveBulkUserAsync))]
     public async Task<ActionResult<ApiResponse<IReadOnlyCollection<UserDto>>>> SaveBulkUserAsync([FromBody] System.Text.Json.JsonElement jsonElement, CancellationToken cancellationToken)

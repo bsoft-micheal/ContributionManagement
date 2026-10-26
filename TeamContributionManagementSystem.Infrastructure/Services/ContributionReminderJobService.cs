@@ -478,63 +478,71 @@ public class ContributionReminderJobService : IContributionReminderJobService
 
         var effectiveUpiId = !string.IsNullOrWhiteSpace(paymentSetting?.UpiId)
             ? paymentSetting.UpiId
-            : "danielrobertanto604@okicici";
+            : string.Empty;
         var effectiveReceiverName = !string.IsNullOrWhiteSpace(paymentSetting?.ReceiverName)
             ? paymentSetting.ReceiverName
             : orgName;
         var isUploadedMode = paymentSetting?.QrMode?.Equals("uploaded", StringComparison.OrdinalIgnoreCase) == true && !string.IsNullOrWhiteSpace(paymentSetting?.QrImageUrl);
 
-        var upiPaymentUri = $"upi://pay?pa={Uri.EscapeDataString(effectiveUpiId)}&pn={Uri.EscapeDataString(effectiveReceiverName)}&am={pendingAmount:F2}&cu=INR&tn={Uri.EscapeDataString($"Contribution for {eventName}")}";
+        var isQrConfigured = !string.IsNullOrWhiteSpace(effectiveUpiId) || isUploadedMode;
 
-        // 2. Generate or Load QR Code Image as Inline Attachment
-        var qrContentId = $"qr_{Guid.NewGuid():N}";
-        var tempDir = Path.Combine(Path.GetTempPath(), "ContributionManagement_EmailQr");
-        Directory.CreateDirectory(tempDir);
+        var qrCodeCardHtml = string.Empty;
         InlineEmailImage? inlineImage = null;
 
-        if (isUploadedMode && !string.IsNullOrWhiteSpace(paymentSetting?.QrImageUrl))
+        if (isQrConfigured)
         {
-            var rawImg = paymentSetting.QrImageUrl.Trim();
-            if (rawImg.StartsWith("data:image", StringComparison.OrdinalIgnoreCase))
+            var upiPaymentUri = $"upi://pay?pa={Uri.EscapeDataString(effectiveUpiId)}&pn={Uri.EscapeDataString(effectiveReceiverName)}&am={pendingAmount:F2}&cu=INR&tn={Uri.EscapeDataString($"Contribution for {eventName}")}";
+
+            // 2. Generate or Load QR Code Image as Inline Attachment
+            var qrContentId = $"qr_{Guid.NewGuid():N}";
+            var tempDir = Path.Combine(Path.GetTempPath(), "ContributionManagement_EmailQr");
+            Directory.CreateDirectory(tempDir);
+
+            if (isUploadedMode && !string.IsNullOrWhiteSpace(paymentSetting?.QrImageUrl))
             {
-                try
+                var rawImg = paymentSetting.QrImageUrl.Trim();
+                if (rawImg.StartsWith("data:image", StringComparison.OrdinalIgnoreCase))
                 {
-                    var commaIdx = rawImg.IndexOf(',');
-                    var base64 = commaIdx >= 0 ? rawImg.Substring(commaIdx + 1) : rawImg;
-                    var imgBytes = Convert.FromBase64String(base64);
-                    var ext = rawImg.Contains("jpeg", StringComparison.OrdinalIgnoreCase) || rawImg.Contains("jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
-                    var mediaType = ext == "jpg" ? "image/jpeg" : "image/png";
-                    var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.{ext}");
-                    await File.WriteAllBytesAsync(tempFilePath, imgBytes, cancellationToken);
-                    inlineImage = new InlineEmailImage(qrContentId, tempFilePath, mediaType);
+                    try
+                    {
+                        var commaIdx = rawImg.IndexOf(',');
+                        var base64 = commaIdx >= 0 ? rawImg.Substring(commaIdx + 1) : rawImg;
+                        var imgBytes = Convert.FromBase64String(base64);
+                        var ext = rawImg.Contains("jpeg", StringComparison.OrdinalIgnoreCase) || rawImg.Contains("jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
+                        var mediaType = ext == "jpg" ? "image/jpeg" : "image/png";
+                        var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.{ext}");
+                        await File.WriteAllBytesAsync(tempFilePath, imgBytes, cancellationToken);
+                        inlineImage = new InlineEmailImage(qrContentId, tempFilePath, mediaType);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to decode uploaded QR base64 image; falling back to dynamic generation.");
+                    }
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.LogWarning(ex, "Failed to decode uploaded QR base64 image; falling back to dynamic generation.");
+                    var localPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", rawImg.TrimStart('/', '\\'));
+                    if (File.Exists(localPath))
+                    {
+                        inlineImage = new InlineEmailImage(qrContentId, localPath, "image/png");
+                    }
                 }
             }
-            else
+
+            if (inlineImage == null && !string.IsNullOrWhiteSpace(effectiveUpiId))
             {
-                var localPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", rawImg.TrimStart('/', '\\'));
-                if (File.Exists(localPath))
-                {
-                    inlineImage = new InlineEmailImage(qrContentId, localPath, "image/png");
-                }
+                using var qrGenerator = new QRCodeGenerator();
+                using var qrCodeData = qrGenerator.CreateQrCode(upiPaymentUri, QRCodeGenerator.ECCLevel.Q);
+                using var qrCode = new PngByteQRCode(qrCodeData);
+                var qrBytes = qrCode.GetGraphic(20);
+                var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.png");
+                await File.WriteAllBytesAsync(tempFilePath, qrBytes, cancellationToken);
+                inlineImage = new InlineEmailImage(qrContentId, tempFilePath, "image/png");
             }
-        }
 
-        if (inlineImage == null)
-        {
-            using var qrGenerator = new QRCodeGenerator();
-            using var qrCodeData = qrGenerator.CreateQrCode(upiPaymentUri, QRCodeGenerator.ECCLevel.Q);
-            using var qrCode = new PngByteQRCode(qrCodeData);
-            var qrBytes = qrCode.GetGraphic(20);
-            var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.png");
-            await File.WriteAllBytesAsync(tempFilePath, qrBytes, cancellationToken);
-            inlineImage = new InlineEmailImage(qrContentId, tempFilePath, "image/png");
-        }
-
-        var qrCodeCardHtml = $@"
+            if (inlineImage != null)
+            {
+                qrCodeCardHtml = $@"
             <div class=""qr-section"">
                 <div style=""font-size: 13.5px; font-weight: 700; color: #4b5563; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;"">
                     Scan QR to Pay via Any UPI App (GPay / PhonePe / Paytm)
@@ -555,13 +563,15 @@ public class ContributionReminderJobService : IContributionReminderJobService
                     </a>
                 </div>
             </div>";
+            }
+        }
 
         var (resolvedSubject, resolvedDescription, qrEmbeddedInDesc) = ResolveEmailTemplate(
             systemSettings,
-            eventTypeName,
-            memberName,
-            eventName,
-            eventDescription,
+            eventTypeName ?? "Event",
+            memberName ?? "Member",
+            eventName ?? "Event",
+            eventDescription ?? string.Empty,
             formattedAmount,
             formattedDueDate,
             orgName,
@@ -572,7 +582,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
 
         var subject = !string.IsNullOrWhiteSpace(resolvedSubject)
             ? resolvedSubject
-            : $"Payment Reminder: {eventName} - Contribution Due ({formattedAmount})";
+            : $"Payment Reminder: {eventName ?? "Event"} - Contribution Due ({formattedAmount})";
 
         var body = $@"<!DOCTYPE html>
 <html lang=""en"">

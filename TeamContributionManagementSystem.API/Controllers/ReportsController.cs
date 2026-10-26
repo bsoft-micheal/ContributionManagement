@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -14,7 +13,6 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [Authorize]
 [ApiVersion("1.0")]
 [Route(CommonRoutes.Reports.Base)]
-[EnableRateLimiting(CommonConstants.RateLimitPolicies.Reports)]
 public class ReportsController : ControllerBase
 {
     private readonly IReportService _reportService;

@@ -949,7 +949,7 @@ public class EventService : IEventService
 
                 // Resolve Payment QR config for this event type
                 string effectiveReceiverName = orgName;
-                string effectiveUpiId = "danielrobertanto604@okicici";
+                string effectiveUpiId = string.Empty;
                 string qrMode = "generated";
                 string? uploadedQrImage = null;
 
@@ -1010,8 +1010,10 @@ public class EventService : IEventService
                     catch { }
                 }
 
+                bool isQrConfigured = !string.IsNullOrWhiteSpace(effectiveUpiId) || !string.IsNullOrWhiteSpace(uploadedQrImage);
+
                 // If uploaded image mode is configured but no data URI is in settings, try reading wwwroot gpay image
-                if (string.IsNullOrWhiteSpace(uploadedQrImage) && !string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+                if (isQrConfigured && string.IsNullOrWhiteSpace(uploadedQrImage) && !string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
                 {
                     try
                     {
@@ -1073,66 +1075,74 @@ public class EventService : IEventService
                         var frontendBaseUrl = "http://localhost:5173";
                         var portalContributionUrl = $"{frontendBaseUrl}/contributions";
 
-                        // Generate Dynamic UPI QR Image for Contributor
-                        var upiPaymentUri = $"upi://pay?pa={Uri.EscapeDataString(effectiveUpiId)}&pn={Uri.EscapeDataString(effectiveReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString($"Contribution for {safeEventName}")}";
-
-                        var qrContentId = $"qr_{Guid.NewGuid():N}";
-                        var tempDir = Path.Combine(Path.GetTempPath(), "ContributionManagement_EmailQr");
-                        Directory.CreateDirectory(tempDir);
                         InlineEmailImage? inlineImage = null;
+                        string qrCodeCardHtml = string.Empty;
 
-                        if (qrMode.Equals("uploaded", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(uploadedQrImage))
+                        if (isQrConfigured)
                         {
-                            var rawImg = uploadedQrImage.Trim();
-                            if (rawImg.StartsWith("data:image", StringComparison.OrdinalIgnoreCase))
+                            // Generate Dynamic UPI QR Image for Contributor
+                            var upiPaymentUri = $"upi://pay?pa={Uri.EscapeDataString(effectiveUpiId)}&pn={Uri.EscapeDataString(effectiveReceiverName)}&am={memberContributionAmount:F2}&cu=INR&tn={Uri.EscapeDataString($"Contribution for {safeEventName}")}";
+
+                            var qrContentId = $"qr_{Guid.NewGuid():N}";
+                            var tempDir = Path.Combine(Path.GetTempPath(), "ContributionManagement_EmailQr");
+                            Directory.CreateDirectory(tempDir);
+
+                            if (qrMode.Equals("uploaded", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(uploadedQrImage))
                             {
-                                try
+                                var rawImg = uploadedQrImage.Trim();
+                                if (rawImg.StartsWith("data:image", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    var commaIdx = rawImg.IndexOf(',');
-                                    var base64 = commaIdx >= 0 ? rawImg.Substring(commaIdx + 1) : rawImg;
-                                    var imgBytes = Convert.FromBase64String(base64);
-                                    var ext = rawImg.Contains("jpeg", StringComparison.OrdinalIgnoreCase) || rawImg.Contains("jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
-                                    var mediaType = ext == "jpg" ? "image/jpeg" : "image/png";
-                                    var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.{ext}");
-                                    await File.WriteAllBytesAsync(tempFilePath, imgBytes, CancellationToken.None);
-                                    inlineImage = new InlineEmailImage(qrContentId, tempFilePath, mediaType);
+                                    try
+                                    {
+                                        var commaIdx = rawImg.IndexOf(',');
+                                        var base64 = commaIdx >= 0 ? rawImg.Substring(commaIdx + 1) : rawImg;
+                                        var imgBytes = Convert.FromBase64String(base64);
+                                        var ext = rawImg.Contains("jpeg", StringComparison.OrdinalIgnoreCase) || rawImg.Contains("jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
+                                        var mediaType = ext == "jpg" ? "image/jpeg" : "image/png";
+                                        var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.{ext}");
+                                        await File.WriteAllBytesAsync(tempFilePath, imgBytes, CancellationToken.None);
+                                        inlineImage = new InlineEmailImage(qrContentId, tempFilePath, mediaType);
+                                    }
+                                    catch { }
                                 }
-                                catch { }
+                            }
+
+                            if (inlineImage == null && !string.IsNullOrWhiteSpace(effectiveUpiId))
+                            {
+                                using var qrGenerator = new QRCodeGenerator();
+                                using var qrCodeData = qrGenerator.CreateQrCode(upiPaymentUri, QRCodeGenerator.ECCLevel.Q);
+                                using var qrCode = new PngByteQRCode(qrCodeData);
+                                var qrBytes = qrCode.GetGraphic(20);
+                                var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.png");
+                                await File.WriteAllBytesAsync(tempFilePath, qrBytes, CancellationToken.None);
+                                inlineImage = new InlineEmailImage(qrContentId, tempFilePath, "image/png");
+                            }
+
+                            if (inlineImage != null)
+                            {
+                                qrCodeCardHtml = $@"
+                    <div class=""qr-section"">
+                        <div style=""font-size: 13px; font-weight: 700; color: #4a3f6b; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;"">
+                            Scan QR to Pay via Any UPI App (GPay / PhonePe / Paytm)
+                        </div>
+                        <div class=""qr-wrapper"">
+                            <img src=""cid:{qrContentId}"" alt=""UPI Payment QR Code"" />
+                        </div>
+                        <div class=""upi-details"">
+                            <div><strong>Payee Name:</strong> {effectiveReceiverName}</div>
+                            <div style=""margin-top: 4px;""><strong>UPI ID:</strong> {effectiveUpiId}</div>
+                            <div style=""margin-top: 6px; font-size: 12px; color: #7c3aed; font-weight: 600;"">
+                                Amount is pre-filled automatically when scanned ({formattedAmount})
+                            </div>
+                        </div>
+                        <div style=""text-align: center; margin-top: 14px;"">
+                            <a href=""{upiPaymentUri}"" class=""btn-pay"">
+                                Pay {formattedAmount} via UPI
+                            </a>
+                        </div>
+                    </div>";
                             }
                         }
-
-                        if (inlineImage == null)
-                        {
-                            using var qrGenerator = new QRCodeGenerator();
-                            using var qrCodeData = qrGenerator.CreateQrCode(upiPaymentUri, QRCodeGenerator.ECCLevel.Q);
-                            using var qrCode = new PngByteQRCode(qrCodeData);
-                            var qrBytes = qrCode.GetGraphic(20);
-                            var tempFilePath = Path.Combine(tempDir, $"{qrContentId}.png");
-                            await File.WriteAllBytesAsync(tempFilePath, qrBytes, CancellationToken.None);
-                            inlineImage = new InlineEmailImage(qrContentId, tempFilePath, "image/png");
-                        }
-
-                        var qrCodeCardHtml = $@"
-                <div class=""qr-section"">
-                    <div style=""font-size: 13px; font-weight: 700; color: #4a3f6b; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;"">
-                        Scan QR to Pay via Any UPI App (GPay / PhonePe / Paytm)
-                    </div>
-                    <div class=""qr-wrapper"">
-                        <img src=""cid:{qrContentId}"" alt=""UPI Payment QR Code"" />
-                    </div>
-                    <div class=""upi-details"">
-                        <div><strong>Payee Name:</strong> {effectiveReceiverName}</div>
-                        <div style=""margin-top: 4px;""><strong>UPI ID:</strong> {effectiveUpiId}</div>
-                        <div style=""margin-top: 6px; font-size: 12px; color: #7c3aed; font-weight: 600;"">
-                            Amount is pre-filled automatically when scanned ({formattedAmount})
-                        </div>
-                    </div>
-                    <div style=""text-align: center; margin-top: 14px;"">
-                        <a href=""{upiPaymentUri}"" class=""btn-pay"">
-                            Pay {formattedAmount} via UPI
-                        </a>
-                    </div>
-                </div>";
 
                         bool qrInCustomDesc = (configuredDescription ?? string.Empty).Contains("{qrCode}", StringComparison.OrdinalIgnoreCase);
 
