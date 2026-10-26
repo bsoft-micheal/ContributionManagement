@@ -126,6 +126,8 @@ public class UserManagementService : IUserManagementService
 
         dto.CreateMemberProfile = user.IsPrimary || activeUserRoles.Any(ur => ur.IsPrimary) || !string.IsNullOrWhiteSpace(user.Username);
         dto.Username = !string.IsNullOrWhiteSpace(user.Username) ? user.Username : null;
+        dto.IsTwoFactorEnabled = user.IsTwoFactorEnabled;
+        dto.HasMfaRegistered = user.MfaDevices != null && user.MfaDevices.Any();
 
         return dto;
     }
@@ -425,6 +427,7 @@ public class UserManagementService : IUserManagementService
                 : DateTime.UtcNow.Date;
             appUser.ModifiedBy          = CommonMethods.ParseNullableGuid(user);
             appUser.ModifiedOn          = DateTime.UtcNow;
+            appUser.IsTwoFactorEnabled  = request.IsTwoFactorEnabled ?? false;
 
             if (!isRestoring)
             {
@@ -607,7 +610,9 @@ public class UserManagementService : IUserManagementService
                 EnableUserAccess = isAccessEnabled,
                 IsFirstLogin = appUser.IsFirstLogin,
                 CreatedOn = appUser.CreatedOn,
-                CreatedAt = appUser.CreatedAt
+                CreatedAt = appUser.CreatedAt,
+                IsTwoFactorEnabled = appUser.IsTwoFactorEnabled,
+                HasMfaRegistered = false
             };
 
             _logger.LogInformation("User created successfully with Email {Email}", emailToUse);
@@ -921,6 +926,11 @@ public class UserManagementService : IUserManagementService
             appUser.ModifiedBy = CommonMethods.ParseNullableGuid(user);
             appUser.ModifiedOn = DateTime.UtcNow;
 
+            if (request.IsTwoFactorEnabled.HasValue)
+            {
+                appUser.IsTwoFactorEnabled = request.IsTwoFactorEnabled.Value;
+            }
+
             if (!string.IsNullOrWhiteSpace(request.Password))
             {
                 appUser.PasswordHash = _passwordHasher.HashPassword(request.Password.Trim());
@@ -966,7 +976,9 @@ public class UserManagementService : IUserManagementService
                 EnableUserAccess = isAccessEnabled,
                 IsFirstLogin = appUser.IsFirstLogin,
                 CreatedOn = appUser.CreatedOn,
-                CreatedAt = appUser.CreatedAt
+                CreatedAt = appUser.CreatedAt,
+                IsTwoFactorEnabled = appUser.IsTwoFactorEnabled,
+                HasMfaRegistered = appUser.MfaDevices != null && appUser.MfaDevices.Any()
             };
 
             _logger.LogInformation("User updated successfully: {Id}", userId);
@@ -976,6 +988,32 @@ public class UserManagementService : IUserManagementService
         {
             var msg = ex.InnerException?.Message ?? ex.Message;
             _logger.LogError(ex, "Error in UpdateAsync: {Message}", msg);
+            throw;
+        }
+    }
+
+    public async Task<bool> ToggleTwoFactorAsync(Guid userId, bool? enable = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var appUser = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (appUser == null)
+            {
+                throw new KeyNotFoundException(CommonMessages.Users.NotFound);
+            }
+
+            appUser.IsTwoFactorEnabled = enable ?? !appUser.IsTwoFactorEnabled;
+            appUser.ModifiedOn = DateTime.UtcNow;
+
+            _userRepository.Update(appUser);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Two-Factor Authentication toggled for user {UserId}: {Status}", userId, appUser.IsTwoFactorEnabled ? "Enabled" : "Disabled");
+            return appUser.IsTwoFactorEnabled;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(ToggleTwoFactorAsync));
             throw;
         }
     }

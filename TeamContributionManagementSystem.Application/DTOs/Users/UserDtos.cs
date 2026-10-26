@@ -45,6 +45,8 @@ public class UserDto
     public string? Phone { get; set; }
     public string? WorkType { get; set; }
     public bool IsReferred { get; set; }
+    public bool IsTwoFactorEnabled { get; set; } = false;
+    public bool HasMfaRegistered { get; set; } = false;
 }
 
 public class CreateUserRequestDto
@@ -102,6 +104,7 @@ public class CreateUserRequestDto
 
     public bool IsActive { get; set; } = true;
     public bool IsImported { get; set; } = false;
+    public bool? IsTwoFactorEnabled { get; set; }
 }
 
 public class UpdateUserRequestDto
@@ -157,6 +160,12 @@ public class UpdateUserRequestDto
     public string? MemberUsername { get; set; }
 
     public bool IsActive { get; set; } = true;
+    public bool? IsTwoFactorEnabled { get; set; }
+}
+
+public class ToggleTwoFactorRequestDto
+{
+    public bool? Enable { get; set; }
 }
 
 public class UpdateProfileRequestDto

@@ -179,6 +179,7 @@ public class UserRepository : IUserRepository
                 .Include(x => x.UserRoles)
                     .ThenInclude(ur => ur.Role)
                 .Include(x => x.WorkTypeNavigation)
+                .Include(x => x.MfaDevices)
                 .OrderBy(x => x.FullName)
                 .ToListAsync(cancellationToken);
 
@@ -235,7 +236,9 @@ public class UserRepository : IUserRepository
                         JoiningDate = x.JoiningDate,
                         Gender = x.Gender,
                         Phone = x.Phone,
-                        WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty
+                        WorkType = x.WorkTypeNavigation != null ? x.WorkTypeNavigation.WorkTypeName : string.Empty,
+                        IsTwoFactorEnabled = x.IsTwoFactorEnabled,
+                        HasMfaRegistered = x.MfaDevices != null && x.MfaDevices.Any()
                     };
                 })
                 .ToList();

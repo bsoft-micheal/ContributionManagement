@@ -12,12 +12,14 @@ public class MfaService : IMfaService
 {
     private readonly ILogger<MfaService> _logger;
     private readonly IUserMfaDeviceRepository _mfaDeviceRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     
-    public MfaService(ILogger<MfaService> logger, IUserMfaDeviceRepository mfaDeviceRepository, IUnitOfWork unitOfWork)
+    public MfaService(ILogger<MfaService> logger, IUserMfaDeviceRepository mfaDeviceRepository, IUserRepository userRepository, IUnitOfWork unitOfWork)
     {
         _logger = logger;
         _mfaDeviceRepository = mfaDeviceRepository;
+        _userRepository = userRepository;
         _unitOfWork = unitOfWork;
     }
 
@@ -55,6 +57,15 @@ public class MfaService : IMfaService
                 };
 
                 await _mfaDeviceRepository.AddAsync(device, cancellationToken);
+
+                var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+                if (user != null)
+                {
+                    user.IsTwoFactorEnabled = true;
+                    user.ModifiedOn = DateTime.UtcNow;
+                    _userRepository.Update(user);
+                }
+
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 return true;
             }
@@ -95,6 +106,19 @@ public class MfaService : IMfaService
             if (device != null)
             {
                 await _mfaDeviceRepository.RemoveAsync(device, cancellationToken);
+
+                var remainingDevices = await _mfaDeviceRepository.GetByUserIdAsync(userId, cancellationToken);
+                if (!remainingDevices.Any(d => d.Id != deviceId))
+                {
+                    var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+                    if (user != null)
+                    {
+                        user.IsTwoFactorEnabled = false;
+                        user.ModifiedOn = DateTime.UtcNow;
+                        _userRepository.Update(user);
+                    }
+                }
+
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
         }
