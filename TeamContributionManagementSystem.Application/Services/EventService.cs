@@ -269,7 +269,14 @@ public class EventService : IEventService
                                         typeMembers["sendOff"] = guids;
                                 }
                             }
-                            if (typeMembers.Count > 0) ev.EventTypeMembers = typeMembers;
+                            if (typeMembers.Count > 0)
+                            {
+                                ev.EventTypeMembers = typeMembers;
+                                if (!ev.EnableCelebrantSelection)
+                                {
+                                    ev.EnableCelebrantSelection = true;
+                                }
+                            }
                         }
 
                         var allEventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
@@ -437,7 +444,14 @@ public class EventService : IEventService
                                     typeMembers["sendOff"] = guids;
                             }
                         }
-                        if (typeMembers.Count > 0) eventDetails.EventTypeMembers = typeMembers;
+                        if (typeMembers.Count > 0)
+                        {
+                            eventDetails.EventTypeMembers = typeMembers;
+                            if (!eventDetails.EnableCelebrantSelection)
+                            {
+                                eventDetails.EnableCelebrantSelection = true;
+                            }
+                        }
                     }
 
                     var allTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
@@ -535,6 +549,26 @@ public class EventService : IEventService
                 .Distinct()
                 .ToList();
 
+            if (!request.EnableCelebrantSelection)
+            {
+                request.EventTypeMembers = null;
+                request.EventTypeMemberDates = null;
+            }
+            else
+            {
+                bool isBday = (eventType?.EventTypeName?.Trim().ToLower().Contains("birthday") == true);
+                if (!isBday)
+                {
+                    bool hasCelebrants = (request.EventTypeMembers != null && request.EventTypeMembers.Values.Any(v => v != null && v.Count > 0))
+                        || (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Values.Any(v => v != null && v.Count > 0))
+                        || (!string.IsNullOrWhiteSpace(request.Description) && request.Description.Contains("<!--celebrants:"));
+                    if (!hasCelebrants)
+                    {
+                        throw new InvalidOperationException("Please select at least one celebrant/member when celebrant selection is enabled.");
+                    }
+                }
+            }
+
             // Validate Monthly Event Restrictions:
             // Rule A: Birthday is allowed only once per calendar month
             // Rule B: Non-Birthday prevents duplicate celebrants for the same event type in the same calendar month
@@ -610,6 +644,10 @@ public class EventService : IEventService
             }
 
             var cleanDesc = (request.Description ?? string.Empty).Trim();
+            if (!request.EnableCelebrantSelection)
+            {
+                cleanDesc = System.Text.RegularExpressions.Regex.Replace(cleanDesc, @"<!--celebrants:.*?-->", string.Empty).Trim();
+            }
             if (cleanDesc.Length > 900)
             {
                 cleanDesc = cleanDesc.Substring(0, 900);
@@ -636,14 +674,15 @@ public class EventService : IEventService
                 EventName = (request.EventName ?? string.Empty).Trim(),
                 EventTypeId = eventType.EventTypeId,
                 EventDate = request.EventDate.Date,
-                EventDates = eventDatesSerialized,
+                EventDates = request.EnableCelebrantSelection ? eventDatesSerialized : null,
                 CreatedBy = user.UserId,
                 CreatedAt = DateTime.UtcNow,
                 Description = packedDescription,
                 Status = request.Status != 0 ? request.Status : EventStatus.Planned,
                 BaseAmount = effectiveBudget,
                 UseAvailableBalance = (request.UsePreviousEventBalance && appliedAdjustmentType == "SurplusCredit") || request.UseAvailableBalance,
-                AllocatedAmount = allocatedAmount
+                AllocatedAmount = allocatedAmount,
+                EnableCelebrantSelection = request.EnableCelebrantSelection
             };
 
             foreach (var member in members)
@@ -754,7 +793,7 @@ public class EventService : IEventService
                     .Select(x => x.MemberId)
                     .ToHashSet();
 
-                if (request.EventTypeMembers != null)
+                if (request.EnableCelebrantSelection && request.EventTypeMembers != null)
                 {
                     foreach (var kvp in request.EventTypeMembers)
                     {
@@ -1728,6 +1767,26 @@ public class EventService : IEventService
                 .Distinct()
                 .ToList();
 
+            if (!request.EnableCelebrantSelection)
+            {
+                request.EventTypeMembers = null;
+                request.EventTypeMemberDates = null;
+            }
+            else
+            {
+                bool isBday = (eventType?.EventTypeName?.Trim().ToLower().Contains("birthday") == true);
+                if (!isBday)
+                {
+                    bool hasCelebrants = (request.EventTypeMembers != null && request.EventTypeMembers.Values.Any(v => v != null && v.Count > 0))
+                        || (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Values.Any(v => v != null && v.Count > 0))
+                        || (!string.IsNullOrWhiteSpace(request.Description) && request.Description.Contains("<!--celebrants:"));
+                    if (!hasCelebrants)
+                    {
+                        throw new InvalidOperationException("Please select at least one celebrant/member when celebrant selection is enabled.");
+                    }
+                }
+            }
+
             // Validate Monthly Event Restrictions:
             // Rule A: Birthday is allowed only once per calendar month
             // Rule B: Non-Birthday prevents duplicate celebrants for the same event type in the same calendar month
@@ -1741,19 +1800,31 @@ public class EventService : IEventService
             eventItem.EventName = (request.EventName ?? string.Empty).Trim();
             eventItem.EventTypeId = eventType.EventTypeId;
             eventItem.EventDate = request.EventDate.Date;
-            if (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Count > 0)
+            eventItem.EnableCelebrantSelection = request.EnableCelebrantSelection;
+            if (request.EnableCelebrantSelection)
             {
-                eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeMemberDates);
-            }
-            else if (request.EventTypeDates != null && request.EventTypeDates.Count > 0)
-            {
-                eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeDates);
+                if (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Count > 0)
+                {
+                    eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeMemberDates);
+                }
+                else if (request.EventTypeDates != null && request.EventTypeDates.Count > 0)
+                {
+                    eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeDates);
+                }
+                else
+                {
+                    eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
+                }
             }
             else
             {
-                eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
+                eventItem.EventDates = null;
             }
             var cleanDesc = (request.Description ?? string.Empty).Trim();
+            if (!request.EnableCelebrantSelection)
+            {
+                cleanDesc = System.Text.RegularExpressions.Regex.Replace(cleanDesc, @"<!--celebrants:.*?-->", string.Empty).Trim();
+            }
             if (cleanDesc.Length > 900)
             {
                 cleanDesc = cleanDesc.Substring(0, 900);
@@ -2027,7 +2098,7 @@ public class EventService : IEventService
                     .Select(x => x.MemberId)
                     .ToHashSet();
 
-                if (request.EventTypeMembers != null)
+                if (request.EnableCelebrantSelection && request.EventTypeMembers != null)
                 {
                     foreach (var kvp in request.EventTypeMembers)
                     {
@@ -2456,6 +2527,12 @@ public class EventService : IEventService
             if (eventType == null)
             {
                 throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
+            }
+
+            if (!request.EnableCelebrantSelection)
+            {
+                request.EventTypeMembers = null;
+                request.EventTypeMemberDates = null;
             }
 
             var participantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
@@ -3072,6 +3149,11 @@ public class EventService : IEventService
         }
 
         // Rule B: All Other Event Types — Prevent duplicate celebrants for the same event type
+        if (!request.EnableCelebrantSelection)
+        {
+            return;
+        }
+
         var requestedTypeCelebrants = new Dictionary<Guid, (string TypeName, HashSet<Guid> Celebrants)>();
 
         void AddCelebrantsForType(Guid tId, string tName, IEnumerable<Guid>? memIds)

@@ -178,6 +178,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
             entity.Property(x => x.UseAvailableBalance).HasColumnName("use_available_balance").HasDefaultValue(false);
             entity.Property(x => x.AllocatedAmount).HasColumnName("allocated_amount").HasPrecision(12, 2).HasDefaultValue(0);
+            entity.Property(x => x.EnableCelebrantSelection).HasColumnName("enable_celebrant_selection").HasDefaultValue(false);
             entity.HasIndex(x => new { x.EventDate, x.EventTypeId });
             entity.HasOne(x => x.EventType)
                 .WithMany(x => x.Events)

@@ -54,6 +54,7 @@ public class EventSummaryDto
     public Dictionary<string, string>? EventTypeDates { get; set; }
     public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
     public Dictionary<string, Dictionary<string, string>>? EventTypeMemberDates { get; set; }
+    public bool EnableCelebrantSelection { get; set; }
 
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }
@@ -125,6 +126,7 @@ public class CreateEventRequestDto
     public Dictionary<string, string>? EventTypeDates { get; set; }
     public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
     public Dictionary<string, Dictionary<string, string>>? EventTypeMemberDates { get; set; }
+    public bool EnableCelebrantSelection { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
 }
@@ -137,6 +139,7 @@ public class EventContributionPreviewRequestDto
     public Dictionary<string, string>? EventTypeDates { get; set; }
     public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
     public Dictionary<string, Dictionary<string, string>>? EventTypeMemberDates { get; set; }
+    public bool EnableCelebrantSelection { get; set; }
     public decimal BaseAmount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal? AllocatedAmount { get; set; }

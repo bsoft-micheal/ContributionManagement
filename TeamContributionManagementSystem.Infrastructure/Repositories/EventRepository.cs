@@ -184,6 +184,7 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
+                    EnableCelebrantSelection = x.EnableCelebrantSelection,
                     ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? 0m)
@@ -434,6 +435,7 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
+                    EnableCelebrantSelection = x.EnableCelebrantSelection,
                     ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? 0m)
@@ -565,6 +567,7 @@ public class EventRepository : IEventRepository
                     Description = x.Description,
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
+                    EnableCelebrantSelection = x.EnableCelebrantSelection,
                     ParticipantCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId) > 0 ? 1 : (x.Participants.Count(p => !p.IsDeleted && p.UserId == memberId) > 0 ? 1 : 0),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId).Sum(c => (decimal?)c.Amount) ?? 0m,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
@@ -781,6 +784,7 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
+                    EnableCelebrantSelection = x.EnableCelebrantSelection,
                     ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? 0m)
@@ -955,6 +959,7 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
+                    EnableCelebrantSelection = x.EnableCelebrantSelection,
                     ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? 0m)

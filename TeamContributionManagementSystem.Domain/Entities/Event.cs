@@ -15,6 +15,7 @@ public class Event
     public decimal BaseAmount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal AllocatedAmount { get; set; }
+    public bool EnableCelebrantSelection { get; set; } = false;
     public bool IsDeleted { get; set; }
 
     public EventType? EventType { get; set; }
