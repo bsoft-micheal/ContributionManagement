@@ -9,6 +9,10 @@ public static class EventMetadataHelper
         @"<!--\s*PREV_EVENT_ADJUSTMENT:\s*(\{.*?\})\s*-->",
         RegexOptions.Compiled | RegexOptions.Singleline);
 
+    private static readonly Regex CreatorRoleRegex = new(
+        @"<!--\s*CREATOR_ROLE:\s*([A-Za-z0-9_-]+)\s*-->",
+        RegexOptions.Compiled | RegexOptions.Singleline);
+
     private class PrevEventAdjustmentPayload
     {
         public bool u { get; set; } // use previous event balance
@@ -24,52 +28,77 @@ public static class EventMetadataHelper
         decimal adjustmentAmount,
         string? adjustmentType,
         decimal originalPlannedBudget,
-        string? previousEventName)
+        string? previousEventName,
+        string? creatorRole = null)
     {
         var desc = (cleanDescription ?? string.Empty).Trim();
         desc = PrevEventAdjustmentRegex.Replace(desc, string.Empty).Trim();
+        desc = CreatorRoleRegex.Replace(desc, string.Empty).Trim();
 
-        if (!usePreviousBalance || adjustmentAmount <= 0 || string.IsNullOrWhiteSpace(adjustmentType))
+        string metaTag = string.Empty;
+        if (usePreviousBalance && adjustmentAmount > 0 && !string.IsNullOrWhiteSpace(adjustmentType))
+        {
+            var payload = new PrevEventAdjustmentPayload
+            {
+                u = true,
+                a = RoundingHelper.RoundToWhole(adjustmentAmount),
+                t = adjustmentType,
+                p = RoundingHelper.RoundToWhole(originalPlannedBudget),
+                s = previousEventName
+            };
+
+            var json = JsonSerializer.Serialize(payload);
+            metaTag = $"<!-- PREV_EVENT_ADJUSTMENT: {json} -->";
+        }
+
+        string roleTag = !string.IsNullOrWhiteSpace(creatorRole)
+            ? $"<!-- CREATOR_ROLE: {creatorRole.Trim()} -->"
+            : string.Empty;
+
+        var tags = new List<string>();
+        if (!string.IsNullOrWhiteSpace(metaTag)) tags.Add(metaTag);
+        if (!string.IsNullOrWhiteSpace(roleTag)) tags.Add(roleTag);
+        var combinedTags = string.Join("\n", tags);
+
+        if (string.IsNullOrWhiteSpace(combinedTags))
         {
             return desc;
         }
 
-        var payload = new PrevEventAdjustmentPayload
-        {
-            u = true,
-            a = RoundingHelper.RoundToWhole(adjustmentAmount),
-            t = adjustmentType,
-            p = RoundingHelper.RoundToWhole(originalPlannedBudget),
-            s = previousEventName
-        };
-
-        var json = JsonSerializer.Serialize(payload);
-        var metaTag = $"<!-- PREV_EVENT_ADJUSTMENT: {json} -->";
-
         // Fit within PostgreSQL varchar(1000) constraint
         const int maxLength = 980;
-        if (desc.Length + metaTag.Length + 1 > maxLength)
+        if (desc.Length + combinedTags.Length + 1 > maxLength)
         {
-            var allowedCleanLen = Math.Max(0, maxLength - metaTag.Length - 1);
+            var allowedCleanLen = Math.Max(0, maxLength - combinedTags.Length - 1);
             desc = desc.Length > allowedCleanLen ? desc.Substring(0, allowedCleanLen).Trim() : desc;
         }
 
-        return string.IsNullOrWhiteSpace(desc) ? metaTag : $"{desc}\n{metaTag}";
+        return string.IsNullOrWhiteSpace(desc) ? combinedTags : $"{desc}\n{combinedTags}";
     }
 
     public static (string CleanDescription, bool UsePreviousBalance, decimal AdjustmentAmount, string AdjustmentType, decimal OriginalPlannedBudget, string? PreviousEventName) UnpackDescription(string? rawDescription)
     {
+        var (cleanDesc, usePrev, adjAmt, adjType, origBudget, prevName, _) = UnpackDescriptionWithRole(rawDescription);
+        return (cleanDesc, usePrev, adjAmt, adjType, origBudget, prevName);
+    }
+
+    public static (string CleanDescription, bool UsePreviousBalance, decimal AdjustmentAmount, string AdjustmentType, decimal OriginalPlannedBudget, string? PreviousEventName, string? CreatorRole) UnpackDescriptionWithRole(string? rawDescription)
+    {
         if (string.IsNullOrWhiteSpace(rawDescription))
         {
-            return (string.Empty, false, 0m, "None", 0m, null);
+            return (string.Empty, false, 0m, "None", 0m, null, null);
         }
 
+        var roleMatch = CreatorRoleRegex.Match(rawDescription);
+        string? creatorRole = roleMatch.Success ? roleMatch.Groups[1].Value.Trim() : null;
+
         var match = PrevEventAdjustmentRegex.Match(rawDescription);
-        var cleanDesc = PrevEventAdjustmentRegex.Replace(rawDescription, string.Empty).Trim();
+        var cleanDesc = PrevEventAdjustmentRegex.Replace(rawDescription, string.Empty);
+        cleanDesc = CreatorRoleRegex.Replace(cleanDesc, string.Empty).Trim();
 
         if (!match.Success)
         {
-            return (cleanDesc, false, 0m, "None", 0m, null);
+            return (cleanDesc, false, 0m, "None", 0m, null, creatorRole);
         }
 
         try
@@ -84,7 +113,8 @@ public static class EventMetadataHelper
                     payload.a,
                     payload.t ?? "None",
                     payload.p,
-                    payload.s
+                    payload.s,
+                    creatorRole
                 );
             }
         }
@@ -93,6 +123,6 @@ public static class EventMetadataHelper
             // Fallback gracefully on parsing error
         }
 
-        return (cleanDesc, false, 0m, "None", 0m, null);
+        return (cleanDesc, false, 0m, "None", 0m, null, creatorRole);
     }
 }

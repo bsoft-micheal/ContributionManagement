@@ -49,16 +49,26 @@ public class CurrentUserService : ICurrentUserService
     {
         get
         {
-            var user = _httpContextAccessor.HttpContext?.User;
-            var activeRole = user?.FindFirst("activeRole")?.Value ?? user?.FindFirst("role")?.Value;
-            if (!string.IsNullOrWhiteSpace(activeRole)) return activeRole;
+            var httpContext = _httpContextAccessor.HttpContext;
+            // 1. Check explicit active role header from request
+            var headerRole = httpContext?.Request.Headers["X-Active-Role"].FirstOrDefault()
+                ?? httpContext?.Request.Headers["X-Role"].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(headerRole))
+            {
+                return headerRole.Trim();
+            }
 
-            var allRoles = Roles;
-            if (allRoles.Contains(CommonRoles.Admin, StringComparer.OrdinalIgnoreCase)) return CommonRoles.Admin;
-            if (allRoles.Contains("Organizer", StringComparer.OrdinalIgnoreCase)) return "Organizer";
-            if (allRoles.Contains(CommonRoles.Member, StringComparer.OrdinalIgnoreCase)) return CommonRoles.Member;
-            return allRoles.FirstOrDefault()
-                ?? user?.FindFirstValue(ClaimTypes.Role);
+            var user = httpContext?.User;
+            // 2. Check activeRole claim from JWT
+            var activeRole = user?.FindFirst("activeRole")?.Value;
+            if (!string.IsNullOrWhiteSpace(activeRole)) return activeRole.Trim();
+
+            // 3. Check role claim
+            var roleClaim = user?.FindFirst("role")?.Value;
+            if (!string.IsNullOrWhiteSpace(roleClaim)) return roleClaim.Trim();
+
+            // 4. Default to ClaimTypes.Role or first role
+            return user?.FindFirstValue(ClaimTypes.Role) ?? Roles.FirstOrDefault();
         }
     }
 
