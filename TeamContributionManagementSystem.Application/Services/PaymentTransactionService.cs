@@ -1015,8 +1015,8 @@ public class PaymentTransactionService : IPaymentTransactionService
                 match.PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow;
                 match.PaymentMode = modeEnum;
 
-                // Ensure pending or rejected payments do not mark contribution as paid (Requirement 8 & 9)
-                if (isAllVerified)
+                // Ensure pending, rejected, or partial payments do not mark contribution as paid
+                if (isAllVerified && (totalCash + totalUpi) >= match.Amount)
                 {
                     match.PaymentStatus = PaymentStatus.Paid;
                 }
@@ -1059,54 +1059,61 @@ public class PaymentTransactionService : IPaymentTransactionService
             }
 
             // Multi-Event Settlement: If the total transacted amount covers more than the primary event
-            // or notes indicate AllOutstanding scope, allocate remaining funds to the member's other pending contributions.
+            // allocate remaining funds to the member's other pending contributions.
             var totalTransacted = totalCash + totalUpi;
             var primaryAmount = match?.Amount ?? 0;
-            var isAllScope = (primary.Notes ?? "").Contains("[Scope: AllOutstanding]", StringComparison.OrdinalIgnoreCase) ||
-                             (primary.Notes ?? "").Contains("All Outstanding", StringComparison.OrdinalIgnoreCase);
+            var remainingForOtherEvents = totalTransacted > primaryAmount ? totalTransacted - primaryAmount : 0;
 
-            if (primary.UserId.HasValue && (isAllScope || totalTransacted > primaryAmount))
+            if (primary.UserId.HasValue && remainingForOtherEvents > 0)
             {
-                var remainingForOtherEvents = totalTransacted > primaryAmount ? totalTransacted - primaryAmount : 0;
                 var allContribs = await _contributionRepository.GetAllAsync(cancellationToken);
                 var otherMemberContribs = allContribs
                     .Where(c => c.MemberId == primary.UserId.Value &&
                                 (match == null || c.ContributionId != match.ContributionId) &&
                                 c.PaymentStatus != PaymentStatus.Paid)
+                    .OrderBy(c => c.CreatedAt)
                     .ToList();
 
                 foreach (var otherDto in otherMemberContribs)
                 {
+                    if (remainingForOtherEvents <= 0) break;
+
                     var otherEntity = await _contributionRepository.GetByEventAndMemberAsync(otherDto.EventId, otherDto.MemberId, cancellationToken);
                     if (otherEntity != null)
                     {
                         var alloc = otherEntity.Amount > 0 ? Math.Min(remainingForOtherEvents, otherEntity.Amount) : remainingForOtherEvents;
+                        if (alloc <= 0) continue;
+
                         remainingForOtherEvents -= alloc;
 
-                        if (statusIdToAssign.HasValue) otherEntity.StatusId = statusIdToAssign.Value;
+                        if (alloc >= otherEntity.Amount)
+                        {
+                            if (statusIdToAssign.HasValue) otherEntity.StatusId = statusIdToAssign.Value;
+                            otherEntity.PaymentStatus = isAllVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
+                        }
+                        else
+                        {
+                            otherEntity.PaymentStatus = PaymentStatus.Pending;
+                        }
+
                         if (primary.PaymentModeId.HasValue) otherEntity.PaymentModeId = primary.PaymentModeId.Value;
                         otherEntity.PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow;
                         otherEntity.PaymentMode = modeEnum;
-                        otherEntity.PaymentStatus = isAllVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
-                        if (alloc > 0)
+
+                        if (modeEnum == PaymentMode.Cash)
                         {
-                            if (modeEnum == PaymentMode.Cash)
-                            {
-                                otherEntity.CashAmount = alloc;
-                                otherEntity.UpiAmount = 0m;
-                            }
-                            else
-                            {
-                                otherEntity.UpiAmount = alloc;
-                                otherEntity.CashAmount = 0m;
-                            }
+                            otherEntity.CashAmount = (otherEntity.CashAmount ?? 0m) + alloc;
+                        }
+                        else
+                        {
+                            otherEntity.UpiAmount = (otherEntity.UpiAmount ?? 0m) + alloc;
                         }
                         otherEntity.ModifiedBy = primary.ModifiedBy ?? primary.CreatedBy;
                         otherEntity.ModifiedOn = DateTime.UtcNow;
 
                         _contributionRepository.Update(otherEntity);
-                        _logger.LogInformation("Multi-event settled contribution {ContributionId} for member {MemberId}: Status={Status}",
-                            otherEntity.ContributionId, primary.UserId.Value, targetStatusName);
+                        _logger.LogInformation("Multi-event settled contribution {ContributionId} for member {MemberId}: Allocated={Alloc}, Remaining={Remaining}",
+                            otherEntity.ContributionId, primary.UserId.Value, alloc, remainingForOtherEvents);
                     }
                 }
             }
