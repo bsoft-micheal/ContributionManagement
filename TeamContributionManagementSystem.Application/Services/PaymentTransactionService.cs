@@ -1011,6 +1011,16 @@ public class PaymentTransactionService : IPaymentTransactionService
                 modeEnum = PaymentMode.Upi;
             }
 
+            bool isPreviousArrearsOnly = !string.IsNullOrWhiteSpace(primary.Notes) &&
+                (primary.Notes.Contains("[Scope: PreviousArrears]", StringComparison.OrdinalIgnoreCase) ||
+                 primary.Notes.Contains("PreviousArrears", StringComparison.OrdinalIgnoreCase) ||
+                 primary.Notes.Contains("Previous Arrears", StringComparison.OrdinalIgnoreCase));
+
+            bool isCurrentEventOnly = !string.IsNullOrWhiteSpace(primary.Notes) &&
+                (primary.Notes.Contains("[Scope: CurrentEvent]", StringComparison.OrdinalIgnoreCase) ||
+                 primary.Notes.Contains("CurrentEvent", StringComparison.OrdinalIgnoreCase) ||
+                 primary.Notes.Contains("Current Event", StringComparison.OrdinalIgnoreCase));
+
             if (match != null)
             {
                 if (statusIdToAssign.HasValue) match.StatusId = statusIdToAssign.Value;
@@ -1061,11 +1071,19 @@ public class PaymentTransactionService : IPaymentTransactionService
                 _logger.LogInformation("Created new contribution for member {Member} and event {Event}", primary.MemberName, primary.EventName);
             }
 
-            // Multi-Event Settlement: If the total transacted amount covers more than the primary event
-            // allocate remaining funds to the member's other pending contributions.
+            // Multi-Event Settlement: allocate funds to member's other pending contributions based on payment scope
             var totalTransacted = totalCash + totalUpi;
-            var primaryAmount = match?.Amount ?? 0;
-            var remainingForOtherEvents = totalTransacted > primaryAmount ? totalTransacted - primaryAmount : 0;
+            decimal remainingForOtherEvents;
+            if (isCurrentEventOnly)
+            {
+                // When paying Current Event Only, do not spill funds to other events
+                remainingForOtherEvents = 0;
+            }
+            else
+            {
+                var primaryAmount = match?.Amount ?? 0;
+                remainingForOtherEvents = totalTransacted > primaryAmount ? totalTransacted - primaryAmount : 0;
+            }
 
             if (primary.UserId.HasValue && remainingForOtherEvents > 0)
             {
@@ -1084,15 +1102,20 @@ public class PaymentTransactionService : IPaymentTransactionService
                     var otherEntity = await _contributionRepository.GetByEventAndMemberAsync(otherDto.EventId, otherDto.MemberId, cancellationToken);
                     if (otherEntity != null)
                     {
-                        var alloc = otherEntity.Amount > 0 ? Math.Min(remainingForOtherEvents, otherEntity.Amount) : remainingForOtherEvents;
-                        if (alloc <= 0) continue;
+                        // STRICT RULE: No partial payments on events!
+                        // A member's event can only be settled if remaining funds can FULLY cover the event's required amount.
+                        if (otherEntity.Amount <= 0 || remainingForOtherEvents < otherEntity.Amount)
+                        {
+                            continue; // Skip this event, do NOT allocate partial amount!
+                        }
 
+                        var alloc = otherEntity.Amount;
                         remainingForOtherEvents -= alloc;
 
-                        if (alloc >= otherEntity.Amount)
+                        if (!isAnyRejected)
                         {
                             if (statusIdToAssign.HasValue) otherEntity.StatusId = statusIdToAssign.Value;
-                            otherEntity.PaymentStatus = isAllVerified ? PaymentStatus.Paid : PaymentStatus.Pending;
+                            otherEntity.PaymentStatus = PaymentStatus.Paid;
                         }
                         else
                         {
