@@ -2988,7 +2988,7 @@ public class EventService : IEventService
         string? rawEventDates,
         DateTime fallbackDate,
         bool isBirthdayEvent = false,
-        List<CelebratingMemberDto>? celebrants = null)
+        List<TeamContributionManagementSystem.Application.DTOs.Members.MemberDto>? celebrants = null)
     {
         if (!string.IsNullOrWhiteSpace(rawEventDates))
         {

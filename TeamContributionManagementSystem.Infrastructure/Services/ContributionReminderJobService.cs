@@ -985,7 +985,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
         string? rawEventDates,
         DateTime fallbackDate,
         bool isBirthdayEvent = false,
-        List<TeamContributionManagementSystem.Domain.Entities.User>? celebrants = null)
+        List<TeamContributionManagementSystem.Domain.Entities.AppUser>? celebrants = null)
     {
         if (!string.IsNullOrWhiteSpace(rawEventDates))
         {
