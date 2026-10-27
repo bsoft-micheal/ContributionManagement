@@ -108,3 +108,53 @@ public class FinancialHealthSummaryDto
     public int DefaultersCount { get; set; }
     public decimal CollectionEfficiencyPercent { get; set; }
 }
+
+public class MonthlyPendingDueDetailDto
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string MonthName { get; set; } = string.Empty;
+    public decimal PendingAmount { get; set; }
+    public int PendingEventsCount { get; set; }
+}
+
+public class MemberPendingDuesReportDto
+{
+    public Guid MemberId { get; set; }
+    public string MemberName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Department { get; set; } = string.Empty;
+    public string WorkType { get; set; } = string.Empty;
+
+    public string PriorMonthsLabel { get; set; } = string.Empty;
+    public decimal PriorMonthsPendingAmount { get; set; }
+
+    public string PreviousMonthLabel { get; set; } = string.Empty;
+    public decimal PreviousMonthPendingAmount { get; set; }
+
+    public string CurrentMonthLabel { get; set; } = string.Empty;
+    public decimal CurrentMonthPendingAmount { get; set; }
+
+    public decimal TotalPendingAmount { get; set; }
+
+    public IReadOnlyCollection<MonthlyPendingDueDetailDto> MonthlyBreakdown { get; set; } = Array.Empty<MonthlyPendingDueDetailDto>();
+}
+
+public class PendingDuesReportSummaryDto
+{
+    public int SelectedMonth { get; set; }
+    public int SelectedYear { get; set; }
+    public string CurrentMonthLabel { get; set; } = string.Empty;
+    public string PreviousMonthLabel { get; set; } = string.Empty;
+    public string PriorMonthsLabel { get; set; } = string.Empty;
+
+    public decimal OverallPriorPending { get; set; }
+    public decimal OverallPreviousPending { get; set; }
+    public decimal OverallCurrentPending { get; set; }
+    public decimal OverallTotalPending { get; set; }
+    public int TotalDefaultersCount { get; set; }
+
+    public IReadOnlyCollection<string> DynamicMonthColumns { get; set; } = Array.Empty<string>();
+    public IReadOnlyCollection<MemberPendingDuesReportDto> Members { get; set; } = Array.Empty<MemberPendingDuesReportDto>();
+}
+

@@ -3,6 +3,7 @@ using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Reports;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.Contributions;
+using TeamContributionManagementSystem.Application.DTOs.Users;
 using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -17,6 +18,7 @@ public class ReportService : IReportService
     private readonly IContributionRepository _contributionRepository;
     private readonly IExpenseRepository _expenseRepository;
     private readonly IPaymentTransactionRepository _paymentTransactionRepository;
+    private readonly IUserRepository? _userRepository;
     private readonly ICurrentUserService? _currentUserService;
 
     public ReportService(
@@ -25,6 +27,7 @@ public class ReportService : IReportService
         IContributionRepository contributionRepository,
         IExpenseRepository expenseRepository,
         IPaymentTransactionRepository paymentTransactionRepository,
+        IUserRepository? userRepository = null,
         ICurrentUserService? currentUserService = null)
     {
         _logger = logger;
@@ -32,6 +35,7 @@ public class ReportService : IReportService
         _contributionRepository = contributionRepository;
         _expenseRepository = expenseRepository;
         _paymentTransactionRepository = paymentTransactionRepository;
+        _userRepository = userRepository;
         _currentUserService = currentUserService;
     }
 
@@ -349,6 +353,258 @@ public class ReportService : IReportService
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetSummaryAsync));
+            throw;
+        }
+    }
+
+    public async Task<PendingDuesReportSummaryDto> GetPendingDuesReportAsync(
+        int? month = null,
+        int? year = null,
+        Guid? eventTypeId = null,
+        Guid? eventId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            int selectedYear = (year.HasValue && year.Value >= 2000) ? year.Value : DateTime.UtcNow.Year;
+            bool isAllMonths = (!month.HasValue || month.Value < 1 || month.Value > 12);
+
+            List<EventSummaryDto> events;
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                Guid? orgUserId = null;
+                if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+                {
+                    orgUserId = parsedGuid;
+                }
+                else if (_currentUserService.MemberId.HasValue)
+                {
+                    orgUserId = _currentUserService.MemberId.Value;
+                }
+
+                if (orgUserId.HasValue)
+                {
+                    events = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, null, null, cancellationToken);
+                }
+                else
+                {
+                    events = new List<EventSummaryDto>();
+                }
+            }
+            else
+            {
+                events = await _eventRepository.GetAllAsync(null, null, cancellationToken);
+            }
+
+            if (eventTypeId.HasValue && eventTypeId.Value != Guid.Empty)
+            {
+                events = events.Where(e => e.EventTypeId == eventTypeId.Value).ToList();
+            }
+
+            if (eventId.HasValue && eventId.Value != Guid.Empty)
+            {
+                events = events.Where(e => e.EventId == eventId.Value).ToList();
+            }
+
+            var eventIds = events.Select(e => e.EventId).ToHashSet();
+            var eventLookup = events.ToDictionary(e => e.EventId);
+
+            var allPending = await _contributionRepository.GetPendingAsync(null, null, cancellationToken);
+            allPending = allPending.Where(p => eventIds.Contains(p.EventId)).ToList();
+
+            int selectedMonth;
+            if (isAllMonths)
+            {
+                var pendingDatesInYear = allPending
+                    .Select(p => eventLookup.TryGetValue(p.EventId, out var ev) ? ev.EventDate : (p.CreatedAt ?? DateTime.UtcNow))
+                    .Where(d => d.Year == selectedYear)
+                    .OrderByDescending(d => d)
+                    .ToList();
+
+                if (pendingDatesInYear.Count > 0)
+                {
+                    selectedMonth = pendingDatesInYear[0].Month;
+                }
+                else
+                {
+                    var allPendingDatesOverall = allPending
+                        .Select(p => eventLookup.TryGetValue(p.EventId, out var ev) ? ev.EventDate : (p.CreatedAt ?? DateTime.UtcNow))
+                        .OrderByDescending(d => d)
+                        .ToList();
+
+                    if (allPendingDatesOverall.Count > 0)
+                    {
+                        selectedMonth = allPendingDatesOverall[0].Month;
+                        selectedYear = allPendingDatesOverall[0].Year;
+                    }
+                    else
+                    {
+                        selectedMonth = DateTime.UtcNow.Month;
+                    }
+                }
+            }
+            else
+            {
+                selectedMonth = month.GetValueOrDefault(DateTime.UtcNow.Month);
+            }
+
+            var currentMonthStart = new DateTime(selectedYear, selectedMonth, 1, 0, 0, 0, DateTimeKind.Utc);
+            var prevMonthStart = currentMonthStart.AddMonths(-1);
+            int prevMonth = prevMonthStart.Month;
+            int prevYear = prevMonthStart.Year;
+
+            string currentMonthLabel = currentMonthStart.ToString("MMMM");
+            string previousMonthLabel = prevMonthStart.ToString("MMMM");
+
+            List<UserDto> users = new();
+            if (_userRepository != null)
+            {
+                try
+                {
+                    var allUsers = await _userRepository.GetAllAsync(cancellationToken);
+                    users = allUsers.Where(u => !u.IsDeleted).ToList();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not load users for pending dues report");
+                }
+            }
+
+            // Identify distinct months earlier than prevMonth that actually have pending dues
+            var priorMonthsDates = allPending
+                .Select(p =>
+                {
+                    DateTime d = eventLookup.TryGetValue(p.EventId, out var ev) ? ev.EventDate : (p.CreatedAt ?? DateTime.UtcNow);
+                    return new DateTime(d.Year, d.Month, 1);
+                })
+                .Where(d => d < prevMonthStart)
+                .Distinct()
+                .OrderBy(d => d)
+                .ToList();
+
+            string priorMonthsLabel;
+            if (priorMonthsDates.Count > 0)
+            {
+                priorMonthsLabel = string.Join(" & ", priorMonthsDates.Select(d => d.ToString("MMMM")));
+            }
+            else
+            {
+                priorMonthsLabel = "Earlier Months";
+            }
+
+            var pendingByMember = allPending.GroupBy(p => p.MemberId).ToDictionary(g => g.Key, g => g.ToList());
+
+            var allMemberIds = new HashSet<Guid>();
+            foreach (var u in users) allMemberIds.Add(u.UserId);
+            foreach (var mid in pendingByMember.Keys) allMemberIds.Add(mid);
+
+            var memberReports = new List<MemberPendingDuesReportDto>();
+
+            foreach (var memberId in allMemberIds)
+            {
+                var user = users.FirstOrDefault(u => u.UserId == memberId);
+                var memberPending = pendingByMember.TryGetValue(memberId, out var pList) ? pList : new List<ContributionDto>();
+
+                string memberName = !string.IsNullOrWhiteSpace(user?.FullName)
+                    ? user.FullName
+                    : (memberPending.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.MemberName))?.MemberName ?? user?.Username ?? "Member");
+
+                decimal priorAmt = 0;
+                decimal prevAmt = 0;
+                decimal currentAmt = 0;
+
+                var monthlyBuckets = new Dictionary<string, (int Year, int Month, string MonthName, decimal Amount, int Count)>();
+
+                foreach (var item in memberPending)
+                {
+                    var evDate = eventLookup.TryGetValue(item.EventId, out var ev) ? ev.EventDate : (item.CreatedAt ?? DateTime.UtcNow);
+                    decimal roundedAmt = RoundingHelper.RoundToWhole(item.Amount);
+
+                    if (evDate.Year == selectedYear && evDate.Month == selectedMonth)
+                    {
+                        currentAmt += roundedAmt;
+                    }
+                    else if (evDate.Year == prevYear && evDate.Month == prevMonth)
+                    {
+                        prevAmt += roundedAmt;
+                    }
+                    else if (evDate < prevMonthStart)
+                    {
+                        priorAmt += roundedAmt;
+                    }
+                    else if (isAllMonths)
+                    {
+                        currentAmt += roundedAmt;
+                    }
+
+                    string key = $"{evDate.Year}-{evDate.Month:D2}";
+                    if (!monthlyBuckets.TryGetValue(key, out var b))
+                    {
+                        monthlyBuckets[key] = (evDate.Year, evDate.Month, evDate.ToString("MMMM"), roundedAmt, 1);
+                    }
+                    else
+                    {
+                        monthlyBuckets[key] = (b.Year, b.Month, b.MonthName, b.Amount + roundedAmt, b.Count + 1);
+                    }
+                }
+
+                decimal totalAmt = priorAmt + prevAmt + currentAmt;
+
+                var monthlyDetails = monthlyBuckets.Values
+                    .OrderBy(b => b.Year).ThenBy(b => b.Month)
+                    .Select(b => new MonthlyPendingDueDetailDto
+                    {
+                        Year = b.Year,
+                        Month = b.Month,
+                        MonthName = b.MonthName,
+                        PendingAmount = b.Amount,
+                        PendingEventsCount = b.Count
+                    })
+                    .ToList();
+
+                memberReports.Add(new MemberPendingDuesReportDto
+                {
+                    MemberId = memberId,
+                    MemberName = memberName,
+                    Email = user?.Email ?? string.Empty,
+                    Department = user?.WorkType ?? user?.RoleName ?? string.Empty,
+                    WorkType = user?.WorkType ?? string.Empty,
+                    PriorMonthsLabel = priorMonthsLabel,
+                    PriorMonthsPendingAmount = priorAmt,
+                    PreviousMonthLabel = previousMonthLabel,
+                    PreviousMonthPendingAmount = prevAmt,
+                    CurrentMonthLabel = currentMonthLabel,
+                    CurrentMonthPendingAmount = currentAmt,
+                    TotalPendingAmount = totalAmt,
+                    MonthlyBreakdown = monthlyDetails
+                });
+            }
+
+            memberReports = memberReports.OrderBy(m => m.MemberName).ToList();
+
+            return new PendingDuesReportSummaryDto
+            {
+                SelectedMonth = isAllMonths ? 0 : selectedMonth,
+                SelectedYear = selectedYear,
+                CurrentMonthLabel = currentMonthLabel,
+                PreviousMonthLabel = previousMonthLabel,
+                PriorMonthsLabel = priorMonthsLabel,
+                OverallPriorPending = memberReports.Sum(m => m.PriorMonthsPendingAmount),
+                OverallPreviousPending = memberReports.Sum(m => m.PreviousMonthPendingAmount),
+                OverallCurrentPending = memberReports.Sum(m => m.CurrentMonthPendingAmount),
+                OverallTotalPending = memberReports.Sum(m => m.TotalPendingAmount),
+                TotalDefaultersCount = memberReports.Count(m => m.TotalPendingAmount > 0),
+                Members = memberReports
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetPendingDuesReportAsync request was canceled.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetPendingDuesReportAsync));
             throw;
         }
     }
