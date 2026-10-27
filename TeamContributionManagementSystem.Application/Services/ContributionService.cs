@@ -248,9 +248,17 @@ public class ContributionService : IContributionService
                     decimal paidForThis = Math.Min(remainingAllocation, dueForThis);
                     remainingAllocation -= paidForThis;
 
-                    item.StatusId = paidStatusId;
+                    if (paidForThis >= dueForThis)
+                    {
+                        item.StatusId = paidStatusId;
+                        item.PaymentStatus = PaymentStatus.Paid;
+                    }
+                    else
+                    {
+                        item.PaymentStatus = PaymentStatus.Pending;
+                    }
+
                     item.PaymentModeId = paymentModeId;
-                    item.PaymentStatus = PaymentStatus.Paid;
                     item.PaymentDate = paymentDate;
                     item.PaymentMode = request.PaymentMode;
 
@@ -260,10 +268,15 @@ public class ContributionService : IContributionService
                         item.CashAmount = RoundingHelper.RoundToWhole((request.CashAmount ?? 0) * ratio);
                         item.UpiAmount = RoundingHelper.RoundToWhole((request.UpiAmount ?? 0) * ratio);
                     }
+                    else if (request.PaymentMode == PaymentMode.Cash)
+                    {
+                        item.CashAmount = paidForThis;
+                        item.UpiAmount = 0m;
+                    }
                     else
                     {
-                        item.CashAmount = null;
-                        item.UpiAmount = null;
+                        item.UpiAmount = paidForThis;
+                        item.CashAmount = 0m;
                     }
 
                     _contributionRepository.Update(item);

@@ -2545,10 +2545,7 @@ public class EventService : IEventService
                                 c.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
                                 c.StatusName.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                                 c.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
-                                c.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))) ||
-                            (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                            (c.UpiAmount.HasValue && c.UpiAmount.Value > 0) ||
-                            c.PaymentDate != null)
+                                c.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))))
                 .Sum(c => c.Amount);
 
             // 2. Total Verified/Approved Expenses across all events
