@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AutoMapper;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using QRCoder;
@@ -753,6 +754,20 @@ public class EventService : IEventService
                     .Select(x => x.MemberId)
                     .ToHashSet();
 
+                if (request.EventTypeMembers != null)
+                {
+                    foreach (var kvp in request.EventTypeMembers)
+                    {
+                        if (kvp.Value != null)
+                        {
+                            foreach (var mId in kvp.Value)
+                            {
+                                exemptCelebrantIds.Add(mId);
+                            }
+                        }
+                    }
+                }
+
                 DispatchEventNotificationEmails(
                     eventItem.EventId,
                     eventItem.EventName,
@@ -777,25 +792,27 @@ public class EventService : IEventService
 
     private void DispatchEventNotificationEmails(
         Guid eventId,
-        string eventName,
+        string? eventName,
         DateTime eventDate,
         string? eventDates,
-        string eventDescription,
+        string? eventDescription,
         decimal baseAmount,
         Guid eventTypeId,
-        string eventTypeName,
+        string? eventTypeName,
         HashSet<Guid> exemptCelebrantIds,
         IEnumerable<(Guid MemberId, string? Name, string? Email, decimal ContributionAmount)> participants)
     {
-        // Strip internal <!--contrib:{...}--> metadata that is stored alongside the
-        // user-facing description text. This must never appear in sent emails.
+        var rawEventDescription = eventDescription ?? string.Empty;
+
+        // Strip internal metadata tags (contrib, celebrants, eventDates, memberDates)
         eventDescription = System.Text.RegularExpressions.Regex
-            .Replace(eventDescription ?? string.Empty, @"<!--contrib:[\s\S]*?-->", string.Empty,
+            .Replace(rawEventDescription, @"<!--(contrib|celebrants|eventDates|memberDates):[\s\S]*?-->", string.Empty,
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             .Trim();
 
         var particularContributors = participants
-            .Where(m => !string.IsNullOrWhiteSpace(m.Email))
+            .Where(m => !string.IsNullOrWhiteSpace(m.Email)
+                     && !m.Email.Trim().EndsWith("@nomail.com", StringComparison.OrdinalIgnoreCase))
             .Select(m => new
             {
                 m.MemberId,
@@ -858,20 +875,108 @@ public class EventService : IEventService
                 }
 
                 List<MemberDto> targetCelebrants = new();
+                HashSet<Guid> detectedCelebrantIds = new(exemptCelebrantIds);
 
+                // 1. Extract from <!--celebrants:...--> in raw description
+                if (!string.IsNullOrWhiteSpace(rawEventDescription) && rawEventDescription.Contains("<!--celebrants:"))
+                {
+                    try
+                    {
+                        var startIdx = rawEventDescription.IndexOf("<!--celebrants:") + 15;
+                        var endIdx = rawEventDescription.IndexOf("-->", startIdx);
+                        if (startIdx >= 15 && endIdx > startIdx)
+                        {
+                            var jsonStr = rawEventDescription.Substring(startIdx, endIdx - startIdx).Trim();
+                            using var doc = JsonDocument.Parse(jsonStr);
+                            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                            {
+                                foreach (var prop in doc.RootElement.EnumerateObject())
+                                {
+                                    if (prop.Value.ValueKind == JsonValueKind.Array)
+                                    {
+                                        foreach (var elem in prop.Value.EnumerateArray())
+                                        {
+                                            if (elem.ValueKind == JsonValueKind.String && Guid.TryParse(elem.GetString(), out var mId))
+                                            {
+                                                detectedCelebrantIds.Add(mId);
+                                            }
+                                        }
+                                    }
+                                    else if (prop.Value.ValueKind == JsonValueKind.String && Guid.TryParse(prop.Value.GetString(), out var mId))
+                                    {
+                                        detectedCelebrantIds.Add(mId);
+                                    }
+                                }
+                            }
+                            else if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var elem in doc.RootElement.EnumerateArray())
+                                {
+                                    if (elem.ValueKind == JsonValueKind.String && Guid.TryParse(elem.GetString(), out var mId))
+                                    {
+                                        detectedCelebrantIds.Add(mId);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                bool isBirthdayEvent = (!string.IsNullOrWhiteSpace(eventTypeName) && eventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrWhiteSpace(eventName) && eventName.Contains("Birthday", StringComparison.OrdinalIgnoreCase));
+
+                bool isSendOff = (!string.IsNullOrWhiteSpace(eventTypeName) &&
+                    (eventTypeName.Contains("Send", StringComparison.OrdinalIgnoreCase) ||
+                     eventTypeName.Contains("Farewell", StringComparison.OrdinalIgnoreCase) ||
+                     eventTypeName.Contains("Exit", StringComparison.OrdinalIgnoreCase)))
+                    || (!string.IsNullOrWhiteSpace(eventName) &&
+                    (eventName.Contains("Send", StringComparison.OrdinalIgnoreCase) ||
+                     eventName.Contains("Farewell", StringComparison.OrdinalIgnoreCase) ||
+                     eventName.Contains("Exit", StringComparison.OrdinalIgnoreCase)));
+
+                bool isMarriage = (!string.IsNullOrWhiteSpace(eventTypeName) &&
+                    (eventTypeName.Contains("Marriage", StringComparison.OrdinalIgnoreCase) ||
+                     eventTypeName.Contains("Wedding", StringComparison.OrdinalIgnoreCase)))
+                    || (!string.IsNullOrWhiteSpace(eventName) &&
+                    (eventName.Contains("Marriage", StringComparison.OrdinalIgnoreCase) ||
+                     eventName.Contains("Wedding", StringComparison.OrdinalIgnoreCase)));
+
+                // 2. If Send-Off / Farewell event, also check ExitClearanceService
+                if (isSendOff)
+                {
+                    try
+                    {
+                        var scopedExitService = scope.ServiceProvider.GetService<IExitClearanceService>();
+                        if (scopedExitService != null)
+                        {
+                            var queue = await scopedExitService.GetQueueAsync(eventId: eventId, cancellationToken: CancellationToken.None);
+                            if (queue?.Items != null && queue.Items.Count > 0)
+                            {
+                                foreach (var item in queue.Items)
+                                {
+                                    detectedCelebrantIds.Add(item.MemberId);
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // 3. For Birthday events, resolve active birthdays in the month
                 if (isBirthdayEvent)
                 {
                     try
                     {
                         var allMonthCelebrants = await scopedMemberRepo.GetActiveBirthdaysInMonthAsync(eventDate.Month, CancellationToken.None);
 
-                        if (exemptCelebrantIds.Count > 0)
+                        if (detectedCelebrantIds.Count > 0)
                         {
-                            targetCelebrants = allMonthCelebrants.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
+                            targetCelebrants = allMonthCelebrants.Where(m => detectedCelebrantIds.Contains(m.MemberId)).ToList();
                             if (targetCelebrants.Count == 0)
                             {
-                                var allMembers = await scopedMemberRepo.GetAllActiveAsync(CancellationToken.None);
-                                targetCelebrants = allMembers.Where(m => exemptCelebrantIds.Contains(m.MemberId)).ToList();
+                                var allMembers = await scopedMemberRepo.GetAllAsync(CancellationToken.None);
+                                targetCelebrants = allMembers.Where(m => detectedCelebrantIds.Contains(m.MemberId)).ToList();
                             }
                         }
 
@@ -885,7 +990,7 @@ public class EventService : IEventService
                                 .ToList();
                         }
 
-                        if (targetCelebrants.Count == 0)
+                        if (targetCelebrants.Count == 0 && detectedCelebrantIds.Count == 0)
                         {
                             targetCelebrants = allMonthCelebrants;
                         }
@@ -895,27 +1000,105 @@ public class EventService : IEventService
                         scopedLogger.LogWarning(ex, "Failed to resolve active birthday celebrants for event email dispatch");
                     }
                 }
+                else if (detectedCelebrantIds.Count > 0)
+                {
+                    try
+                    {
+                        var allMembers = await scopedMemberRepo.GetAllAsync(CancellationToken.None);
+                        targetCelebrants = allMembers.Where(m => detectedCelebrantIds.Contains(m.MemberId)).ToList();
+
+                        if (targetCelebrants.Count < detectedCelebrantIds.Count)
+                        {
+                            var missingIds = detectedCelebrantIds.Where(id => !targetCelebrants.Any(t => t.MemberId == id)).ToList();
+                            var direct = await scopedMemberRepo.GetByIdsAsync(missingIds, CancellationToken.None);
+                            if (direct != null && direct.Count > 0)
+                            {
+                                targetCelebrants.AddRange(direct.Select(d => new MemberDto
+                                {
+                                    MemberId = d.MemberId,
+                                    Name = d.Name,
+                                    Email = d.Email,
+                                    DateOfBirth = d.DateOfBirth
+                                }));
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // 4. Fallback: check zero amount contributions for this event
+                if (targetCelebrants.Count == 0 && eventId != Guid.Empty)
+                {
+                    try
+                    {
+                        var scopedContribRepo = scope.ServiceProvider.GetService<IContributionRepository>();
+                        if (scopedContribRepo != null)
+                        {
+                            var contribs = await scopedContribRepo.GetByEventIdAsync(eventId, CancellationToken.None);
+                            var zeroAmts = contribs.Where(c => c.Amount == 0).Select(c => c.MemberId).ToList();
+                            if (zeroAmts.Count > 0)
+                            {
+                                var zeroMembers = await scopedMemberRepo.GetByIdsAsync(zeroAmts, CancellationToken.None);
+                                if (zeroMembers != null && zeroMembers.Count > 0)
+                                {
+                                    targetCelebrants = zeroMembers.Select(d => new MemberDto
+                                    {
+                                        MemberId = d.MemberId,
+                                        Name = d.Name,
+                                        Email = d.Email,
+                                        DateOfBirth = d.DateOfBirth
+                                    }).ToList();
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
 
                 targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
                 var celebrantNames = targetCelebrants.Select(m => m.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
 
-                if (celebrantNames.Count == 0 && isBirthdayEvent)
+                if (celebrantNames.Count == 0)
                 {
-                    var nameParts = eventName.Split(new[] { '-', ':' }, 2);
-                    if (nameParts.Length > 1 && !string.IsNullOrWhiteSpace(nameParts[1]))
+                    var nameParts = eventName.Split(new[] { '-', ':', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (nameParts.Length > 1)
                     {
-                        var parsed = nameParts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                            .Select(p => p.Trim())
-                            .Where(p => !string.IsNullOrWhiteSpace(p))
-                            .ToList();
-                        if (parsed.Count > 0)
+                        var candidate = nameParts[1].Trim();
+                        if (!string.IsNullOrWhiteSpace(candidate) && !candidate.Equals("event", StringComparison.OrdinalIgnoreCase))
                         {
-                            celebrantNames = parsed;
+                            var parsed = candidate.Split(new[] { ',', '&' }, StringSplitOptions.RemoveEmptyEntries)
+                                .Select(p => p.Trim())
+                                .Where(p => !string.IsNullOrWhiteSpace(p))
+                                .ToList();
+                            if (parsed.Count > 0)
+                            {
+                                celebrantNames = parsed;
+                            }
                         }
                     }
                 }
 
                 string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
+
+                var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
+                string celebrantLabel;
+                if (isBirthdayEvent)
+                {
+                    celebrantLabel = celebrantNames.Count > 1 ? "Birthday Celebrants" : "Birthday Celebrant";
+                }
+                else if (isSendOff)
+                {
+                    celebrantLabel = celebrantNames.Count > 1 ? "Send-Off Members" : "Send-Off Member";
+                }
+                else if (isMarriage)
+                {
+                    celebrantLabel = celebrantNames.Count > 1 ? "Marriage Couple" : "Marriage Celebrant";
+                }
+                else
+                {
+                    celebrantLabel = celebrantNames.Count > 1 ? $"{safeCategoryName} Honorees" : $"{safeCategoryName} Honoree";
+                }
+                eventDescription = eventDescription?.Trim() ?? string.Empty;
 
                 Func<MemberDto, DateTime> getCelebrantBirthDate = (m) =>
                 {
@@ -989,6 +1172,14 @@ public class EventService : IEventService
                 </div>";
                     }
                 }
+                else if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
+                {
+                    celebrantsAndDatesHtml = $@"
+                <div class=""detail-row"">
+                    <span class=""detail-label"">{celebrantLabel}:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{celebrantsFormatted}</span>
+                </div>";
+                }
 
                 // Resolve Payment QR config for this event type
                 string effectiveReceiverName = orgName;
@@ -1032,10 +1223,23 @@ public class EventService : IEventService
                             }
                         }
 
-                        // 3. Fallback to "all"
-                        if (!found && root.TryGetProperty("all", out matchedElem))
+                        // 4. Fallback to any configured event type in paymentQrConfigs
+                        if (!found)
                         {
-                            found = true;
+                            foreach (var prop in root.EnumerateObject())
+                            {
+                                if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                                {
+                                    var u = prop.Value.TryGetProperty("upiId", out var upVal) ? upVal.GetString() : null;
+                                    var img = prop.Value.TryGetProperty("qrImage", out var imgVal) ? imgVal.GetString() : null;
+                                    if (!string.IsNullOrWhiteSpace(u) || !string.IsNullOrWhiteSpace(img))
+                                    {
+                                        matchedElem = prop.Value;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
                         }
 
                         if (found && matchedElem.ValueKind == System.Text.Json.JsonValueKind.Object)
@@ -1053,20 +1257,49 @@ public class EventService : IEventService
                     catch { }
                 }
 
-                bool isQrConfigured = !string.IsNullOrWhiteSpace(effectiveUpiId) || !string.IsNullOrWhiteSpace(uploadedQrImage);
-
-                // If uploaded image mode is configured but no data URI is in settings, try reading wwwroot gpay image
-                if (isQrConfigured && string.IsNullOrWhiteSpace(uploadedQrImage) && !string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
+                // If not found in systemSettings.PaymentQrConfigs, query EventTypePaymentSettings table from repository
+                if (string.IsNullOrWhiteSpace(effectiveUpiId) && string.IsNullOrWhiteSpace(uploadedQrImage))
                 {
                     try
                     {
-                        var bytes = File.ReadAllBytes(gpayImagePath);
-                        var ext = Path.GetExtension(gpayImagePath).TrimStart('.').ToLowerInvariant();
-                        var mime = ext == "jpg" || ext == "jpeg" ? "image/jpeg" : "image/png";
-                        uploadedQrImage = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+                        var scopedSettingRepo = scope.ServiceProvider.GetService<ISystemSettingRepository>();
+                        if (scopedSettingRepo != null)
+                        {
+                            var allSettings = await scopedSettingRepo.GetAllEventTypePaymentSettingsAsync(CancellationToken.None);
+                            if (allSettings != null && allSettings.Count > 0)
+                            {
+                                var matched = allSettings.FirstOrDefault(s => s.EventTypeId == eventTypeId)
+                                    ?? allSettings.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.EventTypeName) && s.EventTypeName.Equals(eventTypeName, StringComparison.OrdinalIgnoreCase))
+                                    ?? allSettings.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.EventTypeName) && (!string.IsNullOrWhiteSpace(eventTypeName) && (eventTypeName.Contains(s.EventTypeName, StringComparison.OrdinalIgnoreCase) || s.EventTypeName.Contains(eventTypeName, StringComparison.OrdinalIgnoreCase))))
+                                    ?? allSettings.FirstOrDefault(s => s.EventTypeName?.Equals("all", StringComparison.OrdinalIgnoreCase) == true)
+                                    ?? allSettings.FirstOrDefault(s => s.IsConfigured && (!string.IsNullOrWhiteSpace(s.UpiId) || !string.IsNullOrWhiteSpace(s.QrImageUrl)));
+
+                                if (matched != null)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(matched.UpiId)) effectiveUpiId = matched.UpiId.Trim();
+                                    if (!string.IsNullOrWhiteSpace(matched.ReceiverName)) effectiveReceiverName = matched.ReceiverName.Trim();
+                                    if (!string.IsNullOrWhiteSpace(matched.QrMode)) qrMode = matched.QrMode.Trim();
+                                    if (!string.IsNullOrWhiteSpace(matched.QrImageUrl)) uploadedQrImage = matched.QrImageUrl.Trim();
+                                }
+                            }
+                        }
                     }
                     catch { }
                 }
+
+                // Default fallback if still not configured: ensure scanner is ALWAYS present
+                if (string.IsNullOrWhiteSpace(effectiveUpiId) && string.IsNullOrWhiteSpace(uploadedQrImage))
+                {
+                    var scopedConfig = scope.ServiceProvider.GetService<IConfiguration>();
+                    var configUpi = scopedConfig?["PaymentQr:DefaultUpiId"];
+                    var configReceiver = scopedConfig?["PaymentQr:DefaultReceiverName"];
+
+                    effectiveUpiId = !string.IsNullOrWhiteSpace(configUpi) ? configUpi.Trim() : "danielrobertanto604@okicici";
+                    effectiveReceiverName = !string.IsNullOrWhiteSpace(configReceiver) ? configReceiver.Trim() : (!string.IsNullOrWhiteSpace(orgName) ? orgName : "Unit 1A Residents Association");
+                    qrMode = "generated";
+                }
+
+                bool isQrConfigured = !string.IsNullOrWhiteSpace(effectiveUpiId) || !string.IsNullOrWhiteSpace(uploadedQrImage);
 
                 foreach (var contributor in particularContributors)
                 {
@@ -1079,7 +1312,6 @@ public class EventService : IEventService
                         var formattedDueDate = eventDate.ToString("dd/MM/yyyy");
 
                         var memberName = !string.IsNullOrWhiteSpace(contributor.Name) ? contributor.Name.Trim() : "Member";
-                        var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
                         var safeEventName = !string.IsNullOrWhiteSpace(eventName) ? eventName.Trim() : "Event";
                         var safeOrgName = !string.IsNullOrWhiteSpace(orgName) ? orgName.Trim() : "Unit 1A Residents Association";
 
@@ -1087,7 +1319,7 @@ public class EventService : IEventService
                             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{eventName}", safeEventName, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{eventDescription}", eventDescription, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{eventDescription}", eventDescription ?? string.Empty, StringComparison.OrdinalIgnoreCase)
                             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
                             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
                             .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase);
@@ -1180,26 +1412,59 @@ public class EventService : IEventService
                             }
                         }
 
+                        string detailsCardHtml = $@"
+            <div class=""details-card"">
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Event Name:</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{safeEventName}</span>
+                </div>
+                {celebrantsAndDatesHtml}
+                <div class=""detail-row"">
+                    <span class=""detail-label"">{eventDateLabel}</span>
+                    <span class=""detail-value"" style=""font-weight: 600;"">{eventDateValueDisplay}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Total Amount:</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{totalAmountDisplay}</span>
+                </div>
+                {(string.IsNullOrWhiteSpace(eventDescription) ? string.Empty : $@"<div class=""detail-row"">
+                    <span class=""detail-label"">Description:</span>
+                    <span class=""detail-value"">{eventDescription}</span>
+                </div>")}
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Contribution Amount:</span>
+                    <span class=""detail-value amount-highlight"">{formattedAmount}</span>
+                </div>
+            </div>";
+
                         bool qrInCustomDesc = (configuredDescription ?? string.Empty).Contains("{qrCode}", StringComparison.OrdinalIgnoreCase);
+
+                        string qrBlockWithTable = !string.IsNullOrWhiteSpace(qrCodeCardHtml)
+                            ? $"{detailsCardHtml}\n{qrCodeCardHtml}"
+                            : detailsCardHtml;
 
                         var interpolated = (configuredDescription ?? string.Empty)
                             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{categoryName}", safeCategoryName, StringComparison.OrdinalIgnoreCase)
                             .Replace("{eventName}", safeEventName, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{eventDescription}", eventDescription, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{eventDescription}", eventDescription ?? string.Empty, StringComparison.OrdinalIgnoreCase)
                             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
                             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{paymentLink}", portalContributionUrl, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{qrCode}", qrCodeCardHtml, StringComparison.OrdinalIgnoreCase);
+                            .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase);
 
                         var formattedText = interpolated
                             .Replace("\r\n", "<br />")
                             .Replace("\n", "<br />");
 
+                        formattedText = System.Text.RegularExpressions.Regex.Replace(formattedText, @"(<br\s*/?>\s*){3,}", "<br /><br />");
+
+                        formattedText = formattedText
+                            .Replace("{qrCode}", qrBlockWithTable, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{paymentLink}", $@"<div style=""text-align: center; margin: 16px 0;""><a href=""{portalContributionUrl}"" class=""btn-portal"" style=""display: inline-block; background: linear-gradient(135deg, #4a3f6b 0%, #2d2550 100%); color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 700; padding: 12px 30px; border-radius: 10px; box-shadow: 0 4px 14px rgba(74, 63, 107, 0.3);"">Go to Contribution Page &amp; Pay</a></div>", StringComparison.OrdinalIgnoreCase);
+
                         string customMessageHtml = $@"<div style=""font-size: 15px; line-height: 1.7; color: #334155; margin-bottom: 24px;"">{formattedText}</div>";
 
-                        string standaloneQrBlock = qrInCustomDesc ? string.Empty : qrCodeCardHtml;
+                        string fallbackCardAndQr = qrInCustomDesc ? string.Empty : $"{detailsCardHtml}\n{qrCodeCardHtml}";
 
                         var emailBody = $@"
 <!DOCTYPE html>
@@ -1349,38 +1614,7 @@ public class EventService : IEventService
         </div>
         <div class=""content"">
             {customMessageHtml}
-            
-            <div class=""details-card"">
-                <div class=""detail-row"">
-                    <span class=""detail-label"">Event Name:</span>
-                    <span class=""detail-value"" style=""font-weight: 700;"">{safeEventName}</span>
-                </div>
-                {celebrantsAndDatesHtml}
-                <div class=""detail-row"">
-                    <span class=""detail-label"">{eventDateLabel}</span>
-                    <span class=""detail-value"" style=""font-weight: 600;"">{eventDateValueDisplay}</span>
-                </div>
-                <div class=""detail-row"">
-                    <span class=""detail-label"">Total Amount:</span>
-                    <span class=""detail-value"" style=""font-weight: 700;"">{totalAmountDisplay}</span>
-                </div>
-                <div class=""detail-row"">
-                    <span class=""detail-label"">Description:</span>
-                    <span class=""detail-value"">{eventDescription}</span>
-                </div>
-                <div class=""detail-row"">
-                    <span class=""detail-label"">Contribution Amount:</span>
-                    <span class=""detail-value amount-highlight"">{formattedAmount}</span>
-                </div>
-            </div>
-
-            {standaloneQrBlock}
-
-            <div style=""text-align: center; margin: 30px 0 10px 0;"">
-                <a href=""{portalContributionUrl}"" target=""_blank"" class=""btn-portal"">
-                    Go to Contribution Page &amp; Pay
-                </a>
-            </div>
+            {fallbackCardAndQr}
         </div>
         <div class=""footer"">
             This is an automated notification from {safeOrgName}.
@@ -1792,6 +2026,20 @@ public class EventService : IEventService
                     .Where(x => x.Amount == 0)
                     .Select(x => x.MemberId)
                     .ToHashSet();
+
+                if (request.EventTypeMembers != null)
+                {
+                    foreach (var kvp in request.EventTypeMembers)
+                    {
+                        if (kvp.Value != null)
+                        {
+                            foreach (var mId in kvp.Value)
+                            {
+                                exemptCelebrantIds.Add(mId);
+                            }
+                        }
+                    }
+                }
 
                 DispatchEventNotificationEmails(
                     eventItem.EventId,
@@ -2376,15 +2624,11 @@ public class EventService : IEventService
         string eventTypeName,
         string templateType = "initial")
     {
-        string defaultBirthdaySubject = "Birthday Celebration Contribution - {categoryName}";
-        string defaultBirthdayDesc = "Dear {memberName},\n\nWe have upcoming birthdays this month in our team! Your planned contribution for {categoryName} is {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nWarm regards,\n{orgName}";
+        string defaultSubject = "Contribution Notice - {categoryName}";
+        string defaultDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease scan the dynamic UPI QR code below or log in to the portal to complete your contribution payment.\n\n{qrCode}\n\n{paymentLink}\n\nThank you,\n{orgName}";
 
-        string defaultGeneralSubject = "Contribution Notice - {categoryName}";
-        string defaultGeneralDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
-
-        bool isBirthday = (eventTypeName ?? string.Empty).Contains("Birthday", StringComparison.OrdinalIgnoreCase);
-        string fallbackSubject = isBirthday ? defaultBirthdaySubject : defaultGeneralSubject;
-        string fallbackDesc = isBirthday ? defaultBirthdayDesc : defaultGeneralDesc;
+        string fallbackSubject = !string.IsNullOrWhiteSpace(settings?.EmailSubject) ? settings.EmailSubject.Trim() : defaultSubject;
+        string fallbackDesc = !string.IsNullOrWhiteSpace(settings?.EmailDescription) ? settings.EmailDescription.Trim() : defaultDesc;
 
         if (settings == null) return (fallbackSubject, fallbackDesc);
 
@@ -2448,24 +2692,7 @@ public class EventService : IEventService
                 }
             }
 
-            // 3. Try loose category name match
-            if (matchedEntry == null && !string.IsNullOrWhiteSpace(typeNameClean))
-            {
-                foreach (var property in root.EnumerateObject())
-                {
-                    var key = property.Name.Trim().ToLowerInvariant();
-                    if ((typeNameClean.Contains("birthday") && key.Contains("birthday")) ||
-                        (typeNameClean.Contains("dinner") && key.Contains("dinner")) ||
-                        (typeNameClean.Contains("farewell") && key.Contains("farewell")) ||
-                        (typeNameClean.Contains("outing") && key.Contains("outing")))
-                    {
-                        matchedEntry = property.Value;
-                        break;
-                    }
-                }
-            }
-
-            // 4. Try "all" fallback
+            // 3. Fallback to "all" in CategoryTemplates
             if (matchedEntry == null)
             {
                 foreach (var property in root.EnumerateObject())
@@ -2519,16 +2746,6 @@ public class EventService : IEventService
             }
         }
 
-        // 5. Fallback to settings.EmailSubject / settings.EmailDescription
-        if (!string.IsNullOrWhiteSpace(settings.EmailSubject) || !string.IsNullOrWhiteSpace(settings.EmailDescription))
-        {
-            return (
-                !string.IsNullOrWhiteSpace(settings.EmailSubject) ? settings.EmailSubject : fallbackSubject,
-                !string.IsNullOrWhiteSpace(settings.EmailDescription) ? settings.EmailDescription : fallbackDesc
-            );
-        }
-
-        // 6. Default fallback to standard templates (never null!)
         return (fallbackSubject, fallbackDesc);
     }
 
@@ -2545,10 +2762,7 @@ public class EventService : IEventService
                                 c.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
                                 c.StatusName.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                                 c.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
-                                c.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))) ||
-                            (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                            (c.UpiAmount.HasValue && c.UpiAmount.Value > 0) ||
-                            c.PaymentDate != null)
+                                c.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase))))
                 .Sum(c => c.Amount);
 
             // 2. Total Verified/Approved Expenses across all events
