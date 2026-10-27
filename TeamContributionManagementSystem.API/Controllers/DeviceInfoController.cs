@@ -69,10 +69,13 @@ public class DeviceInfoController : ControllerBase
     {
         var userId = GetUserId();
         var sessionIdClaim = User.FindFirst("SessionId")?.Value;
-        if (Guid.TryParse(sessionIdClaim, out var sessionId))
+        Guid? sessionId = Guid.TryParse(sessionIdClaim, out var parsedSessionId) ? parsedSessionId : null;
+
+        if (userId != Guid.Empty)
         {
-            await _sessionService.LogoutSessionAsync(sessionId, userId, cancellationToken);
+            await _sessionService.LogoutCurrentSessionAsync(userId, sessionId, cancellationToken);
         }
+
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse.SuccessResult(CommonMessages.DeviceInfo.LogoutCurrentSessionSuccess, CommonStatusCodes.Status200OK));
     }
 

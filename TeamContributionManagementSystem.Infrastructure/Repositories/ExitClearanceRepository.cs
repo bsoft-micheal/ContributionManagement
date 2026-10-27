@@ -234,4 +234,10 @@ CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_clearance_id ON exit_clea
     {
         return await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
     }
+
+    public async Task<bool> HasActiveLoginSessionsAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.DeviceLoginHistories
+            .AnyAsync(h => h.UserId == userId && h.IsActive && h.LogoutTime == null, cancellationToken);
+    }
 }
