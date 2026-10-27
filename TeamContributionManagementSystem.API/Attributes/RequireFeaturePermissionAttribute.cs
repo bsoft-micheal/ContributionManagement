@@ -38,8 +38,12 @@ public class FeaturePermissionFilter : IAsyncActionFilter
             return;
         }
 
-        var roleClaim = user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value 
-                     ?? user.FindFirst("role")?.Value;
+        var headerRole = context.HttpContext.Request.Headers["X-Active-Role"].FirstOrDefault()
+            ?? context.HttpContext.Request.Headers["X-Role"].FirstOrDefault();
+        var activeRoleClaim = user.FindFirst("activeRole")?.Value;
+        var roleClaim = !string.IsNullOrWhiteSpace(headerRole) ? headerRole.Trim()
+            : (!string.IsNullOrWhiteSpace(activeRoleClaim) ? activeRoleClaim.Trim()
+            : (user.FindFirst("role")?.Value ?? user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value));
 
         if (string.IsNullOrWhiteSpace(roleClaim))
         {

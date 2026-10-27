@@ -323,9 +323,16 @@ public class EventService : IEventService
                 if (curUserGuid.HasValue)
                 {
                     var rawEvent = await _eventRepository.GetByIdAsync(eventId, cancellationToken);
-                    if (rawEvent != null && rawEvent.CreatedBy != curUserGuid.Value)
+                    if (rawEvent != null)
                     {
-                        throw new UnauthorizedAccessException("Organizers can only view details of events they created.");
+                        bool isUserAdmin = _currentUserService.HasRole(CommonRoles.Admin);
+                        bool isAllowed = rawEvent.CreatedBy == curUserGuid.Value &&
+                            (!isUserAdmin || (rawEvent.Description != null && rawEvent.Description.Contains("CREATOR_ROLE: Organizer")));
+
+                        if (!isAllowed)
+                        {
+                            throw new UnauthorizedAccessException("Organizers can only view details of events they created.");
+                        }
                     }
                 }
             }
@@ -607,13 +614,20 @@ public class EventService : IEventService
                 cleanDesc = cleanDesc.Substring(0, 900);
             }
 
+            var activeCreatorRole = _currentUserService?.Role;
+            if (string.IsNullOrWhiteSpace(activeCreatorRole))
+            {
+                activeCreatorRole = _currentUserService?.IsOrganizerRole == true ? "Organizer" : "Admin";
+            }
+
             var packedDescription = EventMetadataHelper.PackDescription(
                 cleanDesc,
                 request.UsePreviousEventBalance && appliedAdjustment > 0,
                 appliedAdjustment,
                 appliedAdjustmentType,
                 plannedBudget,
-                prevEventName);
+                prevEventName,
+                activeCreatorRole);
 
             var eventItem = new Event
             {
@@ -1411,7 +1425,11 @@ public class EventService : IEventService
                 var curUserId = _currentUserService.UserId;
                 if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
                 {
-                    if (eventItem.CreatedBy != curUserGuid)
+                    bool isUserAdmin = _currentUserService.HasRole(CommonRoles.Admin);
+                    bool isAllowed = eventItem.CreatedBy == curUserGuid &&
+                        (!isUserAdmin || (eventItem.Description != null && eventItem.Description.Contains("CREATOR_ROLE: Organizer")));
+
+                    if (!isAllowed)
                     {
                         throw new UnauthorizedAccessException("Organizers can only edit events they created.");
                     }
@@ -1554,13 +1572,17 @@ public class EventService : IEventService
                 }
             }
 
+            var (_, _, _, _, _, _, existingCreatorRole) = EventMetadataHelper.UnpackDescriptionWithRole(eventItem.Description);
+            var updatedCreatorRole = existingCreatorRole ?? (_currentUserService?.IsOrganizerRole == true ? "Organizer" : "Admin");
+
             var packedDescription = EventMetadataHelper.PackDescription(
                 cleanDesc,
                 request.UsePreviousEventBalance && appliedAdjustment > 0,
                 appliedAdjustment,
                 appliedAdjustmentType,
                 plannedBudget,
-                prevEventName);
+                prevEventName,
+                updatedCreatorRole);
 
             eventItem.Description = packedDescription;
             if (request.Status != 0)
@@ -1812,7 +1834,11 @@ public class EventService : IEventService
                 var curUserId = _currentUserService.UserId;
                 if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
                 {
-                    if (eventItem.CreatedBy != curUserGuid)
+                    bool isUserAdmin = _currentUserService.HasRole(CommonRoles.Admin);
+                    bool isAllowed = eventItem.CreatedBy == curUserGuid &&
+                        (!isUserAdmin || (eventItem.Description != null && eventItem.Description.Contains("CREATOR_ROLE: Organizer")));
+
+                    if (!isAllowed)
                     {
                         throw new UnauthorizedAccessException("Organizers can only delete events they created.");
                     }
@@ -1912,7 +1938,11 @@ public class EventService : IEventService
                 var curUserId = _currentUserService.UserId;
                 if (!string.IsNullOrWhiteSpace(curUserId) && Guid.TryParse(curUserId, out var curUserGuid))
                 {
-                    if (eventItem.CreatedBy != curUserGuid)
+                    bool isUserAdmin = _currentUserService.HasRole(CommonRoles.Admin);
+                    bool isAllowed = eventItem.CreatedBy == curUserGuid &&
+                        (!isUserAdmin || (eventItem.Description != null && eventItem.Description.Contains("CREATOR_ROLE: Organizer")));
+
+                    if (!isAllowed)
                     {
                         throw new UnauthorizedAccessException("Organizers can only publish events they created.");
                     }

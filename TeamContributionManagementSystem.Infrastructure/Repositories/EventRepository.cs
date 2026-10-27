@@ -312,6 +312,17 @@ public class EventRepository : IEventRepository
                 .Where(x => !x.IsDeleted && x.CreatedBy == organizerUserId)
                 .AsQueryable();
 
+            // Multi-role session isolation: Check if this organizer user ALSO has the Admin role
+            var isUserAdmin = await _context.UserRoles
+                .AnyAsync(ur => ur.UserId == organizerUserId && ur.Role != null && !ur.Role.IsDeleted && ur.Role.RoleName.ToLower() == "admin", cancellationToken)
+                || await _context.Users.AnyAsync(u => u.UserId == organizerUserId && u.Role == Domain.Enums.UserRole.Admin, cancellationToken);
+
+            if (isUserAdmin)
+            {
+                // Multi-role user operating in Organizer role: only show events created under the Organizer role
+                query = query.Where(x => x.Description != null && x.Description.Contains("CREATOR_ROLE: Organizer"));
+            }
+
             if (month.HasValue)
             {
                 query = query.Where(x => x.EventDate.Month == month.Value);
