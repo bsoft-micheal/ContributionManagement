@@ -15,12 +15,15 @@ public class Event
     public decimal BaseAmount { get; set; }
     public bool UseAvailableBalance { get; set; }
     public decimal AllocatedAmount { get; set; }
+    public bool EnableCelebrantSelection { get; set; } = false;
+    public bool RequireSponsorContribution { get; set; } = false;
     public bool IsDeleted { get; set; }
 
     public EventType? EventType { get; set; }
     public AppUser? CreatedByUser { get; set; }
     public ICollection<EventParticipant> Participants { get; set; } = new List<EventParticipant>();
     public ICollection<Contribution> Contributions { get; set; } = new List<Contribution>();
+    public ICollection<EventSponsor> Sponsors { get; set; } = new List<EventSponsor>();
 
     // Publication Audit Properties
     public DateTime? PublishedAt { get; set; }

@@ -92,6 +92,9 @@ public class ApplicationDbContextSeeder
                 await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS users ALTER COLUMN username DROP NOT NULL; ALTER TABLE IF EXISTS users ALTER COLUMN password_hash DROP NOT NULL;", cancellationToken);
                 await _context.Database.ExecuteSqlRawAsync("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username_lower ON users (LOWER(username)) WHERE is_deleted = false AND username IS NOT NULL AND username <> '';", cancellationToken);
                 await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS gallery_photos ALTER COLUMN title TYPE VARCHAR(250);", cancellationToken);
+                await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS enable_celebrant_selection BOOLEAN NOT NULL DEFAULT FALSE;", cancellationToken);
+                await ExecuteScriptIfExistsAsync("add_enable_celebrant_selection_to_events.sql", cancellationToken);
+                await ExecuteScriptIfExistsAsync("create_event_sponsors_tables.sql", cancellationToken);
 
                 // Ensure birthday_reminder_logs table exists
                 await _context.Database.ExecuteSqlRawAsync(@"
@@ -182,6 +185,11 @@ CREATE TABLE IF NOT EXISTS exit_clearance_histories (
 CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_member_id ON exit_clearance_histories(member_id);
 CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_event_id ON exit_clearance_histories(event_id);
 CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_clearance_id ON exit_clearance_histories(clearance_id);
+
+DROP INDEX IF EXISTS public.idx_event_sponsors_single_active;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_event_sponsors_event_user_active 
+ON public.event_sponsors (event_id, user_id) 
+WHERE is_active = TRUE AND is_deleted = FALSE;
 ", cancellationToken);
             }
             catch { /* Non-fatal */ }

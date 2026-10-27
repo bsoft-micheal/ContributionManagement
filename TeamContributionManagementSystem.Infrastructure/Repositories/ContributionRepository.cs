@@ -174,6 +174,11 @@ public class ContributionRepository : IContributionRepository
     {
         try
         {
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty) })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
             var items = await _context.Contributions
                 .Where(x => x.EventId == eventId && !x.IsDeleted)
                 .OrderBy(x => x.User != null ? x.User.FullName : string.Empty)

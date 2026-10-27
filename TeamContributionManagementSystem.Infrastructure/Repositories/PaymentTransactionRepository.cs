@@ -80,7 +80,7 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
                     TxnNumber = x.TxnNumber,
                     EventId = x.EventId,
                     UserId = x.UserId,
-                    MemberName = x.User != null ? (!string.IsNullOrWhiteSpace(x.User.FullName) ? x.User.FullName : x.User.Username) : string.Empty,
+                    MemberName = x.User != null ? (!string.IsNullOrWhiteSpace(x.User.FullName) ? x.User.FullName : (x.User.Username ?? string.Empty)) : string.Empty,
                     EventName = x.Event != null ? x.Event.EventName : string.Empty,
                     Amount = x.Amount,
                     PaymentDate = x.PaymentDate,

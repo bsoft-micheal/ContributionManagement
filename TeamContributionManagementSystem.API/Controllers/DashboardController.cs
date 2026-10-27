@@ -16,6 +16,7 @@ namespace TeamContributionManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [Route(CommonRoutes.Dashboard.Base)]
+[Route("api/dashboard")]
 public class DashboardController : ControllerBase
 {
     private readonly IDashboardService _dashboardService;
@@ -90,5 +91,64 @@ public class DashboardController : ControllerBase
 
         var allEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<EventSummaryDto>>.SuccessResult(allEvents, CommonMessages.Events.GetAllSuccess, CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Retrieves KPI summary metrics for the authenticated member dashboard.
+    /// </summary>
+    [HttpGet("member/summary")]
+    [HttpGet("getMemberSummaryAsync")]
+    [ActionName(nameof(GetMemberSummaryAsync))]
+    public async Task<ActionResult<ApiResponse<MemberDashboardSummaryDto>>> GetMemberSummaryAsync([FromQuery] int? month, [FromQuery] int? year, CancellationToken cancellationToken)
+    {
+        var result = await _dashboardService.GetMemberSummaryAsync(month, year, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<MemberDashboardSummaryDto>.SuccessResult(result, "Member dashboard summary retrieved successfully.", CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Retrieves event-wise contribution items with payment eligibility for the authenticated member.
+    /// </summary>
+    [HttpGet("member/contributions")]
+    [HttpGet("getMemberContributionsAsync")]
+    [ActionName(nameof(GetMemberContributionsAsync))]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<MemberContributionItemDto>>>> GetMemberContributionsAsync([FromQuery] int? month, [FromQuery] int? year, [FromQuery] string? eventTypeId, CancellationToken cancellationToken)
+    {
+        Guid? parsedGuid = null;
+        string? eventTypeName = null;
+
+        if (!string.IsNullOrWhiteSpace(eventTypeId) && !string.Equals(eventTypeId, "ALL", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Guid.TryParse(eventTypeId, out var g))
+            {
+                parsedGuid = g;
+            }
+            else
+            {
+                eventTypeName = eventTypeId.Trim();
+            }
+        }
+
+        var result = await _dashboardService.GetMemberContributionsAsync(month, year, parsedGuid, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(eventTypeName))
+        {
+            result = result
+                .Where(x => string.Equals(x.EventTypeName?.Trim(), eventTypeName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<MemberContributionItemDto>>.SuccessResult(result, "Member contributions retrieved successfully.", CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
+    /// Retrieves the authenticated member's latest five payment transactions.
+    /// </summary>
+    [HttpGet("member/recent-payments")]
+    [HttpGet("getMemberRecentPaymentsAsync")]
+    [ActionName(nameof(GetMemberRecentPaymentsAsync))]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<MemberRecentPaymentDto>>>> GetMemberRecentPaymentsAsync([FromQuery] int limit = 5, CancellationToken cancellationToken = default)
+    {
+        var result = await _dashboardService.GetMemberRecentPaymentsAsync(limit, cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<MemberRecentPaymentDto>>.SuccessResult(result, "Member recent payments retrieved successfully.", CommonStatusCodes.Status200OK));
     }
 }

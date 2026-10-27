@@ -142,7 +142,7 @@ public class EventService : IEventService
                 {
                     orgUserId = _currentUserService.MemberId.Value;
                 }
-                else if (!string.IsNullOrWhiteSpace(_currentUserService.Email) && _userRepository != null)
+                else if (!string.IsNullOrWhiteSpace(_currentUserService.Email))
                 {
                     var u = await _userRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
                     if (u != null) orgUserId = u.UserId;
@@ -199,7 +199,7 @@ public class EventService : IEventService
                 var users = await _userRepository.GetAllAsync(cancellationToken);
                 var userDict = users.ToDictionary(
                     u => u.UserId.ToString(),
-                    u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username,
+                    u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty),
                     StringComparer.OrdinalIgnoreCase);
 
                 foreach (var ev in events)
@@ -269,7 +269,14 @@ public class EventService : IEventService
                                         typeMembers["sendOff"] = guids;
                                 }
                             }
-                            if (typeMembers.Count > 0) ev.EventTypeMembers = typeMembers;
+                            if (typeMembers.Count > 0)
+                            {
+                                ev.EventTypeMembers = typeMembers;
+                                if (!ev.EnableCelebrantSelection)
+                                {
+                                    ev.EnableCelebrantSelection = true;
+                                }
+                            }
                         }
 
                         var allEventTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
@@ -437,7 +444,14 @@ public class EventService : IEventService
                                     typeMembers["sendOff"] = guids;
                             }
                         }
-                        if (typeMembers.Count > 0) eventDetails.EventTypeMembers = typeMembers;
+                        if (typeMembers.Count > 0)
+                        {
+                            eventDetails.EventTypeMembers = typeMembers;
+                            if (!eventDetails.EnableCelebrantSelection)
+                            {
+                                eventDetails.EnableCelebrantSelection = true;
+                            }
+                        }
                     }
 
                     var allTypes = await _eventTypeRepository.GetAllAsync(cancellationToken);
@@ -535,6 +549,26 @@ public class EventService : IEventService
                 .Distinct()
                 .ToList();
 
+            if (!request.EnableCelebrantSelection)
+            {
+                request.EventTypeMembers = null;
+                request.EventTypeMemberDates = null;
+            }
+            else
+            {
+                bool isBday = (eventType?.EventTypeName?.Trim().ToLower().Contains("birthday") == true);
+                if (!isBday)
+                {
+                    bool hasCelebrants = (request.EventTypeMembers != null && request.EventTypeMembers.Values.Any(v => v != null && v.Count > 0))
+                        || (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Values.Any(v => v != null && v.Count > 0))
+                        || (!string.IsNullOrWhiteSpace(request.Description) && request.Description.Contains("<!--celebrants:"));
+                    if (!hasCelebrants)
+                    {
+                        throw new InvalidOperationException("Please select at least one celebrant/member when celebrant selection is enabled.");
+                    }
+                }
+            }
+
             // Validate Monthly Event Restrictions:
             // Rule A: Birthday is allowed only once per calendar month
             // Rule B: Non-Birthday prevents duplicate celebrants for the same event type in the same calendar month
@@ -554,6 +588,28 @@ public class EventService : IEventService
             }
 
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
+            decimal totalSponsorAmount = 0m;
+            if (request.RequireSponsorContribution)
+            {
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
+
+                if (!sponsorInputs.Any())
+                {
+                    throw new InvalidOperationException("At least one sponsor must be provided when sponsor contribution is required.");
+                }
+
+                totalSponsorAmount = sponsorInputs.Sum(s => RoundingHelper.RoundToWhole(s.ContributionAmount));
+                if (totalSponsorAmount > plannedBudget)
+                {
+                    throw new InvalidOperationException($"Total sponsor contribution (₹{totalSponsorAmount:N0}) cannot exceed the total planned budget (₹{plannedBudget:N0}).");
+                }
+            }
+
+            decimal remainingFundingRequirement = Math.Max(0m, plannedBudget - totalSponsorAmount);
             decimal effectiveBudget = plannedBudget;
             decimal allocatedAmount = 0m;
             decimal appliedAdjustment = 0m;
@@ -576,7 +632,7 @@ public class EventService : IEventService
                     }
                     else if (appliedAdjustmentType == "SurplusCredit")
                     {
-                        appliedAdjustment = Math.Min(appliedAdjustment, plannedBudget);
+                        appliedAdjustment = Math.Min(appliedAdjustment, remainingFundingRequirement);
                         allocatedAmount = appliedAdjustment;
                     }
                 }
@@ -585,11 +641,11 @@ public class EventService : IEventService
             {
                 allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
                     ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value)
-                    : plannedBudget;
+                    : remainingFundingRequirement;
 
-                if (allocatedAmount > plannedBudget)
+                if (allocatedAmount > remainingFundingRequirement)
                 {
-                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the planned budget (₹{plannedBudget:N0}).");
+                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the remaining funding requirement (₹{remainingFundingRequirement:N0}).");
                 }
 
                 var balanceInfo = await GetAvailableAmountInHandAsync(null, cancellationToken);
@@ -610,6 +666,10 @@ public class EventService : IEventService
             }
 
             var cleanDesc = (request.Description ?? string.Empty).Trim();
+            if (!request.EnableCelebrantSelection)
+            {
+                cleanDesc = System.Text.RegularExpressions.Regex.Replace(cleanDesc, @"<!--celebrants:.*?-->", string.Empty).Trim();
+            }
             if (cleanDesc.Length > 900)
             {
                 cleanDesc = cleanDesc.Substring(0, 900);
@@ -636,15 +696,85 @@ public class EventService : IEventService
                 EventName = (request.EventName ?? string.Empty).Trim(),
                 EventTypeId = eventType.EventTypeId,
                 EventDate = request.EventDate.Date,
-                EventDates = eventDatesSerialized,
+                EventDates = request.EnableCelebrantSelection ? eventDatesSerialized : null,
                 CreatedBy = user.UserId,
                 CreatedAt = DateTime.UtcNow,
                 Description = packedDescription,
                 Status = request.Status != 0 ? request.Status : EventStatus.Planned,
                 BaseAmount = effectiveBudget,
                 UseAvailableBalance = (request.UsePreviousEventBalance && appliedAdjustmentType == "SurplusCredit") || request.UseAvailableBalance,
-                AllocatedAmount = allocatedAmount
+                AllocatedAmount = allocatedAmount,
+                EnableCelebrantSelection = request.EnableCelebrantSelection,
+                RequireSponsorContribution = request.RequireSponsorContribution
             };
+
+            if (request.RequireSponsorContribution)
+            {
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
+
+                if (!sponsorInputs.Any())
+                {
+                    throw new InvalidOperationException("At least one sponsor must be provided when sponsor contribution is required.");
+                }
+
+                var distinctUsers = new HashSet<Guid>();
+                foreach (var input in sponsorInputs)
+                {
+                    if (input.UserId == Guid.Empty)
+                    {
+                        throw new InvalidOperationException("A valid sponsor must be selected when sponsor contribution is required.");
+                    }
+                    if (!distinctUsers.Add(input.UserId))
+                    {
+                        throw new InvalidOperationException("Duplicate sponsor selected for the event.");
+                    }
+                    if (input.ContributionAmount <= 0)
+                    {
+                        throw new InvalidOperationException("Sponsor contribution amount must be greater than 0.");
+                    }
+
+                    var sponsorUser = await _userRepository.GetByIdAsync(input.UserId, cancellationToken)
+                        ?? throw new KeyNotFoundException("Selected sponsor user was not found.");
+                    if (sponsorUser.IsDeleted || !sponsorUser.IsActive || sponsorUser.IsExited)
+                    {
+                        throw new InvalidOperationException($"Selected sponsor user '{sponsorUser.FullName}' is inactive or exited.");
+                    }
+
+                    var sponsorAmount = RoundingHelper.RoundToWhole(input.ContributionAmount);
+                    var newSponsor = new EventSponsor
+                    {
+                        SponsorId = Guid.NewGuid(),
+                        EventId = eventItem.EventId,
+                        UserId = sponsorUser.UserId,
+                        ContributionAmount = sponsorAmount,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = user.UserId,
+                        IsDeleted = false
+                    };
+
+                    var newHistory = new EventSponsorHistory
+                    {
+                        HistoryId = Guid.NewGuid(),
+                        SponsorId = newSponsor.SponsorId,
+                        EventId = eventItem.EventId,
+                        UserId = sponsorUser.UserId,
+                        ContributionAmount = sponsorAmount,
+                        PreviousAmount = null,
+                        ChangeType = "CREATED",
+                        ActionDate = DateTime.UtcNow,
+                        ActionBy = user.UserId,
+                        Notes = $"Initial sponsor assignment: {sponsorUser.FullName} with amount ₹{sponsorAmount:N0}"
+                    };
+
+                    eventItem.Sponsors.Add(newSponsor);
+                    newSponsor.Histories.Add(newHistory);
+                }
+            }
 
             foreach (var member in members)
             {
@@ -662,8 +792,8 @@ public class EventService : IEventService
             }
 
             var remainingBudgetToCollect = (request.UsePreviousEventBalance && appliedAdjustmentType == "DeficitRecovery")
-                ? effectiveBudget
-                : (eventItem.UseAvailableBalance ? Math.Max(0m, effectiveBudget - allocatedAmount) : effectiveBudget);
+                ? (remainingFundingRequirement + appliedAdjustment)
+                : (eventItem.UseAvailableBalance ? Math.Max(0m, remainingFundingRequirement - allocatedAmount) : remainingFundingRequirement);
 
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
@@ -754,7 +884,7 @@ public class EventService : IEventService
                     .Select(x => x.MemberId)
                     .ToHashSet();
 
-                if (request.EventTypeMembers != null)
+                if (request.EnableCelebrantSelection && request.EventTypeMembers != null)
                 {
                     foreach (var kvp in request.EventTypeMembers)
                     {
@@ -859,7 +989,7 @@ public class EventService : IEventService
                     ? systemSettings.OrgName.Trim()
                     : "Unit 1A Residents Association";
 
-                var (configuredSubject, configuredDescription) = ResolveConfiguredTemplate(systemSettings, eventTypeId, eventTypeName, "initial");
+                var (configuredSubject, configuredDescription) = ResolveConfiguredTemplate(systemSettings, eventTypeId, eventTypeName ?? string.Empty, "initial");
 
                 var gpayImagePath = ResolveGpayImagePath();
                 if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
@@ -1060,7 +1190,7 @@ public class EventService : IEventService
 
                 if (celebrantNames.Count == 0)
                 {
-                    var nameParts = eventName.Split(new[] { '-', ':', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
+                    var nameParts = (eventName ?? string.Empty).Split(new[] { '-', ':', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
                     if (nameParts.Length > 1)
                     {
                         var candidate = nameParts[1].Trim();
@@ -1728,6 +1858,26 @@ public class EventService : IEventService
                 .Distinct()
                 .ToList();
 
+            if (!request.EnableCelebrantSelection)
+            {
+                request.EventTypeMembers = null;
+                request.EventTypeMemberDates = null;
+            }
+            else
+            {
+                bool isBday = (eventType?.EventTypeName?.Trim().ToLower().Contains("birthday") == true);
+                if (!isBday)
+                {
+                    bool hasCelebrants = (request.EventTypeMembers != null && request.EventTypeMembers.Values.Any(v => v != null && v.Count > 0))
+                        || (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Values.Any(v => v != null && v.Count > 0))
+                        || (!string.IsNullOrWhiteSpace(request.Description) && request.Description.Contains("<!--celebrants:"));
+                    if (!hasCelebrants)
+                    {
+                        throw new InvalidOperationException("Please select at least one celebrant/member when celebrant selection is enabled.");
+                    }
+                }
+            }
+
             // Validate Monthly Event Restrictions:
             // Rule A: Birthday is allowed only once per calendar month
             // Rule B: Non-Birthday prevents duplicate celebrants for the same event type in the same calendar month
@@ -1741,25 +1891,59 @@ public class EventService : IEventService
             eventItem.EventName = (request.EventName ?? string.Empty).Trim();
             eventItem.EventTypeId = eventType.EventTypeId;
             eventItem.EventDate = request.EventDate.Date;
-            if (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Count > 0)
+            eventItem.EnableCelebrantSelection = request.EnableCelebrantSelection;
+            if (request.EnableCelebrantSelection)
             {
-                eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeMemberDates);
-            }
-            else if (request.EventTypeDates != null && request.EventTypeDates.Count > 0)
-            {
-                eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeDates);
+                if (request.EventTypeMemberDates != null && request.EventTypeMemberDates.Count > 0)
+                {
+                    eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeMemberDates);
+                }
+                else if (request.EventTypeDates != null && request.EventTypeDates.Count > 0)
+                {
+                    eventItem.EventDates = System.Text.Json.JsonSerializer.Serialize(request.EventTypeDates);
+                }
+                else
+                {
+                    eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
+                }
             }
             else
             {
-                eventItem.EventDates = !string.IsNullOrWhiteSpace(request.EventDates) ? request.EventDates.Trim() : null;
+                eventItem.EventDates = null;
             }
             var cleanDesc = (request.Description ?? string.Empty).Trim();
+            if (!request.EnableCelebrantSelection)
+            {
+                cleanDesc = System.Text.RegularExpressions.Regex.Replace(cleanDesc, @"<!--celebrants:.*?-->", string.Empty).Trim();
+            }
             if (cleanDesc.Length > 900)
             {
                 cleanDesc = cleanDesc.Substring(0, 900);
             }
 
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
+            decimal totalSponsorAmount = 0m;
+            if (request.RequireSponsorContribution)
+            {
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
+
+                if (!sponsorInputs.Any())
+                {
+                    throw new InvalidOperationException("At least one sponsor must be provided when sponsor contribution is required.");
+                }
+
+                totalSponsorAmount = sponsorInputs.Sum(s => RoundingHelper.RoundToWhole(s.ContributionAmount));
+                if (totalSponsorAmount > plannedBudget)
+                {
+                    throw new InvalidOperationException($"Total sponsor contribution (₹{totalSponsorAmount:N0}) cannot exceed the total planned budget (₹{plannedBudget:N0}).");
+                }
+            }
+
+            decimal remainingFundingRequirement = Math.Max(0m, plannedBudget - totalSponsorAmount);
             decimal effectiveBudget = plannedBudget;
             decimal allocatedAmount = 0m;
             decimal appliedAdjustment = 0m;
@@ -1782,7 +1966,7 @@ public class EventService : IEventService
                     }
                     else if (appliedAdjustmentType == "SurplusCredit")
                     {
-                        appliedAdjustment = Math.Min(appliedAdjustment, plannedBudget);
+                        appliedAdjustment = Math.Min(appliedAdjustment, remainingFundingRequirement);
                         allocatedAmount = appliedAdjustment;
                     }
                 }
@@ -1791,11 +1975,11 @@ public class EventService : IEventService
             {
                 allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
                     ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value)
-                    : plannedBudget;
+                    : remainingFundingRequirement;
 
-                if (allocatedAmount > plannedBudget)
+                if (allocatedAmount > remainingFundingRequirement)
                 {
-                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the planned budget (₹{plannedBudget:N0}).");
+                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the remaining funding requirement (₹{remainingFundingRequirement:N0}).");
                 }
             }
 
@@ -1821,6 +2005,163 @@ public class EventService : IEventService
             eventItem.UseAvailableBalance = (request.UsePreviousEventBalance && appliedAdjustmentType == "SurplusCredit") || request.UseAvailableBalance;
             eventItem.AllocatedAmount = allocatedAmount;
             eventItem.ModifiedOn = DateTime.UtcNow;
+            eventItem.RequireSponsorContribution = request.RequireSponsorContribution;
+
+            // Manage Sponsor Assignment & Auditable History
+            var currentUserId = _currentUserService?.UserId != null && Guid.TryParse(_currentUserService.UserId, out var parsedCurrentId)
+                ? parsedCurrentId
+                : (Guid?)null;
+
+            var activeSponsors = eventItem.Sponsors.Where(s => s.IsActive && !s.IsDeleted).ToList();
+
+            if (request.RequireSponsorContribution)
+            {
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
+
+                if (!sponsorInputs.Any())
+                {
+                    throw new InvalidOperationException("At least one sponsor must be provided when sponsor contribution is required.");
+                }
+
+                var distinctUsers = new HashSet<Guid>();
+                foreach (var input in sponsorInputs)
+                {
+                    if (input.UserId == Guid.Empty)
+                    {
+                        throw new InvalidOperationException("A valid sponsor must be selected when sponsor contribution is required.");
+                    }
+                    if (!distinctUsers.Add(input.UserId))
+                    {
+                        throw new InvalidOperationException("Duplicate sponsor selected for the event.");
+                    }
+                    if (input.ContributionAmount <= 0)
+                    {
+                        throw new InvalidOperationException("Sponsor contribution amount must be greater than 0.");
+                    }
+                }
+
+                var incomingUserIds = sponsorInputs.Select(x => x.UserId).ToHashSet();
+
+                // Deactivate removed sponsors
+                foreach (var active in activeSponsors.Where(a => !incomingUserIds.Contains(a.UserId)))
+                {
+                    active.IsActive = false;
+                    active.ModifiedAt = DateTime.UtcNow;
+                    active.ModifiedBy = currentUserId;
+
+                    var deactHistory = new EventSponsorHistory
+                    {
+                        HistoryId = Guid.NewGuid(),
+                        SponsorId = active.SponsorId,
+                        EventId = eventItem.EventId,
+                        UserId = active.UserId,
+                        ContributionAmount = active.ContributionAmount,
+                        PreviousAmount = active.ContributionAmount,
+                        ChangeType = "DEACTIVATED",
+                        ActionDate = DateTime.UtcNow,
+                        ActionBy = currentUserId,
+                        Notes = "Sponsor removed from event"
+                    };
+                    active.Histories.Add(deactHistory);
+                }
+
+                // Add or update incoming sponsors
+                foreach (var input in sponsorInputs)
+                {
+                    var newAmount = RoundingHelper.RoundToWhole(input.ContributionAmount);
+                    var existing = activeSponsors.FirstOrDefault(a => a.UserId == input.UserId);
+
+                    if (existing != null)
+                    {
+                        if (existing.ContributionAmount != newAmount)
+                        {
+                            var prevAmt = existing.ContributionAmount;
+                            existing.ContributionAmount = newAmount;
+                            existing.ModifiedAt = DateTime.UtcNow;
+                            existing.ModifiedBy = currentUserId;
+
+                            var updateHistory = new EventSponsorHistory
+                            {
+                                HistoryId = Guid.NewGuid(),
+                                SponsorId = existing.SponsorId,
+                                EventId = eventItem.EventId,
+                                UserId = existing.UserId,
+                                PreviousAmount = prevAmt,
+                                ContributionAmount = newAmount,
+                                ChangeType = "UPDATED",
+                                ActionDate = DateTime.UtcNow,
+                                ActionBy = currentUserId,
+                                Notes = $"Updated contribution amount from ₹{prevAmt:N0} to ₹{newAmount:N0}"
+                            };
+                            existing.Histories.Add(updateHistory);
+                        }
+                    }
+                    else
+                    {
+                        var sponsorUser = await _userRepository.GetByIdAsync(input.UserId, cancellationToken)
+                            ?? throw new KeyNotFoundException("Selected sponsor user was not found.");
+                        if (sponsorUser.IsDeleted || !sponsorUser.IsActive || sponsorUser.IsExited)
+                        {
+                            throw new InvalidOperationException($"Selected sponsor user '{sponsorUser.FullName}' is inactive or exited.");
+                        }
+
+                        var newSponsor = new EventSponsor
+                        {
+                            SponsorId = Guid.NewGuid(),
+                            EventId = eventItem.EventId,
+                            UserId = sponsorUser.UserId,
+                            ContributionAmount = newAmount,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedBy = currentUserId,
+                            IsDeleted = false
+                        };
+                        var newHistory = new EventSponsorHistory
+                        {
+                            HistoryId = Guid.NewGuid(),
+                            SponsorId = newSponsor.SponsorId,
+                            EventId = eventItem.EventId,
+                            UserId = sponsorUser.UserId,
+                            ContributionAmount = newAmount,
+                            PreviousAmount = null,
+                            ChangeType = "CREATED",
+                            ActionDate = DateTime.UtcNow,
+                            ActionBy = currentUserId,
+                            Notes = $"Assigned sponsor: {sponsorUser.FullName} with amount ₹{newAmount:N0}"
+                        };
+                        eventItem.Sponsors.Add(newSponsor);
+                        newSponsor.Histories.Add(newHistory);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var active in activeSponsors)
+                {
+                    active.IsActive = false;
+                    active.ModifiedAt = DateTime.UtcNow;
+                    active.ModifiedBy = currentUserId;
+
+                    var deactHistory = new EventSponsorHistory
+                    {
+                        HistoryId = Guid.NewGuid(),
+                        SponsorId = active.SponsorId,
+                        EventId = eventItem.EventId,
+                        UserId = active.UserId,
+                        ContributionAmount = active.ContributionAmount,
+                        PreviousAmount = active.ContributionAmount,
+                        ChangeType = "DEACTIVATED",
+                        ActionDate = DateTime.UtcNow,
+                        ActionBy = currentUserId,
+                        Notes = "Require sponsor contribution feature disabled"
+                    };
+                    active.Histories.Add(deactHistory);
+                }
+            }
 
             var newParticipantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
             if (newParticipantIds.Count == 0)
@@ -1835,8 +2176,8 @@ public class EventService : IEventService
             }
 
             var remainingBudgetToCollect = (request.UsePreviousEventBalance && appliedAdjustmentType == "DeficitRecovery")
-                ? effectiveBudget
-                : (eventItem.UseAvailableBalance ? Math.Max(0m, effectiveBudget - allocatedAmount) : effectiveBudget);
+                ? (remainingFundingRequirement + appliedAdjustment)
+                : (eventItem.UseAvailableBalance ? Math.Max(0m, remainingFundingRequirement - allocatedAmount) : remainingFundingRequirement);
 
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
@@ -2027,7 +2368,7 @@ public class EventService : IEventService
                     .Select(x => x.MemberId)
                     .ToHashSet();
 
-                if (request.EventTypeMembers != null)
+                if (request.EnableCelebrantSelection && request.EventTypeMembers != null)
                 {
                     foreach (var kvp in request.EventTypeMembers)
                     {
@@ -2458,6 +2799,12 @@ public class EventService : IEventService
                 throw new KeyNotFoundException(CommonMessages.EventTypes.NotFound);
             }
 
+            if (!request.EnableCelebrantSelection)
+            {
+                request.EventTypeMembers = null;
+                request.EventTypeMemberDates = null;
+            }
+
             var participantIds = (request.ParticipantIds ?? new List<Guid>()).Distinct().ToList();
             if (participantIds.Count == 0)
             {
@@ -2489,6 +2836,19 @@ public class EventService : IEventService
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
             var memberLookup = members.ToDictionary(m => m.MemberId);
 
+            decimal totalSponsorAmount = 0m;
+            if (request.RequireSponsorContribution)
+            {
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
+
+                totalSponsorAmount = sponsorInputs.Sum(s => RoundingHelper.RoundToWhole(s.ContributionAmount));
+            }
+
+            decimal remainingFundingRequirement = Math.Max(0m, plannedBudget - totalSponsorAmount);
             decimal effectiveBudget = plannedBudget;
             decimal eligibleAdj = 0m;
             string adjType = "None";
@@ -2505,7 +2865,7 @@ public class EventService : IEventService
                 }
                 else if (adjType == "SurplusCredit")
                 {
-                    eligibleAdj = Math.Min(eligibleAdj, plannedBudget);
+                    eligibleAdj = Math.Min(eligibleAdj, remainingFundingRequirement);
                 }
             }
 
@@ -2515,23 +2875,23 @@ public class EventService : IEventService
             if (request.UsePreviousEventBalance && adjType == "DeficitRecovery")
             {
                 // Deficit recovery increases collection requirement to recover previous overspend
-                remainingBudgetToCollect = effectiveBudget;
+                remainingBudgetToCollect = remainingFundingRequirement + eligibleAdj;
             }
             else if (request.UsePreviousEventBalance && adjType == "SurplusCredit")
             {
                 // Surplus credit acts as allocated amount deduction
                 allocatedAmount = eligibleAdj;
-                remainingBudgetToCollect = Math.Max(0m, plannedBudget - allocatedAmount);
+                remainingBudgetToCollect = Math.Max(0m, remainingFundingRequirement - allocatedAmount);
             }
             else
             {
                 // Normal available balance deduction logic
                 allocatedAmount = request.UseAvailableBalance
-                    ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value) : plannedBudget)
+                    ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value) : remainingFundingRequirement)
                     : 0m;
                 remainingBudgetToCollect = request.UseAvailableBalance
-                    ? Math.Max(0m, plannedBudget - allocatedAmount)
-                    : plannedBudget;
+                    ? Math.Max(0m, remainingFundingRequirement - allocatedAmount)
+                    : remainingFundingRequirement;
             }
 
             var detailedCalculations = CalculateDetailedMemberContributions(
@@ -2581,6 +2941,8 @@ public class EventService : IEventService
                 EligibleAdjustmentAmount = eligibleAdj,
                 AdjustmentType = adjType,
                 EffectiveBudget = effectiveBudget,
+                TotalSponsorContributionAmount = totalSponsorAmount,
+                RemainingFundingRequirement = remainingFundingRequirement,
                 Members = orderedPreview
             };
         }
@@ -2932,7 +3294,7 @@ public class EventService : IEventService
                                 EventTypeId = ev.EventTypeId,
                                 EventTypeName = "Birthday",
                                 EventId = ev.EventId,
-                                EventName = ev.EventName,
+                                EventName = ev.EventName ?? string.Empty,
                                 EventDate = ev.EventDate,
                                 CelebrationReason = $"Birthday Celebration ({ev.EventName})"
                             });
@@ -2967,7 +3329,7 @@ public class EventService : IEventService
                                                 EventTypeId = parsedTypeId,
                                                 EventTypeName = evTypeName,
                                                 EventId = ev.EventId,
-                                                EventName = ev.EventName,
+                                                EventName = ev.EventName ?? string.Empty,
                                                 EventDate = ev.EventDate,
                                                 CelebrationReason = $"{evTypeName} ({ev.EventName})"
                                             });
@@ -3007,7 +3369,7 @@ public class EventService : IEventService
                                                     EventTypeId = parsedTypeId,
                                                     EventTypeName = !string.IsNullOrWhiteSpace(evTypeName) ? evTypeName : typeKey,
                                                     EventId = ev.EventId,
-                                                    EventName = ev.EventName,
+                                                    EventName = ev.EventName ?? string.Empty,
                                                     EventDate = ev.EventDate,
                                                     CelebrationReason = $"{evTypeName} ({ev.EventName})"
                                                 });
@@ -3072,6 +3434,11 @@ public class EventService : IEventService
         }
 
         // Rule B: All Other Event Types — Prevent duplicate celebrants for the same event type
+        if (!request.EnableCelebrantSelection)
+        {
+            return;
+        }
+
         var requestedTypeCelebrants = new Dictionary<Guid, (string TypeName, HashSet<Guid> Celebrants)>();
 
         void AddCelebrantsForType(Guid tId, string tName, IEnumerable<Guid>? memIds)
@@ -3288,6 +3655,23 @@ public class EventService : IEventService
         }
 
         return fallbackDate.ToString("MMMM dd, yyyy");
+    }
+
+    public async Task<IReadOnlyCollection<EligibleSponsorDto>> GetEligibleSponsorsAsync(CancellationToken cancellationToken = default)
+    {
+        var allUsers = await _userRepository.GetAllAsync(cancellationToken);
+        return allUsers
+            .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited)
+            .OrderBy(u => u.FullName)
+            .Select(u => new EligibleSponsorDto
+            {
+                UserId = u.UserId,
+                FullName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? "Member"),
+                Email = u.Email ?? string.Empty,
+                Phone = u.Phone,
+                RoleName = u.RoleName
+            })
+            .ToList();
     }
 }
 

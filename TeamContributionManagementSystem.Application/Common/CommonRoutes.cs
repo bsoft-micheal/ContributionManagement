@@ -34,6 +34,8 @@ public static class CommonRoutes
         public const string PreviewContributions = "previewContributionsAsync";
         public const string GetAvailableAmountInHand = "getAvailableAmountInHandAsync";
         public const string GetAvailableBalance = "getAvailableBalanceAsync";
+        public const string GetEligibleSponsors = "eligible-sponsors";
+        public const string GetEligibleSponsorsAsync = "getEligibleSponsorsAsync";
     }
 
     public static class Members

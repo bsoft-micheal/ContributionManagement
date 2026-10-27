@@ -24,4 +24,5 @@ public interface IEventService
     Task<EventContributionPreviewResponseDto> PreviewContributionAsync(EventContributionPreviewRequestDto request, CancellationToken cancellationToken = default) => CalculateContributionPreviewAsync(request, cancellationToken);
     Task<EventDetailsDto> PublishEventAsyncById(Guid eventId, Guid publishingUserId, CancellationToken cancellationToken = default) => PublishAsync(eventId, publishingUserId, cancellationToken);
     Task<MonthlyEventRestrictionsDto> GetMonthlyRestrictionsAsync(int month, int year, Guid? excludeEventId = null, CancellationToken cancellationToken = default) => GetMonthlyEventRestrictionsAsync(month, year, excludeEventId, cancellationToken);
+    Task<IReadOnlyCollection<EligibleSponsorDto>> GetEligibleSponsorsAsync(CancellationToken cancellationToken = default);
 }
