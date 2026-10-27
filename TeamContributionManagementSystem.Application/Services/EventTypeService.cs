@@ -47,10 +47,10 @@ public class EventTypeService : IEventTypeService
                     var users = await _userRepository.GetAllAsync(cancellationToken);
                     foreach (var u in users)
                     {
-                        var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username;
+                        var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty);
                         userDict[u.UserId.ToString()] = displayName;
-                        if (!string.IsNullOrWhiteSpace(u.Username)) userDict[u.Username] = displayName;
-                        if (!string.IsNullOrWhiteSpace(u.FullName)) userDict[u.FullName] = displayName;
+                        if (!string.IsNullOrWhiteSpace(u.Username)) userDict[u.Username!] = displayName;
+                        if (!string.IsNullOrWhiteSpace(u.FullName)) userDict[u.FullName!] = displayName;
                     }
 
                     var firstAdmin = users.FirstOrDefault(u => 
@@ -129,10 +129,10 @@ public class EventTypeService : IEventTypeService
                 var userDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var u in users)
                 {
-                    var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username;
+                    var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty);
                     userDict[u.UserId.ToString()] = displayName;
-                    if (!string.IsNullOrWhiteSpace(u.Username)) userDict[u.Username] = displayName;
-                    if (!string.IsNullOrWhiteSpace(u.FullName)) userDict[u.FullName] = displayName;
+                    if (!string.IsNullOrWhiteSpace(u.Username)) userDict[u.Username!] = displayName;
+                    if (!string.IsNullOrWhiteSpace(u.FullName)) userDict[u.FullName!] = displayName;
                 }
 
                 var firstAdmin = users.FirstOrDefault(u => 

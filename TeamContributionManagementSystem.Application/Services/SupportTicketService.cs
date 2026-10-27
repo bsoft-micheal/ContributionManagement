@@ -106,11 +106,11 @@ public class SupportTicketService : ISupportTicketService
                     orgUserId = _currentUserService.MemberId.Value;
                 }
 
-                if (orgUserId.HasValue)
+                if (orgUserId.HasValue && _eventRepository != null)
                 {
                     var myEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
                     var myEventIds = myEvents.Select(e => e.EventId).ToHashSet();
-                    var myEventNames = myEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var myEventNames = myEvents.Select(e => e.EventName?.Trim().ToLower() ?? string.Empty).Where(s => !string.IsNullOrEmpty(s)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
                     var orgUserIdStr = orgUserId.Value.ToString();
                     var orgUserName = _currentUserService.UserName?.Trim();
@@ -467,7 +467,7 @@ public class SupportTicketService : ISupportTicketService
                 TicketTypeId = ticketTypeId,
                 PriorityId = priorityId,
                 StatusId = statusId,
-                MemberName = request.MemberName.Trim(),
+                MemberName = request.MemberName?.Trim() ?? string.Empty,
                 MemberId = request.MemberId?.Trim(),
                 RelatedEvent = request.RelatedEvent?.Trim(),
                 TicketType = ticketType ?? string.Empty,

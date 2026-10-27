@@ -142,7 +142,7 @@ public class ContributionRepository : IContributionRepository
         {
             var users = await _context.Users
                 .AsNoTracking()
-                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty) })
                 .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
 
             var items = await _context.Contributions

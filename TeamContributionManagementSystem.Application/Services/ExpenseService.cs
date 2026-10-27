@@ -436,15 +436,15 @@ public class ExpenseService : IExpenseService
                 cleanDescription = request.Description.Trim();
             }
 
-            expense.EventName = request.EventName.Trim();
-            expense.Category = request.Category.Trim();
+            expense.EventName = request.EventName?.Trim() ?? string.Empty;
+            expense.Category = request.Category?.Trim() ?? string.Empty;
             expense.Amount = calculatedTotal;
             expense.BudgetAmount = budgetPart;
             expense.ExtraAmount = extraSum;
             expense.AdditionalExpenses = additionalExpensesJson;
             expense.ExpenseDate = request.ExpenseDate;
             expense.Status = string.IsNullOrWhiteSpace(request.Status) ? expense.Status : request.Status.Trim();
-            expense.SubmittedBy = request.SubmittedBy.Trim();
+            expense.SubmittedBy = request.SubmittedBy?.Trim() ?? string.Empty;
 
             if (expense.Status.Equals(CommonConstants.ExpenseStatuses.Pending, StringComparison.OrdinalIgnoreCase))
             {

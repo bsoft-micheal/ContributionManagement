@@ -142,7 +142,7 @@ public class EventService : IEventService
                 {
                     orgUserId = _currentUserService.MemberId.Value;
                 }
-                else if (!string.IsNullOrWhiteSpace(_currentUserService.Email) && _userRepository != null)
+                else if (!string.IsNullOrWhiteSpace(_currentUserService.Email))
                 {
                     var u = await _userRepository.GetByEmailAsync(_currentUserService.Email.Trim(), cancellationToken);
                     if (u != null) orgUserId = u.UserId;
@@ -199,7 +199,7 @@ public class EventService : IEventService
                 var users = await _userRepository.GetAllAsync(cancellationToken);
                 var userDict = users.ToDictionary(
                     u => u.UserId.ToString(),
-                    u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username,
+                    u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty),
                     StringComparer.OrdinalIgnoreCase);
 
                 foreach (var ev in events)
@@ -859,7 +859,7 @@ public class EventService : IEventService
                     ? systemSettings.OrgName.Trim()
                     : "Unit 1A Residents Association";
 
-                var (configuredSubject, configuredDescription) = ResolveConfiguredTemplate(systemSettings, eventTypeId, eventTypeName, "initial");
+                var (configuredSubject, configuredDescription) = ResolveConfiguredTemplate(systemSettings, eventTypeId, eventTypeName ?? string.Empty, "initial");
 
                 var gpayImagePath = ResolveGpayImagePath();
                 if (!string.IsNullOrWhiteSpace(gpayImagePath) && File.Exists(gpayImagePath))
@@ -1060,7 +1060,7 @@ public class EventService : IEventService
 
                 if (celebrantNames.Count == 0)
                 {
-                    var nameParts = eventName.Split(new[] { '-', ':', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
+                    var nameParts = (eventName ?? string.Empty).Split(new[] { '-', ':', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
                     if (nameParts.Length > 1)
                     {
                         var candidate = nameParts[1].Trim();
@@ -2932,7 +2932,7 @@ public class EventService : IEventService
                                 EventTypeId = ev.EventTypeId,
                                 EventTypeName = "Birthday",
                                 EventId = ev.EventId,
-                                EventName = ev.EventName,
+                                EventName = ev.EventName ?? string.Empty,
                                 EventDate = ev.EventDate,
                                 CelebrationReason = $"Birthday Celebration ({ev.EventName})"
                             });
@@ -2967,7 +2967,7 @@ public class EventService : IEventService
                                                 EventTypeId = parsedTypeId,
                                                 EventTypeName = evTypeName,
                                                 EventId = ev.EventId,
-                                                EventName = ev.EventName,
+                                                EventName = ev.EventName ?? string.Empty,
                                                 EventDate = ev.EventDate,
                                                 CelebrationReason = $"{evTypeName} ({ev.EventName})"
                                             });
@@ -3007,7 +3007,7 @@ public class EventService : IEventService
                                                     EventTypeId = parsedTypeId,
                                                     EventTypeName = !string.IsNullOrWhiteSpace(evTypeName) ? evTypeName : typeKey,
                                                     EventId = ev.EventId,
-                                                    EventName = ev.EventName,
+                                                    EventName = ev.EventName ?? string.Empty,
                                                     EventDate = ev.EventDate,
                                                     CelebrationReason = $"{evTypeName} ({ev.EventName})"
                                                 });

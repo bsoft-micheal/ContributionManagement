@@ -80,7 +80,7 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.Contributions, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted)));
 
         CreateMap<RoleRight, RoleRightDto>()
-            .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role.ToString()))
+            .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role != null ? src.Role.ToString() : string.Empty))
             .ForMember(dest => dest.AccessType, opt => opt.MapFrom(src => (int)src.AccessType))
             .ReverseMap()
             .ForMember(dest => dest.Role, opt => opt.Ignore()); // Role set explicitly in service

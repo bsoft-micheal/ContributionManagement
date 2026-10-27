@@ -381,8 +381,8 @@ public class EventRepository : IEventRepository
             try
             {
                 photoEventNames = await _context.GalleryPhotos
-                    .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.EventName))
-                    .Select(x => x.EventName.ToLower())
+                    .Where(x => !x.IsDeleted && x.Event != null && !string.IsNullOrEmpty(x.Event.EventName))
+                    .Select(x => x.Event!.EventName.ToLower())
                     .Distinct()
                     .ToListAsync(cancellationToken);
             }

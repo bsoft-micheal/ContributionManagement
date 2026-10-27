@@ -450,7 +450,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
         }
 
         targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
-        var celebrantNames = targetCelebrants.Select(m => !string.IsNullOrWhiteSpace(m.FullName) ? m.FullName : m.Username).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+        var celebrantNames = targetCelebrants.Select(m => !string.IsNullOrWhiteSpace(m.FullName) ? m.FullName : (m.Username ?? string.Empty)).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
 
         if (celebrantNames.Count == 0)
         {
