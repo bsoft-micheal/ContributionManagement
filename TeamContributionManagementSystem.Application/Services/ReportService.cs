@@ -99,6 +99,15 @@ public class ReportService : IReportService
                     e.Status.Contains("approv", StringComparison.OrdinalIgnoreCase) ||
                     e.Status.Equals("paid", StringComparison.OrdinalIgnoreCase)))
                 .ToList();
+
+            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            {
+                var orgEventNames = events.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                allExpenses = allExpenses
+                    .Where(e => !string.IsNullOrWhiteSpace(e.EventName) && orgEventNames.Contains(e.EventName.Trim().ToLower()))
+                    .ToList();
+            }
+
             var allPayments = await _paymentTransactionRepository.GetAllAsync(startDate: startDate, endDate: endDate, cancellationToken: cancellationToken);
 
             // 1. Event Collections Report
@@ -331,6 +340,11 @@ public class ReportService : IReportService
                 PaymentModeBreakdown = paymentModeGroups,
                 FinancialSummary = financialSummary
             };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetSummaryAsync request was canceled.");
+            throw;
         }
         catch (Exception ex)
         {

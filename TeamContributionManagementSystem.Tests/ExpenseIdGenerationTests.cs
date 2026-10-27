@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using TeamContributionManagementSystem.Application.DTOs.Expenses;
@@ -33,11 +34,11 @@ public class ExpenseIdGenerationTests : IDisposable
         var loggerRepoMock = new Mock<ILogger<ExpenseRepository>>();
         _expenseRepository = new ExpenseRepository(_context, loggerRepoMock.Object);
 
-        var mapperConfig = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile(new MappingProfile());
-        });
-        _mapper = mapperConfig.CreateMapper();
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddLogging();
+        services.AddAutoMapper(cfg => { }, typeof(MappingProfile));
+        var sp = services.BuildServiceProvider();
+        _mapper = sp.GetRequiredService<IMapper>();
 
         var loggerServiceMock = new Mock<ILogger<ExpenseService>>();
         var eventRepoMock = new Mock<IEventRepository>();
