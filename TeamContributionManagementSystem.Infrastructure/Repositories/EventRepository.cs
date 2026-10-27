@@ -108,12 +108,7 @@ public class EventRepository : IEventRepository
             try
             {
                 contribPaidEventIds = await _context.Contributions
-                    .Where(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    ))
+                    .Where(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
                     .Select(c => c.EventId)
                     .Distinct()
                     .ToListAsync(cancellationToken);
@@ -195,30 +190,13 @@ public class EventRepository : IEventRepository
                         : (x.UseAvailableBalance && x.AllocatedAmount > 0
                             ? Math.Max(0m, x.BaseAmount - x.AllocatedAmount)
                             : x.BaseAmount),
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
+                        .Sum(c => (decimal?)c.Amount) ?? 0m,
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted &&
-                        (!c.StatusId.HasValue || !paidStatusIds.Contains(c.StatusId.Value)) &&
-                        c.PaymentDate == null &&
-                        (!c.CashAmount.HasValue || c.CashAmount.Value <= 0) &&
-                        (!c.UpiAmount.HasValue || c.UpiAmount.Value <= 0)
+                        (!c.StatusId.HasValue || !paidStatusIds.Contains(c.StatusId.Value))
                     ),
-                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
-                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -381,12 +359,7 @@ public class EventRepository : IEventRepository
             try
             {
                 contribPaidEventIds = await _context.Contributions
-                    .Where(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    ))
+                    .Where(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
                     .Select(c => c.EventId)
                     .Distinct()
                     .ToListAsync(cancellationToken);
@@ -468,30 +441,13 @@ public class EventRepository : IEventRepository
                         : (x.UseAvailableBalance && x.AllocatedAmount > 0
                             ? Math.Max(0m, x.BaseAmount - x.AllocatedAmount)
                             : x.BaseAmount),
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
+                        .Sum(c => (decimal?)c.Amount) ?? 0m,
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted &&
-                        (!c.StatusId.HasValue || !paidStatusIds.Contains(c.StatusId.Value)) &&
-                        c.PaymentDate == null &&
-                        (!c.CashAmount.HasValue || c.CashAmount.Value <= 0) &&
-                        (!c.UpiAmount.HasValue || c.UpiAmount.Value <= 0)
+                        (!c.StatusId.HasValue || !paidStatusIds.Contains(c.StatusId.Value))
                     ),
-                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
-                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -612,30 +568,13 @@ public class EventRepository : IEventRepository
                     BaseAmount = x.BaseAmount,
                     ParticipantCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId) > 0 ? 1 : (x.Participants.Count(p => !p.IsDeleted && p.UserId == memberId) > 0 ? 1 : 0),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId).Sum(c => (decimal?)c.Amount) ?? 0m,
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
+                        .Sum(c => (decimal?)c.Amount) ?? 0m,
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId &&
-                        (!c.StatusId.HasValue || !paidStatusIds.Contains(c.StatusId.Value)) &&
-                        c.PaymentDate == null &&
-                        (!c.CashAmount.HasValue || c.CashAmount.Value <= 0) &&
-                        (!c.UpiAmount.HasValue || c.UpiAmount.Value <= 0)
+                        (!c.StatusId.HasValue || !paidStatusIds.Contains(c.StatusId.Value))
                     ),
-                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
-                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && c.UserId == memberId && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && c.UserId == memberId && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -849,30 +788,13 @@ public class EventRepository : IEventRepository
                         : (x.UseAvailableBalance && x.AllocatedAmount > 0
                             ? Math.Max(0m, x.BaseAmount - x.AllocatedAmount)
                             : x.BaseAmount),
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
+                        .Sum(c => (decimal?)c.Amount) ?? 0m,
                     PendingContributionsCount = x.Contributions.Count(c => !c.IsDeleted &&
-                        (!c.StatusId.HasValue || !paidStatusIds.Contains(c.StatusId.Value)) &&
-                        c.PaymentDate == null &&
-                        (!c.CashAmount.HasValue || c.CashAmount.Value <= 0) &&
-                        (!c.UpiAmount.HasValue || c.UpiAmount.Value <= 0)
+                        (!c.StatusId.HasValue || !paidStatusIds.Contains(c.StatusId.Value))
                     ),
-                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
-                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -1040,24 +962,10 @@ public class EventRepository : IEventRepository
                         : (x.UseAvailableBalance && x.AllocatedAmount > 0
                             ? Math.Max(0m, x.BaseAmount - x.AllocatedAmount)
                             : x.BaseAmount),
-                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )).Sum(c => (decimal?)c.Amount) ?? 0m,
-                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
-                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && (
-                        (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ||
-                        c.PaymentDate != null ||
-                        (c.CashAmount.HasValue && c.CashAmount.Value > 0) ||
-                        (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)
-                    )),
+                    TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
+                        .Sum(c => (decimal?)c.Amount) ?? 0m,
+                    PaidContributionsCount = x.Contributions.Count(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
+                    HasPaidContributions = x.Contributions.Any(c => !c.IsDeleted && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)),
                     CreatedByName = x.CreatedByUser != null
                         ? (!string.IsNullOrWhiteSpace(x.CreatedByUser.FullName) ? x.CreatedByUser.FullName : x.CreatedByUser.Username)
                         : null,
@@ -1092,8 +1000,8 @@ public class EventRepository : IEventRepository
                         MemberId = c.UserId,
                         MemberName = c.User != null ? c.User.FullName : (c.Member != null ? c.Member.Name : string.Empty),
                         Amount = c.Amount,
-                        PaymentStatus = ((c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) || c.PaymentDate != null || (c.CashAmount.HasValue && c.CashAmount.Value > 0) || (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
-                        StatusName = c.StatusItem != null ? c.StatusItem.StatusName : ((c.PaymentDate != null || (c.CashAmount.HasValue && c.CashAmount.Value > 0) || (c.UpiAmount.HasValue && c.UpiAmount.Value > 0)) ? "Paid" : "Pending"),
+                        PaymentStatus = (c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value)) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                        StatusName = c.StatusItem != null ? c.StatusItem.StatusName : "Pending",
                         PaymentDate = c.PaymentDate,
                         PaymentMode = c.PaymentModeItem != null
                             ? (c.PaymentModeItem.IsCash ? PaymentMode.Cash : (c.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
@@ -1412,16 +1320,13 @@ public class EventRepository : IEventRepository
 
             var hasPaidContrib = await _context.Contributions.AnyAsync(x => x.EventId == eventId && !x.IsDeleted &&
                 (
-                    x.PaymentDate != null ||
                     (x.StatusItem != null && (
                         x.StatusItem.StatusName.ToLower().Contains("paid") ||
                         x.StatusItem.StatusName.ToLower().Contains("verif") ||
                         x.StatusItem.StatusName.ToLower().Contains("approv") ||
                         x.StatusItem.StatusName.ToLower() == "closed" ||
                         x.StatusItem.StatusName.ToLower() == "completed"
-                    )) ||
-                    (x.CashAmount.HasValue && x.CashAmount.Value > 0) ||
-                    (x.UpiAmount.HasValue && x.UpiAmount.Value > 0)
+                    ))
                 ), cancellationToken);
 
             if (hasPaidContrib) return true;
