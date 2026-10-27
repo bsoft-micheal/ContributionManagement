@@ -977,7 +977,28 @@ public class PaymentTransactionService : IPaymentTransactionService
             bool isFullyCovered = !isAnyRejected && match != null && match.Amount > 0 && totalPaid >= match.Amount;
 
             // Status determination: if member has paid required amount and not rejected, status is Paid (or Verified/Approved if already verified)
-            string targetStatusName = isAnyRejected ? "Rejected" : (primary.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase) ? "Approved" : (isExplicitlyVerified ? "Verified" : ((isAllVerified || isFullyCovered) ? "Paid" : "Pending")));
+            string targetStatusName;
+            if (isAnyRejected)
+            {
+                targetStatusName = "Rejected";
+            }
+            else if (primary.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase) && isFullyCovered)
+            {
+                targetStatusName = "Approved";
+            }
+            else if (isExplicitlyVerified && isFullyCovered)
+            {
+                targetStatusName = "Verified";
+            }
+            else if (isFullyCovered)
+            {
+                targetStatusName = "Paid";
+            }
+            else
+            {
+                targetStatusName = "Pending";
+            }
+
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
@@ -1028,8 +1049,8 @@ public class PaymentTransactionService : IPaymentTransactionService
                 match.PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow;
                 match.PaymentMode = modeEnum;
 
-                // Mark contribution as paid if all verified OR member paid the full amount without rejection
-                if (!isAnyRejected && (isAllVerified || isFullyCovered))
+                // Mark contribution as paid ONLY if member paid the full amount without rejection
+                if (!isAnyRejected && isFullyCovered)
                 {
                     match.PaymentStatus = PaymentStatus.Paid;
                 }
