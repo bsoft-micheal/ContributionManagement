@@ -332,24 +332,6 @@ public class ExpenseRepository : IExpenseRepository
                 int maxExistingExpenseNum = Convert.ToInt32(maxExpenseNumScalar);
                 cmd.Parameters.Clear();
 
-                if (!hasExistingForMonth && maxExistingExpenseNum == 0)
-                {
-                    // If all expenses were deleted/cleared completely from the database, reset sequence counter for this month
-                    cmd.CommandText = "DELETE FROM expense_sequences WHERE year = @year AND month = @month;";
-                    var pY = cmd.CreateParameter();
-                    pY.ParameterName = "@year";
-                    pY.Value = year;
-                    cmd.Parameters.Add(pY);
-
-                    var pM = cmd.CreateParameter();
-                    pM.ParameterName = "@month";
-                    pM.Value = month;
-                    cmd.Parameters.Add(pM);
-
-                    await cmd.ExecuteNonQueryAsync(cancellationToken);
-                    cmd.Parameters.Clear();
-                }
-
                 // Increment sequence ensuring it is always strictly greater than both last_sequence and maxExistingExpenseNum
                 cmd.CommandText = @"
                     INSERT INTO expense_sequences (id, year, month, last_sequence, updated_at)
@@ -400,13 +382,6 @@ public class ExpenseRepository : IExpenseRepository
 
                 var seqRecord = await _context.ExpenseSequences
                     .FirstOrDefaultAsync(s => s.Year == year && s.Month == month, cancellationToken);
-
-                if (!hasExistingForMonth && maxInMemoryExpenseNum == 0 && seqRecord != null)
-                {
-                    _context.ExpenseSequences.Remove(seqRecord);
-                    await _context.SaveChangesAsync(cancellationToken);
-                    seqRecord = null;
-                }
 
                 int nextSequence;
                 if (seqRecord == null)

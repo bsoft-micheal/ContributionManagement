@@ -69,6 +69,25 @@ public class DashboardController : ControllerBase
             }
         }
 
+        if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+        {
+            Guid? orgUserId = null;
+            if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
+            {
+                orgUserId = parsedGuid;
+            }
+            else if (_currentUserService.MemberId.HasValue)
+            {
+                orgUserId = _currentUserService.MemberId.Value;
+            }
+
+            if (orgUserId.HasValue)
+            {
+                var orgEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, filterMonth, filterYear, cancellationToken);
+                return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<EventSummaryDto>>.SuccessResult(orgEvents, CommonMessages.Events.GetAllSuccess, CommonStatusCodes.Status200OK));
+            }
+        }
+
         var allEvents = await _eventRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
         return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<EventSummaryDto>>.SuccessResult(allEvents, CommonMessages.Events.GetAllSuccess, CommonStatusCodes.Status200OK));
     }

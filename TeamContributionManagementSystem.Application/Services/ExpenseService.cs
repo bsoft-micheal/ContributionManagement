@@ -152,7 +152,9 @@ public class ExpenseService : IExpenseService
             var validAdditionalItems = request.AdditionalExpenses?
                 .Where(x => !string.IsNullOrWhiteSpace(x.Reason) || x.Amount > 0)
                 .ToList();
-            var extraSum = validAdditionalItems?.Sum(x => x.Amount) ?? (request.ExtraAmount ?? 0m);
+            var extraSum = (validAdditionalItems != null && validAdditionalItems.Count > 0)
+                ? validAdditionalItems.Sum(x => x.Amount)
+                : (request.ExtraAmount ?? 0m);
             var budgetPart = request.BudgetAmount ?? Math.Max(0m, request.Amount - extraSum);
             var calculatedTotal = budgetPart + extraSum;
 
@@ -366,7 +368,9 @@ public class ExpenseService : IExpenseService
             string? additionalExpensesJson;
             if (request.AdditionalExpenses != null)
             {
-                extraSum = validAdditionalItems?.Sum(x => x.Amount) ?? (request.ExtraAmount ?? 0m);
+                extraSum = (validAdditionalItems != null && validAdditionalItems.Count > 0)
+                    ? validAdditionalItems.Sum(x => x.Amount)
+                    : (request.ExtraAmount ?? 0m);
                 additionalExpensesJson = (validAdditionalItems != null && validAdditionalItems.Count > 0)
                     ? System.Text.Json.JsonSerializer.Serialize(validAdditionalItems)
                     : null;

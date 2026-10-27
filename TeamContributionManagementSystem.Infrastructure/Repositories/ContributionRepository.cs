@@ -20,15 +20,48 @@ public class ContributionRepository : IContributionRepository
         _logger = logger;
     }
 
+    private async Task PopulateNamesAsync(List<ContributionDto> items, CancellationToken cancellationToken)
+    {
+        if (items.Count == 0) return;
+
+        var userIdsToFetch = new HashSet<Guid>();
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.MemberName) && item.MemberId != Guid.Empty)
+            {
+                userIdsToFetch.Add(item.MemberId);
+            }
+            if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && cGuid != Guid.Empty)
+            {
+                userIdsToFetch.Add(cGuid);
+            }
+        }
+
+        if (userIdsToFetch.Count == 0) return;
+
+        var users = await _context.Users
+            .AsNoTracking()
+            .Where(u => userIdsToFetch.Contains(u.UserId))
+            .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+            .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.MemberName) && users.TryGetValue(item.MemberId, out var mName))
+            {
+                item.MemberName = mName;
+            }
+            if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
+            {
+                item.CreatedBy = cName;
+            }
+        }
+    }
+
     public async Task<List<ContributionDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var users = await _context.Users
-                .AsNoTracking()
-                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
-                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
-
             var items = await _context.Contributions
                 .Where(x => !x.IsDeleted)
                 .OrderBy(x => x.Event!.EventDate)
@@ -57,15 +90,14 @@ public class ContributionRepository : IContributionRepository
                 })
                 .ToListAsync(cancellationToken);
 
-            foreach (var item in items)
-            {
-                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
-                {
-                    item.CreatedBy = cName;
-                }
-            }
+            await PopulateNamesAsync(items, cancellationToken);
 
             return items;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetAllAsync request was canceled.");
+            throw;
         }
         catch (Exception ex)
         {
@@ -78,11 +110,6 @@ public class ContributionRepository : IContributionRepository
     {
         try
         {
-            var users = await _context.Users
-                .AsNoTracking()
-                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
-                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
-
             var query = _context.Contributions
                 .Where(x => !x.IsDeleted && x.Event != null && !x.Event.IsDeleted);
 
@@ -119,15 +146,14 @@ public class ContributionRepository : IContributionRepository
                 })
                 .ToListAsync(cancellationToken);
 
-            foreach (var item in items)
-            {
-                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
-                {
-                    item.CreatedBy = cName;
-                }
-            }
+            await PopulateNamesAsync(items, cancellationToken);
 
             return items;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetAllAsync request was canceled.");
+            throw;
         }
         catch (Exception ex)
         {
@@ -140,11 +166,6 @@ public class ContributionRepository : IContributionRepository
     {
         try
         {
-            var users = await _context.Users
-                .AsNoTracking()
-                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
-                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
-
             var items = await _context.Contributions
                 .Where(x => x.EventId == eventId && !x.IsDeleted)
                 .OrderBy(x => x.User != null ? x.User.FullName : string.Empty)
@@ -292,19 +313,14 @@ public class ContributionRepository : IContributionRepository
                 }
             }
 
-            foreach (var item in items)
-            {
-                if (string.IsNullOrWhiteSpace(item.MemberName) && users.TryGetValue(item.MemberId, out var mName))
-                {
-                    item.MemberName = mName;
-                }
-                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
-                {
-                    item.CreatedBy = cName;
-                }
-            }
+            await PopulateNamesAsync(items, cancellationToken);
 
             return items;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetByEventIdAsync request was canceled.");
+            throw;
         }
         catch (Exception ex)
         {
@@ -358,11 +374,6 @@ public class ContributionRepository : IContributionRepository
                 query = query.Where(x => x.Event!.EventDate.Year == year.Value);
             }
 
-            var users = await _context.Users
-                .AsNoTracking()
-                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
-                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
-
             var items = await query
                 .OrderBy(x => x.Event!.EventDate)
                 .Select(x => new ContributionDto
@@ -390,15 +401,14 @@ public class ContributionRepository : IContributionRepository
                 })
                 .ToListAsync(cancellationToken);
 
-            foreach (var item in items)
-            {
-                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
-                {
-                    item.CreatedBy = cName;
-                }
-            }
+            await PopulateNamesAsync(items, cancellationToken);
 
             return items;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetPendingAsync request was canceled.");
+            throw;
         }
         catch (Exception ex)
         {
@@ -463,11 +473,6 @@ public class ContributionRepository : IContributionRepository
     {
         try
         {
-            var users = await _context.Users
-                .AsNoTracking()
-                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
-                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
-
             var items = await _context.Contributions
                 .Where(x => !x.IsDeleted && x.User != null && x.User.Email == email)
                 .OrderBy(x => x.Event!.EventDate)
@@ -496,15 +501,14 @@ public class ContributionRepository : IContributionRepository
                 })
                 .ToListAsync(cancellationToken);
 
-            foreach (var item in items)
-            {
-                if (!string.IsNullOrWhiteSpace(item.CreatedBy) && Guid.TryParse(item.CreatedBy, out var cGuid) && users.TryGetValue(cGuid, out var cName))
-                {
-                    item.CreatedBy = cName;
-                }
-            }
+            await PopulateNamesAsync(items, cancellationToken);
 
             return items;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetByMemberEmailAsync request was canceled.");
+            throw;
         }
         catch (Exception ex)
         {

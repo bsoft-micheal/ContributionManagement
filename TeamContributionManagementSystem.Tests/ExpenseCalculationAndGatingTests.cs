@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using TeamContributionManagementSystem.Application.DTOs.Expenses;
@@ -32,11 +33,11 @@ public class ExpenseCalculationAndGatingTests : IDisposable
         var loggerRepoMock = new Mock<ILogger<ExpenseRepository>>();
         _expenseRepository = new ExpenseRepository(_context, loggerRepoMock.Object);
 
-        var mapperConfig = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile(new MappingProfile());
-        });
-        _mapper = mapperConfig.CreateMapper();
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddLogging();
+        services.AddAutoMapper(cfg => { }, typeof(MappingProfile));
+        var sp = services.BuildServiceProvider();
+        _mapper = sp.GetRequiredService<IMapper>();
 
         var loggerServiceMock = new Mock<ILogger<ExpenseService>>();
         var eventRepoMock = new Mock<IEventRepository>();
@@ -77,7 +78,7 @@ public class ExpenseCalculationAndGatingTests : IDisposable
         };
 
         // Act
-        var created = await _expenseService.CreateExpenseAsync(request);
+        var created = await _expenseService.CreateAsync(request);
 
         // Assert
         Assert.NotNull(created);
@@ -90,7 +91,7 @@ public class ExpenseCalculationAndGatingTests : IDisposable
     public async Task UpdateExpense_RecalculatesTotalExpense_WithoutDoubleCounting()
     {
         // Arrange
-        var initial = await _expenseService.CreateExpenseAsync(new CreateExpenseRequestDto
+        var initial = await _expenseService.CreateAsync(new CreateExpenseRequestDto
         {
             EventName = "Hackathon",
             Category = "Technical",
@@ -105,7 +106,6 @@ public class ExpenseCalculationAndGatingTests : IDisposable
         // Act - Update with modified additional rows (row removed or updated)
         var updateRequest = new UpdateExpenseRequestDto
         {
-            ExpenseId = initial.ExpenseId,
             EventName = "Hackathon",
             Category = "Technical",
             BudgetAmount = 5000,
@@ -116,7 +116,7 @@ public class ExpenseCalculationAndGatingTests : IDisposable
             Description = "Updated hackathon budget"
         };
 
-        var updated = await _expenseService.UpdateExpenseAsync(initial.ExpenseId, updateRequest);
+        var updated = await _expenseService.UpdateAsync(initial.ExpenseId, updateRequest);
 
         // Assert
         Assert.NotNull(updated);
@@ -125,7 +125,7 @@ public class ExpenseCalculationAndGatingTests : IDisposable
         Assert.Equal(5000, updated.BudgetAmount);
 
         // Verify database state has single updated record, no duplicate count
-        var allExpenses = await _expenseService.GetAllExpensesAsync();
+        var allExpenses = await _expenseService.GetAllAsync();
         Assert.Single(allExpenses);
         Assert.Equal(5500, allExpenses.First().Amount);
     }
@@ -134,7 +134,7 @@ public class ExpenseCalculationAndGatingTests : IDisposable
     public async Task DeleteExpense_RemovesExpense_BudgetBecomesAvailableAgain()
     {
         // Arrange
-        var expense = await _expenseService.CreateExpenseAsync(new CreateExpenseRequestDto
+        var expense = await _expenseService.CreateAsync(new CreateExpenseRequestDto
         {
             EventName = "Team Outing",
             Category = "Recreation",
@@ -147,11 +147,10 @@ public class ExpenseCalculationAndGatingTests : IDisposable
         });
 
         // Act
-        var deleted = await _expenseService.DeleteExpenseAsync(expense.ExpenseId);
+        await _expenseService.DeleteAsync(expense.ExpenseId);
 
         // Assert
-        Assert.True(deleted);
-        var remainingExpenses = await _expenseService.GetAllExpensesAsync();
+        var remainingExpenses = await _expenseService.GetAllAsync();
         Assert.Empty(remainingExpenses);
     }
 
