@@ -59,6 +59,7 @@ public class EventSummaryDto
     public Guid? SponsorUserId { get; set; }
     public string? SponsorName { get; set; }
     public decimal? SponsorContributionAmount { get; set; }
+    public List<EventSponsorDto> Sponsors { get; set; } = new();
 
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }
@@ -135,6 +136,7 @@ public class CreateEventRequestDto
     public Guid? SponsorUserId { get; set; }
     [Range(0, 1000000, ErrorMessage = "Sponsor contribution amount must be between 0 and 1,000,000.")]
     public decimal? SponsorContributionAmount { get; set; }
+    public List<EventSponsorInputDto>? Sponsors { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
 }
@@ -250,6 +252,12 @@ public class EventSponsorHistoryDto
     public DateTime ActionDate { get; set; }
     public string? ActionByName { get; set; }
     public string? Notes { get; set; }
+}
+
+public class EventSponsorInputDto
+{
+    public Guid UserId { get; set; }
+    public decimal ContributionAmount { get; set; }
 }
 
 

@@ -688,51 +688,70 @@ public class EventService : IEventService
 
             if (request.RequireSponsorContribution)
             {
-                if (!request.SponsorUserId.HasValue || request.SponsorUserId.Value == Guid.Empty)
-                {
-                    throw new InvalidOperationException("A valid sponsor must be selected when sponsor contribution is required.");
-                }
-                if (!request.SponsorContributionAmount.HasValue || request.SponsorContributionAmount.Value <= 0)
-                {
-                    throw new InvalidOperationException("Sponsor contribution amount must be greater than 0.");
-                }
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
 
-                var sponsorUser = await _userRepository.GetByIdAsync(request.SponsorUserId.Value, cancellationToken)
-                    ?? throw new KeyNotFoundException("Selected sponsor user was not found.");
-                if (sponsorUser.IsDeleted || !sponsorUser.IsActive || sponsorUser.IsExited)
+                if (!sponsorInputs.Any())
                 {
-                    throw new InvalidOperationException("Selected sponsor user is inactive or exited.");
+                    throw new InvalidOperationException("At least one sponsor must be provided when sponsor contribution is required.");
                 }
 
-                var sponsorAmount = RoundingHelper.RoundToWhole(request.SponsorContributionAmount.Value);
-                var newSponsor = new EventSponsor
+                var distinctUsers = new HashSet<Guid>();
+                foreach (var input in sponsorInputs)
                 {
-                    SponsorId = Guid.NewGuid(),
-                    EventId = eventItem.EventId,
-                    SponsorUserId = sponsorUser.UserId,
-                    ContributionAmount = sponsorAmount,
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedBy = user.UserId,
-                    IsDeleted = false
-                };
+                    if (input.UserId == Guid.Empty)
+                    {
+                        throw new InvalidOperationException("A valid sponsor must be selected when sponsor contribution is required.");
+                    }
+                    if (!distinctUsers.Add(input.UserId))
+                    {
+                        throw new InvalidOperationException("Duplicate sponsor selected for the event.");
+                    }
+                    if (input.ContributionAmount <= 0)
+                    {
+                        throw new InvalidOperationException("Sponsor contribution amount must be greater than 0.");
+                    }
 
-                var newHistory = new EventSponsorHistory
-                {
-                    HistoryId = Guid.NewGuid(),
-                    SponsorId = newSponsor.SponsorId,
-                    EventId = eventItem.EventId,
-                    SponsorUserId = sponsorUser.UserId,
-                    ContributionAmount = sponsorAmount,
-                    PreviousAmount = null,
-                    ChangeType = "CREATED",
-                    ActionDate = DateTime.UtcNow,
-                    ActionBy = user.UserId,
-                    Notes = $"Initial sponsor assignment: {sponsorUser.FullName} with amount ₹{sponsorAmount:N0}"
-                };
+                    var sponsorUser = await _userRepository.GetByIdAsync(input.UserId, cancellationToken)
+                        ?? throw new KeyNotFoundException("Selected sponsor user was not found.");
+                    if (sponsorUser.IsDeleted || !sponsorUser.IsActive || sponsorUser.IsExited)
+                    {
+                        throw new InvalidOperationException($"Selected sponsor user '{sponsorUser.FullName}' is inactive or exited.");
+                    }
 
-                eventItem.Sponsors.Add(newSponsor);
-                newSponsor.Histories.Add(newHistory);
+                    var sponsorAmount = RoundingHelper.RoundToWhole(input.ContributionAmount);
+                    var newSponsor = new EventSponsor
+                    {
+                        SponsorId = Guid.NewGuid(),
+                        EventId = eventItem.EventId,
+                        UserId = sponsorUser.UserId,
+                        ContributionAmount = sponsorAmount,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = user.UserId,
+                        IsDeleted = false
+                    };
+
+                    var newHistory = new EventSponsorHistory
+                    {
+                        HistoryId = Guid.NewGuid(),
+                        SponsorId = newSponsor.SponsorId,
+                        EventId = eventItem.EventId,
+                        UserId = sponsorUser.UserId,
+                        ContributionAmount = sponsorAmount,
+                        PreviousAmount = null,
+                        ChangeType = "CREATED",
+                        ActionDate = DateTime.UtcNow,
+                        ActionBy = user.UserId,
+                        Notes = $"Initial sponsor assignment: {sponsorUser.FullName} with amount ₹{sponsorAmount:N0}"
+                    };
+
+                    eventItem.Sponsors.Add(newSponsor);
+                    newSponsor.Histories.Add(newHistory);
+                }
             }
 
             foreach (var member in members)
@@ -1949,153 +1968,154 @@ public class EventService : IEventService
                 ? parsedCurrentId
                 : (Guid?)null;
 
-            var activeSponsor = eventItem.Sponsors.FirstOrDefault(s => s.IsActive && !s.IsDeleted);
+            var activeSponsors = eventItem.Sponsors.Where(s => s.IsActive && !s.IsDeleted).ToList();
 
             if (request.RequireSponsorContribution)
             {
-                if (!request.SponsorUserId.HasValue || request.SponsorUserId.Value == Guid.Empty)
-                {
-                    throw new InvalidOperationException("A valid sponsor must be selected when sponsor contribution is required.");
-                }
-                if (!request.SponsorContributionAmount.HasValue || request.SponsorContributionAmount.Value <= 0)
-                {
-                    throw new InvalidOperationException("Sponsor contribution amount must be greater than 0.");
-                }
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
 
-                var sponsorUser = await _userRepository.GetByIdAsync(request.SponsorUserId.Value, cancellationToken)
-                    ?? throw new KeyNotFoundException("Selected sponsor user was not found.");
-                if (sponsorUser.IsDeleted || !sponsorUser.IsActive || sponsorUser.IsExited)
+                if (!sponsorInputs.Any())
                 {
-                    throw new InvalidOperationException("Selected sponsor user is inactive or exited.");
+                    throw new InvalidOperationException("At least one sponsor must be provided when sponsor contribution is required.");
                 }
 
-                var newAmount = RoundingHelper.RoundToWhole(request.SponsorContributionAmount.Value);
-
-                if (activeSponsor == null)
+                var distinctUsers = new HashSet<Guid>();
+                foreach (var input in sponsorInputs)
                 {
-                    var newSponsor = new EventSponsor
+                    if (input.UserId == Guid.Empty)
                     {
-                        SponsorId = Guid.NewGuid(),
-                        EventId = eventItem.EventId,
-                        SponsorUserId = sponsorUser.UserId,
-                        ContributionAmount = newAmount,
-                        IsActive = true,
-                        CreatedAt = DateTime.UtcNow,
-                        CreatedBy = currentUserId,
-                        IsDeleted = false
-                    };
-                    var newHistory = new EventSponsorHistory
+                        throw new InvalidOperationException("A valid sponsor must be selected when sponsor contribution is required.");
+                    }
+                    if (!distinctUsers.Add(input.UserId))
                     {
-                        HistoryId = Guid.NewGuid(),
-                        SponsorId = newSponsor.SponsorId,
-                        EventId = eventItem.EventId,
-                        SponsorUserId = sponsorUser.UserId,
-                        ContributionAmount = newAmount,
-                        PreviousAmount = null,
-                        ChangeType = "CREATED",
-                        ActionDate = DateTime.UtcNow,
-                        ActionBy = currentUserId,
-                        Notes = $"Assigned sponsor: {sponsorUser.FullName} with amount ₹{newAmount:N0}"
-                    };
-                    eventItem.Sponsors.Add(newSponsor);
-                    newSponsor.Histories.Add(newHistory);
-                }
-                else if (activeSponsor.SponsorUserId == sponsorUser.UserId)
-                {
-                    if (activeSponsor.ContributionAmount != newAmount)
+                        throw new InvalidOperationException("Duplicate sponsor selected for the event.");
+                    }
+                    if (input.ContributionAmount <= 0)
                     {
-                        var prevAmt = activeSponsor.ContributionAmount;
-                        activeSponsor.ContributionAmount = newAmount;
-                        activeSponsor.ModifiedAt = DateTime.UtcNow;
-                        activeSponsor.ModifiedBy = currentUserId;
-
-                        var updateHistory = new EventSponsorHistory
-                        {
-                            HistoryId = Guid.NewGuid(),
-                            SponsorId = activeSponsor.SponsorId,
-                            EventId = eventItem.EventId,
-                            SponsorUserId = sponsorUser.UserId,
-                            PreviousAmount = prevAmt,
-                            ContributionAmount = newAmount,
-                            ChangeType = "UPDATED",
-                            ActionDate = DateTime.UtcNow,
-                            ActionBy = currentUserId,
-                            Notes = $"Updated contribution amount from ₹{prevAmt:N0} to ₹{newAmount:N0}"
-                        };
-                        activeSponsor.Histories.Add(updateHistory);
+                        throw new InvalidOperationException("Sponsor contribution amount must be greater than 0.");
                     }
                 }
-                else
+
+                var incomingUserIds = sponsorInputs.Select(x => x.UserId).ToHashSet();
+
+                // Deactivate removed sponsors
+                foreach (var active in activeSponsors.Where(a => !incomingUserIds.Contains(a.UserId)))
                 {
-                    activeSponsor.IsActive = false;
-                    activeSponsor.ModifiedAt = DateTime.UtcNow;
-                    activeSponsor.ModifiedBy = currentUserId;
+                    active.IsActive = false;
+                    active.ModifiedAt = DateTime.UtcNow;
+                    active.ModifiedBy = currentUserId;
 
                     var deactHistory = new EventSponsorHistory
                     {
                         HistoryId = Guid.NewGuid(),
-                        SponsorId = activeSponsor.SponsorId,
+                        SponsorId = active.SponsorId,
                         EventId = eventItem.EventId,
-                        SponsorUserId = activeSponsor.SponsorUserId,
-                        ContributionAmount = activeSponsor.ContributionAmount,
-                        PreviousAmount = activeSponsor.ContributionAmount,
+                        UserId = active.UserId,
+                        ContributionAmount = active.ContributionAmount,
+                        PreviousAmount = active.ContributionAmount,
                         ChangeType = "DEACTIVATED",
                         ActionDate = DateTime.UtcNow,
                         ActionBy = currentUserId,
-                        Notes = $"Deactivated prior sponsor to reassign to {sponsorUser.FullName}"
+                        Notes = "Sponsor removed from event"
                     };
-                    activeSponsor.Histories.Add(deactHistory);
+                    active.Histories.Add(deactHistory);
+                }
 
-                    var newSponsor = new EventSponsor
+                // Add or update incoming sponsors
+                foreach (var input in sponsorInputs)
+                {
+                    var newAmount = RoundingHelper.RoundToWhole(input.ContributionAmount);
+                    var existing = activeSponsors.FirstOrDefault(a => a.UserId == input.UserId);
+
+                    if (existing != null)
                     {
-                        SponsorId = Guid.NewGuid(),
-                        EventId = eventItem.EventId,
-                        SponsorUserId = sponsorUser.UserId,
-                        ContributionAmount = newAmount,
-                        IsActive = true,
-                        CreatedAt = DateTime.UtcNow,
-                        CreatedBy = currentUserId,
-                        IsDeleted = false
-                    };
-                    var newHistory = new EventSponsorHistory
+                        if (existing.ContributionAmount != newAmount)
+                        {
+                            var prevAmt = existing.ContributionAmount;
+                            existing.ContributionAmount = newAmount;
+                            existing.ModifiedAt = DateTime.UtcNow;
+                            existing.ModifiedBy = currentUserId;
+
+                            var updateHistory = new EventSponsorHistory
+                            {
+                                HistoryId = Guid.NewGuid(),
+                                SponsorId = existing.SponsorId,
+                                EventId = eventItem.EventId,
+                                UserId = existing.UserId,
+                                PreviousAmount = prevAmt,
+                                ContributionAmount = newAmount,
+                                ChangeType = "UPDATED",
+                                ActionDate = DateTime.UtcNow,
+                                ActionBy = currentUserId,
+                                Notes = $"Updated contribution amount from ₹{prevAmt:N0} to ₹{newAmount:N0}"
+                            };
+                            existing.Histories.Add(updateHistory);
+                        }
+                    }
+                    else
                     {
-                        HistoryId = Guid.NewGuid(),
-                        SponsorId = newSponsor.SponsorId,
-                        EventId = eventItem.EventId,
-                        SponsorUserId = sponsorUser.UserId,
-                        ContributionAmount = newAmount,
-                        PreviousAmount = null,
-                        ChangeType = "CREATED",
-                        ActionDate = DateTime.UtcNow,
-                        ActionBy = currentUserId,
-                        Notes = $"Reassigned sponsor to: {sponsorUser.FullName} with amount ₹{newAmount:N0}"
-                    };
-                    eventItem.Sponsors.Add(newSponsor);
-                    newSponsor.Histories.Add(newHistory);
+                        var sponsorUser = await _userRepository.GetByIdAsync(input.UserId, cancellationToken)
+                            ?? throw new KeyNotFoundException("Selected sponsor user was not found.");
+                        if (sponsorUser.IsDeleted || !sponsorUser.IsActive || sponsorUser.IsExited)
+                        {
+                            throw new InvalidOperationException($"Selected sponsor user '{sponsorUser.FullName}' is inactive or exited.");
+                        }
+
+                        var newSponsor = new EventSponsor
+                        {
+                            SponsorId = Guid.NewGuid(),
+                            EventId = eventItem.EventId,
+                            UserId = sponsorUser.UserId,
+                            ContributionAmount = newAmount,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedBy = currentUserId,
+                            IsDeleted = false
+                        };
+                        var newHistory = new EventSponsorHistory
+                        {
+                            HistoryId = Guid.NewGuid(),
+                            SponsorId = newSponsor.SponsorId,
+                            EventId = eventItem.EventId,
+                            UserId = sponsorUser.UserId,
+                            ContributionAmount = newAmount,
+                            PreviousAmount = null,
+                            ChangeType = "CREATED",
+                            ActionDate = DateTime.UtcNow,
+                            ActionBy = currentUserId,
+                            Notes = $"Assigned sponsor: {sponsorUser.FullName} with amount ₹{newAmount:N0}"
+                        };
+                        eventItem.Sponsors.Add(newSponsor);
+                        newSponsor.Histories.Add(newHistory);
+                    }
                 }
             }
             else
             {
-                if (activeSponsor != null)
+                foreach (var active in activeSponsors)
                 {
-                    activeSponsor.IsActive = false;
-                    activeSponsor.ModifiedAt = DateTime.UtcNow;
-                    activeSponsor.ModifiedBy = currentUserId;
+                    active.IsActive = false;
+                    active.ModifiedAt = DateTime.UtcNow;
+                    active.ModifiedBy = currentUserId;
 
                     var deactHistory = new EventSponsorHistory
                     {
                         HistoryId = Guid.NewGuid(),
-                        SponsorId = activeSponsor.SponsorId,
+                        SponsorId = active.SponsorId,
                         EventId = eventItem.EventId,
-                        SponsorUserId = activeSponsor.SponsorUserId,
-                        ContributionAmount = activeSponsor.ContributionAmount,
-                        PreviousAmount = activeSponsor.ContributionAmount,
+                        UserId = active.UserId,
+                        ContributionAmount = active.ContributionAmount,
+                        PreviousAmount = active.ContributionAmount,
                         ChangeType = "DEACTIVATED",
                         ActionDate = DateTime.UtcNow,
                         ActionBy = currentUserId,
                         Notes = "Require sponsor contribution feature disabled"
                     };
-                    activeSponsor.Histories.Add(deactHistory);
+                    active.Histories.Add(deactHistory);
                 }
             }
 

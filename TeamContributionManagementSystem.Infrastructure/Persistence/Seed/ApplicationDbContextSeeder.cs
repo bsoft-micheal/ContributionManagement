@@ -185,6 +185,11 @@ CREATE TABLE IF NOT EXISTS exit_clearance_histories (
 CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_member_id ON exit_clearance_histories(member_id);
 CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_event_id ON exit_clearance_histories(event_id);
 CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_clearance_id ON exit_clearance_histories(clearance_id);
+
+DROP INDEX IF EXISTS public.idx_event_sponsors_single_active;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_event_sponsors_event_user_active 
+ON public.event_sponsors (event_id, user_id) 
+WHERE is_active = TRUE AND is_deleted = FALSE;
 ", cancellationToken);
             }
             catch { /* Non-fatal */ }

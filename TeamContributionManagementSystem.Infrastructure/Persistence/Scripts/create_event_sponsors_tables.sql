@@ -18,9 +18,10 @@ CREATE TABLE IF NOT EXISTS public.event_sponsors (
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_sponsors_event_id ON public.event_sponsors(event_id);
-CREATE INDEX IF NOT EXISTS idx_event_sponsors_user_id ON public.event_sponsors(sponsor_user_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_event_sponsors_single_active 
-    ON public.event_sponsors(event_id) 
+CREATE INDEX IF NOT EXISTS idx_event_sponsors_user_id ON public.event_sponsors(user_id);
+DROP INDEX IF EXISTS public.idx_event_sponsors_single_active;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_event_sponsors_event_user_active 
+    ON public.event_sponsors(event_id, user_id) 
     WHERE is_active = TRUE AND is_deleted = FALSE;
 
 -- 3. Create event_sponsor_histories table
