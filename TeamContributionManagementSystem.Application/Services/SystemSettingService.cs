@@ -122,7 +122,7 @@ public class SystemSettingService : ISystemSettingService
             }
             else
             {
-                dto.EmailDescription = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
+                dto.EmailDescription = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease scan the dynamic UPI QR code below or log in to the portal to complete your contribution payment.\n\n{qrCode}\n\n{paymentLink}\n\nThank you,\n{orgName}";
             }
 
             if (map.TryGetValue(CommonConstants.SettingKeys.SelectedTemplateCategoryId, out var selCatId)) dto.SelectedTemplateCategoryId = selCatId;
