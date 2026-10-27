@@ -96,9 +96,9 @@ public class PendingDuesReportTests
         Assert.NotNull(result);
         Assert.Equal(9, result.SelectedMonth);
         Assert.Equal(2026, result.SelectedYear);
-        Assert.Equal("September", result.CurrentMonthLabel);
-        Assert.Equal("August", result.PreviousMonthLabel);
-        Assert.Contains("May", result.PriorMonthsLabel);
+        Assert.Equal("Sep", result.CurrentMonthLabel);
+        Assert.Equal("Aug", result.PreviousMonthLabel);
+        Assert.Equal("Previous Arrear", result.PriorMonthsLabel);
 
         // Felix check
         var felix = Assert.Single(result.Members, m => m.MemberId == felixId);
@@ -161,9 +161,10 @@ public class PendingDuesReportTests
         // Act
         var result = await _reportService.GetPendingDuesReportAsync(selectedMonth, selectedYear, null, null, CancellationToken.None);
 
-        // Assert: January, December, and Earlier Months must be 0!
-        Assert.Equal("January", result.CurrentMonthLabel);
-        Assert.Equal("December", result.PreviousMonthLabel);
+        // Assert: In January, PreviousMonthLabel is empty, and future months (October 2026) are not included
+        Assert.Equal("Jan", result.CurrentMonthLabel);
+        Assert.Equal(string.Empty, result.PreviousMonthLabel);
+        Assert.Equal("Previous Arrear", result.PriorMonthsLabel);
 
         var member = Assert.Single(result.Members, m => m.MemberId == memberId);
         Assert.Equal(0m, member.CurrentMonthPendingAmount);
@@ -213,5 +214,54 @@ public class PendingDuesReportTests
         Assert.Equal(500m, member.CurrentMonthPendingAmount);
         Assert.Equal(500m, member.TotalPendingAmount);
         Assert.Equal(500m, result.OverallTotalPending);
+    }
+
+    [Fact]
+    public async Task GetPendingDuesReportAsync_WhenFilteringByJanuary2027_RollsAll2026MonthsIntoPreviousArrear()
+    {
+        // Arrange: October 2026 (498), December 2026 (125), January 2027 (125)
+        var octEventId = Guid.NewGuid();
+        var decEventId = Guid.NewGuid();
+        var janEventId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+
+        var events = new List<EventSummaryDto>
+        {
+            new() { EventId = octEventId, EventName = "Oct Event", EventDate = new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc) },
+            new() { EventId = decEventId, EventName = "Dec Event", EventDate = new DateTime(2026, 12, 20, 0, 0, 0, DateTimeKind.Utc) },
+            new() { EventId = janEventId, EventName = "Jan Event", EventDate = new DateTime(2027, 1, 10, 0, 0, 0, DateTimeKind.Utc) }
+        };
+
+        var contributions = new List<ContributionDto>
+        {
+            new() { ContributionId = Guid.NewGuid(), EventId = octEventId, MemberId = memberId, MemberName = "Anthony Infant Raj", Amount = 498m, PaymentStatus = PaymentStatus.Pending },
+            new() { ContributionId = Guid.NewGuid(), EventId = decEventId, MemberId = memberId, MemberName = "Anthony Infant Raj", Amount = 125m, PaymentStatus = PaymentStatus.Pending },
+            new() { ContributionId = Guid.NewGuid(), EventId = janEventId, MemberId = memberId, MemberName = "Anthony Infant Raj", Amount = 125m, PaymentStatus = PaymentStatus.Pending }
+        };
+
+        var users = new List<UserDto>
+        {
+            new() { UserId = memberId, FullName = "Anthony Infant Raj", IsDeleted = false }
+        };
+
+        _eventRepoMock.Setup(r => r.GetAllAsync(null, null, It.IsAny<CancellationToken>())).ReturnsAsync(events);
+        _contribRepoMock.Setup(r => r.GetPendingAsync(null, null, It.IsAny<CancellationToken>())).ReturnsAsync(contributions);
+        _userRepoMock.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(users);
+
+        // Act: Filter by Year 2027, Month 1 (January)
+        var result = await _reportService.GetPendingDuesReportAsync(1, 2027, null, null, CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("Previous Arrear", result.PriorMonthsLabel);
+        Assert.Equal(string.Empty, result.PreviousMonthLabel);
+        Assert.Equal("Jan", result.CurrentMonthLabel);
+
+        var member = Assert.Single(result.Members, m => m.MemberId == memberId);
+        // Oct 2026 (498) + Dec 2026 (125) = 623
+        Assert.Equal(623m, member.PriorMonthsPendingAmount);
+        Assert.Equal(0m, member.PreviousMonthPendingAmount);
+        Assert.Equal(125m, member.CurrentMonthPendingAmount);
+        Assert.Equal(748m, member.TotalPendingAmount);
     }
 }

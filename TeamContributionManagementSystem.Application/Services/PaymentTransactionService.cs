@@ -964,8 +964,20 @@ public class PaymentTransactionService : IPaymentTransactionService
                 t.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                 (!string.IsNullOrWhiteSpace(t.VerifiedBy) && !t.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase)));
 
-            // Status determination
-            string targetStatusName = isAnyRejected ? "Rejected" : (primary.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase) ? "Approved" : (isExplicitlyVerified ? "Verified" : (isAllVerified ? "Paid" : "Pending")));
+            // Calculate aggregate group amounts (Requirement 8)
+            decimal totalCash = groupEntities
+                .Where(t => (t.PaymentMode ?? "").Contains("Cash", StringComparison.OrdinalIgnoreCase))
+                .Sum(t => t.Amount);
+
+            decimal totalUpi = groupEntities
+                .Where(t => !(t.PaymentMode ?? "").Contains("Cash", StringComparison.OrdinalIgnoreCase))
+                .Sum(t => t.Amount);
+
+            decimal totalPaid = totalCash + totalUpi;
+            bool isFullyCovered = !isAnyRejected && match != null && match.Amount > 0 && totalPaid >= match.Amount;
+
+            // Status determination: if member has paid required amount and not rejected, status is Paid (or Verified/Approved if already verified)
+            string targetStatusName = isAnyRejected ? "Rejected" : (primary.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase) ? "Approved" : (isExplicitlyVerified ? "Verified" : ((isAllVerified || isFullyCovered) ? "Paid" : "Pending")));
             Guid? statusIdToAssign = null;
             if (_statusRepository != null)
             {
@@ -984,15 +996,6 @@ public class PaymentTransactionService : IPaymentTransactionService
                 }
                 statusIdToAssign = st?.StatusId;
             }
-
-            // Calculate aggregate group amounts (Requirement 8)
-            decimal totalCash = groupEntities
-                .Where(t => (t.PaymentMode ?? "").Contains("Cash", StringComparison.OrdinalIgnoreCase))
-                .Sum(t => t.Amount);
-
-            decimal totalUpi = groupEntities
-                .Where(t => !(t.PaymentMode ?? "").Contains("Cash", StringComparison.OrdinalIgnoreCase))
-                .Sum(t => t.Amount);
 
             PaymentMode modeEnum;
             if (groupEntities.Count > 1 || (totalCash > 0 && totalUpi > 0))
@@ -1015,8 +1018,8 @@ public class PaymentTransactionService : IPaymentTransactionService
                 match.PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow;
                 match.PaymentMode = modeEnum;
 
-                // Ensure pending, rejected, or partial payments do not mark contribution as paid
-                if (isAllVerified && (totalCash + totalUpi) >= match.Amount)
+                // Mark contribution as paid if all verified OR member paid the full amount without rejection
+                if (!isAnyRejected && (isAllVerified || isFullyCovered))
                 {
                     match.PaymentStatus = PaymentStatus.Paid;
                 }
@@ -1049,7 +1052,7 @@ public class PaymentTransactionService : IPaymentTransactionService
                     PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow,
                     CashAmount = totalCash,
                     UpiAmount = totalUpi,
-                    PaymentStatus = isAllVerified ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    PaymentStatus = (!isAnyRejected && (isAllVerified || (totalCash + totalUpi) > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
                     PaymentMode = modeEnum,
                     CreatedBy = primary.CreatedBy,
                     CreatedAt = DateTime.UtcNow

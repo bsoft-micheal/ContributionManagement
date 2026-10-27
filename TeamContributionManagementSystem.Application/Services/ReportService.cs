@@ -449,12 +449,32 @@ public class ReportService : IReportService
             }
 
             var currentMonthStart = new DateTime(selectedYear, selectedMonth, 1, 0, 0, 0, DateTimeKind.Utc);
-            var prevMonthStart = currentMonthStart.AddMonths(-1);
-            int prevMonth = prevMonthStart.Month;
-            int prevYear = prevMonthStart.Year;
+            string currentMonthLabel = currentMonthStart.ToString("MMM");
 
-            string currentMonthLabel = currentMonthStart.ToString("MMMM");
-            string previousMonthLabel = prevMonthStart.ToString("MMMM");
+            // For January (Month 1), there is no previous month in the selected year.
+            // All pending dues from previous year(s) (e.g., all 2026 months like Oct, Nov, Dec) roll into "Previous Arrear".
+            DateTime prevMonthStart;
+            int prevMonth;
+            int prevYear;
+            string previousMonthLabel;
+
+            if (selectedMonth > 1)
+            {
+                prevMonthStart = currentMonthStart.AddMonths(-1);
+                prevMonth = prevMonthStart.Month;
+                prevYear = prevMonthStart.Year;
+                previousMonthLabel = prevMonthStart.ToString("MMM");
+            }
+            else
+            {
+                // Month is January: No previous month within the selected year
+                prevMonthStart = currentMonthStart;
+                prevMonth = 0;
+                prevYear = 0;
+                previousMonthLabel = string.Empty;
+            }
+
+            string priorMonthsLabel = "Previous Arrear";
 
             List<UserDto> users = new();
             if (_userRepository != null)
@@ -468,28 +488,6 @@ public class ReportService : IReportService
                 {
                     _logger.LogWarning(ex, "Could not load users for pending dues report");
                 }
-            }
-
-            // Identify distinct months earlier than prevMonth that actually have pending dues
-            var priorMonthsDates = allPending
-                .Select(p =>
-                {
-                    DateTime d = eventLookup.TryGetValue(p.EventId, out var ev) ? ev.EventDate : (p.CreatedAt ?? DateTime.UtcNow);
-                    return new DateTime(d.Year, d.Month, 1);
-                })
-                .Where(d => d < prevMonthStart)
-                .Distinct()
-                .OrderBy(d => d)
-                .ToList();
-
-            string priorMonthsLabel;
-            if (priorMonthsDates.Count > 0)
-            {
-                priorMonthsLabel = string.Join(" & ", priorMonthsDates.Select(d => d.ToString("MMMM")));
-            }
-            else
-            {
-                priorMonthsLabel = "Earlier Months";
             }
 
             var pendingByMember = allPending.GroupBy(p => p.MemberId).ToDictionary(g => g.Key, g => g.ToList());
@@ -520,19 +518,25 @@ public class ReportService : IReportService
                     var evDate = eventLookup.TryGetValue(item.EventId, out var ev) ? ev.EventDate : (item.CreatedAt ?? DateTime.UtcNow);
                     decimal roundedAmt = RoundingHelper.RoundToWhole(item.Amount);
 
+                    // Exclude future events when filtering for a specific month
+                    if (!isAllMonths && evDate >= currentMonthStart.AddMonths(1))
+                    {
+                        continue;
+                    }
+
                     if (evDate.Year == selectedYear && evDate.Month == selectedMonth)
                     {
                         currentAmt += roundedAmt;
                     }
-                    else if (evDate.Year == prevYear && evDate.Month == prevMonth)
+                    else if (selectedMonth > 1 && evDate.Year == prevYear && evDate.Month == prevMonth)
                     {
                         prevAmt += roundedAmt;
                     }
-                    else if (evDate < prevMonthStart)
+                    else if (evDate < (selectedMonth > 1 ? prevMonthStart : currentMonthStart))
                     {
                         priorAmt += roundedAmt;
                     }
-                    else if (isAllMonths)
+                    else if (isAllMonths && evDate.Year == selectedYear)
                     {
                         currentAmt += roundedAmt;
                     }
