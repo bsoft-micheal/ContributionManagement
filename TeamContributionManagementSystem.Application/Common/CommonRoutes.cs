@@ -134,6 +134,7 @@ public static class CommonRoutes
     {
         public const string Base = $"{ApiBase}/reports";
         public const string GetSummary = "getSummaryReportAsync";
+        public const string GetPendingDues = "getPendingDuesReportAsync";
     }
 
     public static class Dashboard

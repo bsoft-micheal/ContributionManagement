@@ -24,4 +24,9 @@ public interface IReportService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task returning the calculated summary statistics and metrics.</returns>
     Task<ReportsSummaryDto> GetSummaryReportAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetSummaryAsync(month, year, cancellationToken);
+
+    /// <summary>
+    /// Generates a pending dues report detailing prior months, previous month, current month, and total pending per member.
+    /// </summary>
+    Task<PendingDuesReportSummaryDto> GetPendingDuesReportAsync(int? month = null, int? year = null, Guid? eventTypeId = null, Guid? eventId = null, CancellationToken cancellationToken = default);
 }
