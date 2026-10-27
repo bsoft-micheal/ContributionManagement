@@ -198,16 +198,29 @@ public class EmailService : IEmailService
                 mailMessage.IsBodyHtml = true;
             }
 
-            using var smtpClient = new SmtpClient(host, port)
+            const int maxRetries = 3;
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                Credentials = new NetworkCredential(username, password),
-                EnableSsl = enableSsl,
-                Timeout = 30000
-            };
+                try
+                {
+                    using var smtpClient = new SmtpClient(host, port)
+                    {
+                        Credentials = new NetworkCredential(username, password),
+                        EnableSsl = enableSsl,
+                        Timeout = 30000
+                    };
 
-            await smtpClient.SendMailAsync(mailMessage, cancellationToken);
-            IncrementEmailCount();
-            _logger.LogInformation(CommonLogMessages.Emails.EmailSentSuccess, toEmail);
+                    await smtpClient.SendMailAsync(mailMessage, cancellationToken);
+                    IncrementEmailCount();
+                    _logger.LogInformation(CommonLogMessages.Emails.EmailSentSuccess, toEmail);
+                    return;
+                }
+                catch (Exception ex) when (attempt < maxRetries && !cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning(ex, "SMTP send attempt {Attempt} of {MaxRetries} to {ToEmail} failed. Retrying in {Delay}s...", attempt, maxRetries, toEmail, attempt * 2);
+                    await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
+                }
+            }
         }
         catch (Exception ex)
         {

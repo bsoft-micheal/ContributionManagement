@@ -533,7 +533,7 @@ public class ExpenseService : IExpenseService
 
     private async Task ValidateExpenseAmountAgainstEventBudgetAsync(
         Guid? eventId,
-        string eventName,
+        string? eventName,
         string? category,
         decimal requestedBudgetAmount,
         Guid? currentExpenseId,

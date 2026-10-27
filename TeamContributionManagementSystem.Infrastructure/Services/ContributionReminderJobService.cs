@@ -246,6 +246,13 @@ public class ContributionReminderJobService : IContributionReminderJobService
                 continue;
             }
 
+            // Skip test / dummy email addresses
+            if (user.Email.Trim().EndsWith("@nomail.com", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Skipping reminder for dummy email {Email} (Contribution {ContributionId}).", user.Email, contribution.ContributionId);
+                continue;
+            }
+
             // 3. Max reminders limit check
             if (contribution.ReminderCount >= maxReminders)
             {
@@ -303,9 +310,11 @@ public class ContributionReminderJobService : IContributionReminderJobService
         var eventDate = eventItem.EventDate;
         var pendingAmount = contribution.Amount;
 
+        var rawEventDescription = eventItem.Description ?? string.Empty;
+
         // Get the event's actual description and strip internal metadata
         var eventDescription = System.Text.RegularExpressions.Regex
-            .Replace(eventItem.Description ?? string.Empty, @"<!--contrib:[\s\S]*?-->", string.Empty,
+            .Replace(rawEventDescription, @"<!--(contrib|celebrants|eventDates|memberDates):[\s\S]*?-->", string.Empty,
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             .Trim();
 
@@ -322,31 +331,105 @@ public class ContributionReminderJobService : IContributionReminderJobService
         var frontendBaseUrl = _configuration["Cors:AllowedOrigins:0"] ?? CommonConstants.Defaults.DefaultFrontendUrl;
         var portalPaymentUrl = $"{frontendBaseUrl}/contributions";
 
-        // Query birthday celebrants and format celebrants list
-        bool isBirthdayEvent = (eventTypeName ?? string.Empty).IndexOf("birthday", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                               (eventName ?? string.Empty).IndexOf("birthday", StringComparison.OrdinalIgnoreCase) >= 0;
+        bool isBirthdayEvent = (!string.IsNullOrWhiteSpace(eventTypeName) && eventTypeName.Contains("Birthday", StringComparison.OrdinalIgnoreCase)) ||
+                               (!string.IsNullOrWhiteSpace(eventName) && eventName.Contains("Birthday", StringComparison.OrdinalIgnoreCase));
+
+        bool isSendOff = (!string.IsNullOrWhiteSpace(eventTypeName) &&
+            (eventTypeName.Contains("Send", StringComparison.OrdinalIgnoreCase) ||
+             eventTypeName.Contains("Farewell", StringComparison.OrdinalIgnoreCase) ||
+             eventTypeName.Contains("Exit", StringComparison.OrdinalIgnoreCase))) ||
+            (!string.IsNullOrWhiteSpace(eventName) &&
+            (eventName.Contains("Send", StringComparison.OrdinalIgnoreCase) ||
+             eventName.Contains("Farewell", StringComparison.OrdinalIgnoreCase) ||
+             eventName.Contains("Exit", StringComparison.OrdinalIgnoreCase)));
+
+        bool isMarriage = (!string.IsNullOrWhiteSpace(eventTypeName) &&
+            (eventTypeName.Contains("Marriage", StringComparison.OrdinalIgnoreCase) ||
+             eventTypeName.Contains("Wedding", StringComparison.OrdinalIgnoreCase))) ||
+            (!string.IsNullOrWhiteSpace(eventName) &&
+            (eventName.Contains("Marriage", StringComparison.OrdinalIgnoreCase) ||
+             eventName.Contains("Wedding", StringComparison.OrdinalIgnoreCase)));
 
         List<AppUser> targetCelebrants = new();
+        HashSet<Guid> detectedCelebrantIds = new();
+
+        // 1. Extract from <!--celebrants:...--> in raw description
+        if (!string.IsNullOrWhiteSpace(rawEventDescription) && rawEventDescription.Contains("<!--celebrants:"))
+        {
+            try
+            {
+                var startIdx = rawEventDescription.IndexOf("<!--celebrants:") + 15;
+                var endIdx = rawEventDescription.IndexOf("-->", startIdx);
+                if (startIdx >= 15 && endIdx > startIdx)
+                {
+                    var jsonStr = rawEventDescription.Substring(startIdx, endIdx - startIdx).Trim();
+                    using var doc = System.Text.Json.JsonDocument.Parse(jsonStr);
+                    if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                foreach (var elem in prop.Value.EnumerateArray())
+                                {
+                                    if (elem.ValueKind == System.Text.Json.JsonValueKind.String && Guid.TryParse(elem.GetString(), out var mId))
+                                    {
+                                        detectedCelebrantIds.Add(mId);
+                                    }
+                                }
+                            }
+                            else if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.String && Guid.TryParse(prop.Value.GetString(), out var mId))
+                            {
+                                detectedCelebrantIds.Add(mId);
+                            }
+                        }
+                    }
+                    else if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var elem in doc.RootElement.EnumerateArray())
+                        {
+                            if (elem.ValueKind == System.Text.Json.JsonValueKind.String && Guid.TryParse(elem.GetString(), out var mId))
+                            {
+                                detectedCelebrantIds.Add(mId);
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // 2. Extract zero-amount contribution member IDs
+        try
+        {
+            var zeroAmountMemberIds = await _context.Contributions
+                .Where(c => c.EventId == eventItem.EventId && c.Amount == 0)
+                .Select(c => c.MemberId)
+                .ToListAsync(cancellationToken);
+
+            foreach (var zid in zeroAmountMemberIds)
+            {
+                detectedCelebrantIds.Add(zid);
+            }
+        }
+        catch { }
+
+        // 3. Query Celebrants
         if (isBirthdayEvent)
         {
             try
             {
-                var exemptCelebrantIds = await _context.Contributions
-                    .Where(c => c.EventId == eventItem.EventId && c.Amount == 0)
-                    .Select(c => c.MemberId)
-                    .ToListAsync(cancellationToken);
-
-                if (exemptCelebrantIds.Count > 0)
+                if (detectedCelebrantIds.Count > 0)
                 {
                     targetCelebrants = await _context.Users
-                        .Where(u => u.IsActive && !u.IsExited && exemptCelebrantIds.Contains(u.UserId))
+                        .Where(u => !u.IsDeleted && detectedCelebrantIds.Contains(u.UserId))
                         .ToListAsync(cancellationToken);
                 }
 
                 if (targetCelebrants.Count == 0)
                 {
                     targetCelebrants = await _context.Users
-                        .Where(u => u.IsActive && !u.IsExited && u.DateOfBirth.Month == eventDate.Month)
+                        .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited && u.DateOfBirth.Month == eventDate.Month)
                         .ToListAsync(cancellationToken);
                 }
             }
@@ -355,8 +438,90 @@ public class ContributionReminderJobService : IContributionReminderJobService
                 _logger.LogWarning(ex, "Failed to resolve active birthday celebrants for reminder email");
             }
         }
+        else if (detectedCelebrantIds.Count > 0)
+        {
+            try
+            {
+                targetCelebrants = await _context.Users
+                    .Where(u => !u.IsDeleted && detectedCelebrantIds.Contains(u.UserId))
+                    .ToListAsync(cancellationToken);
+            }
+            catch { }
+        }
 
         targetCelebrants = targetCelebrants.OrderBy(c => c.DateOfBirth.Day).ToList();
+        var celebrantNames = targetCelebrants.Select(m => !string.IsNullOrWhiteSpace(m.FullName) ? m.FullName : m.Username).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+
+        if (celebrantNames.Count == 0)
+        {
+            var nameParts = eventName.Split(new[] { '-', ':', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
+            if (nameParts.Length > 1)
+            {
+                var candidate = nameParts[1].Trim();
+                if (!string.IsNullOrWhiteSpace(candidate) && !candidate.Equals("event", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parsed = candidate.Split(new[] { ',', '&' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(p => p.Trim())
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .ToList();
+                    if (parsed.Count > 0)
+                    {
+                        celebrantNames = parsed;
+                    }
+                }
+            }
+        }
+
+        string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
+
+        // Dynamic Celebrant Label based on Event Category
+        string celebrantLabel;
+        if (isBirthdayEvent)
+        {
+            celebrantLabel = celebrantNames.Count > 1 ? "Birthday Celebrants" : "Birthday Celebrant";
+        }
+        else if (isSendOff)
+        {
+            celebrantLabel = celebrantNames.Count > 1 ? "Send-Off Members" : "Send-Off Member";
+        }
+        else if (isMarriage)
+        {
+            celebrantLabel = celebrantNames.Count > 1 ? "Marriage Couple" : "Marriage Celebrant";
+        }
+        else
+        {
+            celebrantLabel = celebrantNames.Count > 1 ? "Celebrants / Honorees" : "Celebrant / Honoree";
+        }
+
+        // Dynamically ensure Description reflects the Celebrant(s)
+        var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
+        if (string.IsNullOrWhiteSpace(eventDescription))
+        {
+            if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
+            {
+                eventDescription = isSendOff
+                    ? $"Send-off celebration honoring {celebrantsFormatted}."
+                    : (isBirthdayEvent
+                        ? $"Birthday celebration honoring {celebrantsFormatted}."
+                        : (isMarriage
+                            ? $"Wedding celebration honoring {celebrantsFormatted}."
+                            : $"{safeCategoryName} celebration honoring {celebrantsFormatted}."));
+            }
+            else
+            {
+                eventDescription = isSendOff
+                    ? "Send-off celebration."
+                    : (isBirthdayEvent
+                        ? "Birthday celebration."
+                        : (isMarriage
+                            ? "Wedding celebration."
+                            : $"{safeCategoryName} celebration."));
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(celebrantsFormatted) && !eventDescription.Contains(celebrantsFormatted, StringComparison.OrdinalIgnoreCase))
+        {
+            eventDescription = $"{eventDescription} (Honoring: {celebrantsFormatted})";
+        }
 
         Func<AppUser, DateTime> getCelebrantBirthDate = (m) =>
         {
@@ -405,6 +570,26 @@ public class ContributionReminderJobService : IContributionReminderJobService
                     </div>
                 </div>";
             }
+            else if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
+            {
+                celebrantsAndDatesHtml = $@"
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Birthday Celebrants:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{celebrantsFormatted}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Particular Birthday Date:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #c026d3;"">{eventDate:MMMM dd, yyyy}</span>
+                </div>";
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
+        {
+            celebrantsAndDatesHtml = $@"
+                <div class=""detail-row"">
+                    <span class=""detail-label"">{celebrantLabel}:</span>
+                    <span class=""detail-value"" style=""font-weight: 700; color: #7c3aed;"">{celebrantsFormatted}</span>
+                </div>";
         }
 
         string eventDateLabel = isBirthdayEvent && !string.IsNullOrWhiteSpace(eventItem.EventDates) && eventItem.EventDates.Contains(",")
@@ -481,6 +666,17 @@ public class ContributionReminderJobService : IContributionReminderJobService
             ? paymentSetting.ReceiverName
             : orgName;
         var isUploadedMode = paymentSetting?.QrMode?.Equals("uploaded", StringComparison.OrdinalIgnoreCase) == true && !string.IsNullOrWhiteSpace(paymentSetting?.QrImageUrl);
+
+        if (string.IsNullOrWhiteSpace(effectiveUpiId) && !isUploadedMode)
+        {
+            var configUpi = _configuration?["PaymentQr:DefaultUpiId"];
+            var configReceiver = _configuration?["PaymentQr:DefaultReceiverName"];
+            effectiveUpiId = !string.IsNullOrWhiteSpace(configUpi) ? configUpi.Trim() : "danielrobertanto604@okicici";
+            if (string.IsNullOrWhiteSpace(effectiveReceiverName))
+            {
+                effectiveReceiverName = !string.IsNullOrWhiteSpace(configReceiver) ? configReceiver.Trim() : orgName;
+            }
+        }
 
         var isQrConfigured = !string.IsNullOrWhiteSpace(effectiveUpiId) || isUploadedMode;
 
@@ -804,11 +1000,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
 
             {qrSectionBlock}
 
-            <div style=""text-align: center; margin: 28px 0 20px 0;"">
-                <a href=""{portalPaymentUrl}"" target=""_blank"" style=""display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff !important; text-decoration: none; padding: 14px 34px; font-size: 15px; font-weight: 700; border-radius: 10px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35); letter-spacing: 0.3px;"">
-                    Go to Contribution Page &amp; Pay
-                </a>
-            </div>
+
 
             <div class=""notice"">
                 <strong>Important:</strong> If you have already made this payment via Cash or Bank Transfer, please contact the organizer or verify your payment status on the portal.
@@ -923,7 +1115,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
             .Replace("{orgName}", orgName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{paymentLink}", portalContributionUrl, StringComparison.OrdinalIgnoreCase);
+            .Replace("{paymentLink}", string.Empty, StringComparison.OrdinalIgnoreCase);
 
         return (resolvedSubject, resolvedDescription, qrEmbeddedInDesc);
     }
