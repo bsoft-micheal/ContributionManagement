@@ -96,17 +96,55 @@ public class SessionService : ISessionService
                 history.IsActive = false;
                 history.LogoutTime = DateTime.UtcNow;
 
-            if (history.DeviceDetail != null && history.DeviceDetail.DeviceType == 2)
-            {
-                history.DeviceDetail.IsActive = false;
+                if (history.DeviceDetail != null && history.DeviceDetail.DeviceType == 2)
+                {
+                    history.DeviceDetail.IsActive = false;
+                }
             }
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-            }
+            // Deactivate account if user was marked as Exited in Exit Clearance
+            await _deviceSessionRepository.DeactivateExitedUserIfNoActiveSessionsAsync(userId, historyId, cancellationToken);
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(LogoutSessionAsync));
+            throw;
+        }
+    }
+
+    public async Task LogoutCurrentSessionAsync(Guid userId, Guid? sessionId = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (sessionId.HasValue && sessionId.Value != Guid.Empty)
+            {
+                var history = await _deviceSessionRepository.GetLoginHistoryByIdAsync(sessionId.Value, cancellationToken);
+                if (history != null && history.UserId == userId && history.IsActive)
+                {
+                    history.IsActive = false;
+                    history.LogoutTime = DateTime.UtcNow;
+
+                    if (history.DeviceDetail != null && history.DeviceDetail.DeviceType == 2)
+                    {
+                        history.DeviceDetail.IsActive = false;
+                    }
+                }
+            }
+            else
+            {
+                await _deviceSessionRepository.LogoutAllActiveSessionsForUserAsync(userId, cancellationToken);
+            }
+
+            // Deactivate account if user was marked as Exited in Exit Clearance
+            await _deviceSessionRepository.DeactivateExitedUserIfNoActiveSessionsAsync(userId, sessionId, cancellationToken);
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(LogoutCurrentSessionAsync));
             throw;
         }
     }

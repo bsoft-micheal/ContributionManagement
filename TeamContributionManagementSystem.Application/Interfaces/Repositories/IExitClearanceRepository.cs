@@ -22,4 +22,5 @@ public interface IExitClearanceRepository
     Task<Event?> GetEventWithDetailsAsync(Guid eventId, CancellationToken cancellationToken = default);
     Task<bool> MemberExistsAsync(Guid memberId, CancellationToken cancellationToken = default);
     Task<AppUser?> GetUserByIdAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<bool> HasActiveLoginSessionsAsync(Guid userId, CancellationToken cancellationToken = default);
 }
