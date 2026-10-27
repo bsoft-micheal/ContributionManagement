@@ -70,6 +70,19 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves a list of all active users who are eligible to be assigned as event sponsors.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet(CommonRoutes.Events.GetEligibleSponsors)]
+    [HttpGet(CommonRoutes.Events.GetEligibleSponsorsAsync)]
+    [ActionName(nameof(GetEligibleSponsorsAsync))]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<EligibleSponsorDto>>>> GetEligibleSponsorsAsync(CancellationToken cancellationToken)
+    {
+        var result = await _eventService.GetEligibleSponsorsAsync(cancellationToken);
+        return StatusCode(CommonStatusCodes.Status200OK, ApiResponse<IReadOnlyCollection<EligibleSponsorDto>>.SuccessResult(result, "Eligible sponsors retrieved successfully.", CommonStatusCodes.Status200OK));
+    }
+
+    /// <summary>
     /// Creates a new event and automatically adds the specified members as participants (Admin or Organizer).
     /// </summary>
     /// <param name="request">The event details and participant list.</param>

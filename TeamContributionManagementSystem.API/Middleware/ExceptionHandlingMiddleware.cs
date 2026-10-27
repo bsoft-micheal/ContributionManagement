@@ -130,7 +130,18 @@ public class ExceptionHandlingMiddleware
             }
             else if (innerMsg.Contains("23505") || innerMsg.IndexOf("unique", StringComparison.OrdinalIgnoreCase) >= 0 || innerMsg.IndexOf("duplicate", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                msg = "A record with this information already exists.";
+                if (innerMsg.IndexOf("ix_events_unique_event_type_month_year", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    msg = "An event of this type already exists in the selected month.";
+                }
+                else if (innerMsg.IndexOf("idx_event_sponsors", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    msg = "Duplicate sponsor assigned to this event.";
+                }
+                else
+                {
+                    msg = "A record with this information already exists.";
+                }
             }
             else
             {
