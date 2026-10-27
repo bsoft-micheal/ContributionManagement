@@ -3,6 +3,7 @@ using TeamContributionManagementSystem.Application.Common;
 using TeamContributionManagementSystem.Application.DTOs.Dashboard;
 using TeamContributionManagementSystem.Application.DTOs.Events;
 using TeamContributionManagementSystem.Application.DTOs.Contributions;
+using TeamContributionManagementSystem.Application.DTOs.Payments;
 using TeamContributionManagementSystem.Application.Interfaces.Common;
 using TeamContributionManagementSystem.Application.Interfaces.Repositories;
 using TeamContributionManagementSystem.Application.Interfaces.Services;
@@ -18,6 +19,10 @@ public class DashboardService : IDashboardService
     private readonly ICurrentUserService? _currentUserService;
     private readonly IMemberRepository? _memberRepository;
     private readonly IExpenseRepository? _expenseRepository;
+    private readonly IPaymentTransactionRepository? _paymentTransactionRepository;
+    private readonly IUserRepository? _userRepository;
+    private readonly IPaymentTransactionService? _paymentTransactionService;
+    private readonly IEventTypeRepository? _eventTypeRepository;
 
     public DashboardService(
         ILogger<DashboardService> logger,
@@ -25,7 +30,11 @@ public class DashboardService : IDashboardService
         IContributionRepository contributionRepository,
         ICurrentUserService? currentUserService = null,
         IMemberRepository? memberRepository = null,
-        IExpenseRepository? expenseRepository = null)
+        IExpenseRepository? expenseRepository = null,
+        IPaymentTransactionRepository? paymentTransactionRepository = null,
+        IUserRepository? userRepository = null,
+        IPaymentTransactionService? paymentTransactionService = null,
+        IEventTypeRepository? eventTypeRepository = null)
     {
         _logger = logger;
         _eventRepository = eventRepository;
@@ -33,6 +42,10 @@ public class DashboardService : IDashboardService
         _currentUserService = currentUserService;
         _memberRepository = memberRepository;
         _expenseRepository = expenseRepository;
+        _paymentTransactionRepository = paymentTransactionRepository;
+        _userRepository = userRepository;
+        _paymentTransactionService = paymentTransactionService;
+        _eventTypeRepository = eventTypeRepository;
     }
 
     public async Task<DashboardSummaryDto> GetSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
@@ -273,6 +286,414 @@ public class DashboardService : IDashboardService
         catch (Exception ex)
         {
             _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetSummaryAsync));
+            throw;
+        }
+    }
+
+    private async Task<(Guid? MemberId, string MemberName, string Email)> ResolveCurrentMemberAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserService == null) return (null, string.Empty, string.Empty);
+
+        var memberId = _currentUserService.MemberId;
+        string memberName = string.Empty;
+        string email = _currentUserService.Email ?? string.Empty;
+
+        if (memberId.HasValue && _memberRepository != null)
+        {
+            var member = await _memberRepository.GetByIdAsync(memberId.Value, cancellationToken);
+            if (member != null)
+            {
+                return (member.MemberId, member.Name, member.Email);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(email) && _memberRepository != null)
+        {
+            var member = await _memberRepository.GetByEmailAsync(email.Trim(), cancellationToken);
+            if (member != null)
+            {
+                return (member.MemberId, member.Name, member.Email);
+            }
+        }
+
+        if (memberId.HasValue && _userRepository != null)
+        {
+            var user = await _userRepository.GetByIdAsync(memberId.Value, cancellationToken);
+            if (user != null)
+            {
+                var name = !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : (user.Username ?? string.Empty);
+                return (user.UserId, name, user.Email);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_currentUserService.UserName))
+        {
+            memberName = _currentUserService.UserName;
+        }
+
+        return (memberId, memberName, email);
+    }
+
+    public async Task<MemberDashboardSummaryDto> GetMemberSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var (memberId, memberName, email) = await ResolveCurrentMemberAsync(cancellationToken);
+            if (!memberId.HasValue)
+            {
+                return new MemberDashboardSummaryDto
+                {
+                    MemberName = memberName,
+                    SelectedMonth = month,
+                    SelectedYear = year
+                };
+            }
+
+            int? filterMonth = (month == 0 || month == null) ? null : month;
+            int? filterYear = (year == 0 || year == null) ? null : year;
+
+            var memberEvents = await _eventRepository.GetAllForMemberAsync(memberId.Value, filterMonth, filterYear, cancellationToken);
+
+            var allTxns = _paymentTransactionRepository != null
+                ? await _paymentTransactionRepository.GetAllAsync(cancellationToken: cancellationToken)
+                : new List<PaymentTransactionDto>();
+
+            var myTxns = allTxns
+                .Where(t => (t.UserId.HasValue && t.UserId.Value == memberId.Value) ||
+                            (!string.IsNullOrWhiteSpace(t.MemberName) && string.Equals(t.MemberName.Trim(), memberName.Trim(), StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            var allContribs = await _contributionRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
+            var myContribs = allContribs.Where(c => c.MemberId == memberId.Value).ToList();
+
+            decimal totalPaid = 0m;
+            decimal totalPending = 0m;
+            int paidEventsCount = 0;
+            int pendingEventsCount = 0;
+
+            foreach (var ev in memberEvents)
+            {
+                decimal expected = ev.TotalExpectedAmount > 0 ? ev.TotalExpectedAmount : ev.BaseAmount;
+
+                var evTxns = myTxns.Where(t =>
+                    (t.EventId.HasValue && t.EventId.Value == ev.EventId) ||
+                    (!string.IsNullOrWhiteSpace(t.EventName) && string.Equals(t.EventName.Trim(), ev.EventName.Trim(), StringComparison.OrdinalIgnoreCase))
+                ).ToList();
+
+                decimal verifiedPaid = evTxns
+                    .Where(t => string.Equals(t.Status, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+                    .Sum(t => t.Amount);
+
+                var contrib = myContribs.FirstOrDefault(c => c.EventId == ev.EventId);
+                if (contrib != null && (
+                    string.Equals(contrib.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(contrib.StatusName, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(contrib.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(contrib.StatusName, "Closed", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(contrib.StatusName, "Completed", StringComparison.OrdinalIgnoreCase)))
+                {
+                    verifiedPaid = Math.Max(verifiedPaid, contrib.Amount);
+                }
+                else if (verifiedPaid == 0 && ev.TotalPaidAmount > 0)
+                {
+                    verifiedPaid = ev.TotalPaidAmount;
+                }
+
+                decimal pending = Math.Max(0, expected - verifiedPaid);
+
+                totalPaid += verifiedPaid;
+                totalPending += pending;
+
+                if (pending == 0 && expected > 0)
+                {
+                    paidEventsCount++;
+                }
+                else
+                {
+                    pendingEventsCount++;
+                }
+            }
+
+            return new MemberDashboardSummaryDto
+            {
+                TotalPaid = RoundingHelper.RoundToWhole(totalPaid),
+                TotalPending = RoundingHelper.RoundToWhole(totalPending),
+                TotalEvents = memberEvents.Count,
+                PaidEventsCount = paidEventsCount,
+                PendingEventsCount = pendingEventsCount,
+                MemberName = memberName,
+                SelectedMonth = filterMonth,
+                SelectedYear = filterYear
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetMemberSummaryAsync request was canceled.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetMemberSummaryAsync));
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyCollection<MemberContributionItemDto>> GetMemberContributionsAsync(int? month = null, int? year = null, Guid? eventTypeId = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var (memberId, memberName, email) = await ResolveCurrentMemberAsync(cancellationToken);
+            if (!memberId.HasValue)
+            {
+                return Array.Empty<MemberContributionItemDto>();
+            }
+
+            int? filterMonth = (month == 0 || month == null) ? null : month;
+            int? filterYear = (year == 0 || year == null) ? null : year;
+
+            var memberEvents = await _eventRepository.GetAllForMemberAsync(memberId.Value, filterMonth, filterYear, cancellationToken);
+            if (eventTypeId.HasValue && eventTypeId.Value != Guid.Empty)
+            {
+                memberEvents = memberEvents.Where(e => e.EventTypeId == eventTypeId.Value).ToList();
+            }
+
+            var allTxns = _paymentTransactionRepository != null
+                ? await _paymentTransactionRepository.GetAllAsync(cancellationToken: cancellationToken)
+                : new List<PaymentTransactionDto>();
+
+            var myTxns = allTxns
+                .Where(t => (t.UserId.HasValue && t.UserId.Value == memberId.Value) ||
+                            (!string.IsNullOrWhiteSpace(t.MemberName) && string.Equals(t.MemberName.Trim(), memberName.Trim(), StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            var allContribs = await _contributionRepository.GetAllAsync(filterMonth, filterYear, cancellationToken);
+            var myContribs = allContribs.Where(c => c.MemberId == memberId.Value).ToList();
+
+            var items = new List<MemberContributionItemDto>();
+
+            foreach (var ev in memberEvents)
+            {
+                decimal expected = ev.TotalExpectedAmount > 0 ? ev.TotalExpectedAmount : ev.BaseAmount;
+
+                var evTxns = myTxns.Where(t =>
+                    (t.EventId.HasValue && t.EventId.Value == ev.EventId) ||
+                    (!string.IsNullOrWhiteSpace(t.EventName) && string.Equals(t.EventName.Trim(), ev.EventName.Trim(), StringComparison.OrdinalIgnoreCase))
+                ).ToList();
+
+                decimal verifiedPaid = evTxns
+                    .Where(t => string.Equals(t.Status, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+                    .Sum(t => t.Amount);
+
+                var contrib = myContribs.FirstOrDefault(c => c.EventId == ev.EventId);
+                if (contrib != null && (
+                    string.Equals(contrib.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(contrib.StatusName, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(contrib.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(contrib.StatusName, "Closed", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(contrib.StatusName, "Completed", StringComparison.OrdinalIgnoreCase)))
+                {
+                    verifiedPaid = Math.Max(verifiedPaid, contrib.Amount);
+                }
+                else if (verifiedPaid == 0 && ev.TotalPaidAmount > 0)
+                {
+                    verifiedPaid = ev.TotalPaidAmount;
+                }
+
+                decimal pending = Math.Max(0, expected - verifiedPaid);
+
+                // Determine transaction / verification status
+                var latestTxn = evTxns
+                    .OrderByDescending(t => t.PaymentDate)
+                    .ThenByDescending(t => t.CreatedAt ?? DateTime.MinValue)
+                    .FirstOrDefault();
+
+                string paymentStatus = "Unpaid";
+                string verificationStatus = "None";
+                bool canPay = true;
+
+                if (latestTxn != null)
+                {
+                    var st = (latestTxn.Status ?? string.Empty).Trim().ToLower();
+                    if (st == "pending")
+                    {
+                        paymentStatus = "Pending Verification";
+                        verificationStatus = "Pending";
+                        canPay = false;
+                    }
+                    else if (st == "rejected")
+                    {
+                        paymentStatus = "Payment Rejected";
+                        verificationStatus = "Rejected";
+                        canPay = true;
+                    }
+                    else if (st == "verified" || st == "approved")
+                    {
+                        verificationStatus = "Verified";
+                        if (verifiedPaid >= expected && expected > 0)
+                        {
+                            paymentStatus = "Paid";
+                            canPay = false;
+                        }
+                        else
+                        {
+                            paymentStatus = "Partially Paid";
+                            canPay = true;
+                        }
+                    }
+                }
+                else
+                {
+                    if (contrib != null && (
+                        string.Equals(contrib.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(contrib.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(contrib.StatusName, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(contrib.StatusName, "Closed", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(contrib.StatusName, "Completed", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        paymentStatus = "Paid";
+                        verificationStatus = "Verified";
+                        canPay = false;
+                    }
+                    else if (verifiedPaid > 0)
+                    {
+                        paymentStatus = verifiedPaid >= expected ? "Paid" : "Partially Paid";
+                        verificationStatus = "Verified";
+                        canPay = verifiedPaid < expected;
+                    }
+                    else
+                    {
+                        paymentStatus = "Unpaid";
+                        verificationStatus = "None";
+                        canPay = true;
+                    }
+                }
+
+                decimal previousArrears = 0m;
+                if (_paymentTransactionService != null)
+                {
+                    try
+                    {
+                        var context = await _paymentTransactionService.GetPaymentContextAsync(ev.EventId, memberId.Value, ev.EventName, memberName, cancellationToken);
+                        if (context != null)
+                        {
+                            previousArrears = context.PreviousArrears;
+                        }
+                    }
+                    catch { }
+                }
+
+                items.Add(new MemberContributionItemDto
+                {
+                    EventId = ev.EventId,
+                    EventTypeId = ev.EventTypeId,
+                    EventTypeName = !string.IsNullOrWhiteSpace(ev.EventTypeName) ? ev.EventTypeName : "Event",
+                    EventName = ev.EventName,
+                    EventDate = ev.EventDate,
+                    CreatedAt = ev.CreatedAt ?? ev.CreatedOn ?? ev.EventDate,
+                    ContributionAmount = RoundingHelper.RoundToWhole(expected),
+                    VerifiedPaidAmount = RoundingHelper.RoundToWhole(verifiedPaid),
+                    OutstandingAmount = RoundingHelper.RoundToWhole(pending),
+                    PreviousArrears = RoundingHelper.RoundToWhole(previousArrears),
+                    TotalDue = RoundingHelper.RoundToWhole(pending + previousArrears),
+                    PaymentVerificationStatus = verificationStatus,
+                    PaymentStatus = paymentStatus,
+                    PaymentEligibility = canPay,
+                    ContributionId = contrib?.ContributionId,
+                    MemberId = memberId.Value,
+                    MemberName = memberName
+                });
+            }
+
+            int GetStatusOrder(string status)
+            {
+                var s = (status ?? string.Empty).Trim().ToLowerInvariant();
+                if (s == "unpaid") return 1;
+                if (s == "partially paid" || s == "partial") return 2;
+                if (s == "pending verification" || s == "pending") return 3;
+                if (s == "payment rejected" || s == "rejected") return 4;
+                if (s == "paid" || s == "approved" || s == "verified") return 5;
+                return 6;
+            }
+
+            return items
+                .OrderBy(x => GetStatusOrder(x.PaymentStatus))
+                .ThenByDescending(x => x.CreatedAt ?? x.EventDate)
+                .ThenByDescending(x => x.EventDate)
+                .ThenByDescending(x => x.EventId)
+                .ToList();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetMemberContributionsAsync request was canceled.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetMemberContributionsAsync));
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyCollection<MemberRecentPaymentDto>> GetMemberRecentPaymentsAsync(int limit = 5, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var (memberId, memberName, email) = await ResolveCurrentMemberAsync(cancellationToken);
+            if (!memberId.HasValue)
+            {
+                return Array.Empty<MemberRecentPaymentDto>();
+            }
+
+            var allTxns = _paymentTransactionRepository != null
+                ? await _paymentTransactionRepository.GetAllAsync(cancellationToken: cancellationToken)
+                : new List<PaymentTransactionDto>();
+
+            var myTxns = allTxns
+                .Where(t => ((t.UserId.HasValue && t.UserId.Value == memberId.Value) ||
+                             (!string.IsNullOrWhiteSpace(t.MemberName) && string.Equals(t.MemberName.Trim(), memberName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
+                            (string.Equals(t.Status, "Completed", StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(t.Status, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(t => t.PaymentDate)
+                .ThenByDescending(t => t.CreatedAt ?? DateTime.MinValue)
+                .Take(limit)
+                .ToList();
+
+            var eventDict = (await _eventRepository.GetAllAsync(null, null, cancellationToken))
+                .ToDictionary(e => e.EventId, e => e.EventTypeName);
+
+            return myTxns.Select(t =>
+            {
+                string evType = string.Empty;
+                if (t.EventId.HasValue && eventDict.TryGetValue(t.EventId.Value, out var typeName))
+                {
+                    evType = typeName;
+                }
+
+                return new MemberRecentPaymentDto
+                {
+                    PaymentId = t.TransactionId,
+                    TxnNumber = t.TxnNumber,
+                    EventId = t.EventId,
+                    EventName = !string.IsNullOrWhiteSpace(t.EventName) ? t.EventName : "Event Payment",
+                    EventTypeName = evType,
+                    PaymentDate = t.PaymentDate,
+                    PaymentAmount = RoundingHelper.RoundToWhole(t.Amount),
+                    PaymentMode = !string.IsNullOrWhiteSpace(t.PaymentMode) ? t.PaymentMode : "UPI",
+                    VerificationStatus = !string.IsNullOrWhiteSpace(t.Status) ? t.Status : "Pending"
+                };
+            }).ToList();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetMemberRecentPaymentsAsync request was canceled.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(GetMemberRecentPaymentsAsync));
             throw;
         }
     }

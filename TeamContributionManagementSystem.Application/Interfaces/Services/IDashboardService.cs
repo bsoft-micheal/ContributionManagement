@@ -24,4 +24,19 @@ public interface IDashboardService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A summary DTO containing dashboard metrics and progress stats.</returns>
     Task<DashboardSummaryDto> GetSummaryDashboardAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default) => GetSummaryAsync(month, year, cancellationToken);
+
+    /// <summary>
+    /// Computes KPI metrics specifically for the authenticated member dashboard.
+    /// </summary>
+    Task<MemberDashboardSummaryDto> GetMemberSummaryAsync(int? month = null, int? year = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Retrieves event-wise contribution items with payment status for the authenticated member.
+    /// </summary>
+    Task<IReadOnlyCollection<MemberContributionItemDto>> GetMemberContributionsAsync(int? month = null, int? year = null, Guid? eventTypeId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Retrieves the authenticated member's latest payment transactions.
+    /// </summary>
+    Task<IReadOnlyCollection<MemberRecentPaymentDto>> GetMemberRecentPaymentsAsync(int limit = 5, CancellationToken cancellationToken = default);
 }
