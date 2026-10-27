@@ -1083,7 +1083,7 @@ public class UserManagementService : IUserManagementService
                 throw new InvalidOperationException(CommonMessages.Users.EmailExists);
 
             var oldFullName = user.FullName;
-            var newFullName = request.FullName.Trim();
+            var newFullName = request.FullName?.Trim() ?? string.Empty;
 
             user.FullName = newFullName;
             user.Email    = newEmail;
@@ -1130,7 +1130,7 @@ public class UserManagementService : IUserManagementService
             _userRepository.Update(user);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            if (!string.IsNullOrWhiteSpace(oldFullName) && !string.Equals(oldFullName, newFullName, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(oldFullName) && !string.IsNullOrWhiteSpace(newFullName) && !string.Equals(oldFullName, newFullName, StringComparison.OrdinalIgnoreCase))
             {
                 await _userRepository.CascadeUpdateCreatorDisplayNameAsync(user.UserId, oldFullName, newFullName, cancellationToken);
             }
