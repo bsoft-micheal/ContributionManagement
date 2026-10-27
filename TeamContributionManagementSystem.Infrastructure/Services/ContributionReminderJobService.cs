@@ -475,6 +475,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
         string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
 
         // Dynamic Celebrant Label based on Event Category
+        var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
         string celebrantLabel;
         if (isBirthdayEvent)
         {
@@ -490,38 +491,10 @@ public class ContributionReminderJobService : IContributionReminderJobService
         }
         else
         {
-            celebrantLabel = celebrantNames.Count > 1 ? "Celebrants / Honorees" : "Celebrant / Honoree";
+            celebrantLabel = celebrantNames.Count > 1 ? $"{safeCategoryName} Honorees" : $"{safeCategoryName} Honoree";
         }
 
-        // Dynamically ensure Description reflects the Celebrant(s)
-        var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
-        if (string.IsNullOrWhiteSpace(eventDescription))
-        {
-            if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
-            {
-                eventDescription = isSendOff
-                    ? $"Send-off celebration honoring {celebrantsFormatted}."
-                    : (isBirthdayEvent
-                        ? $"Birthday celebration honoring {celebrantsFormatted}."
-                        : (isMarriage
-                            ? $"Wedding celebration honoring {celebrantsFormatted}."
-                            : $"{safeCategoryName} celebration honoring {celebrantsFormatted}."));
-            }
-            else
-            {
-                eventDescription = isSendOff
-                    ? "Send-off celebration."
-                    : (isBirthdayEvent
-                        ? "Birthday celebration."
-                        : (isMarriage
-                            ? "Wedding celebration."
-                            : $"{safeCategoryName} celebration."));
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(celebrantsFormatted) && !eventDescription.Contains(celebrantsFormatted, StringComparison.OrdinalIgnoreCase))
-        {
-            eventDescription = $"{eventDescription} (Honoring: {celebrantsFormatted})";
-        }
+        eventDescription = eventDescription?.Trim() ?? string.Empty;
 
         Func<AppUser, DateTime> getCelebrantBirthDate = (m) =>
         {

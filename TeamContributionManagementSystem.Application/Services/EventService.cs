@@ -1080,7 +1080,7 @@ public class EventService : IEventService
 
                 string celebrantsFormatted = celebrantNames.Count > 0 ? string.Join(", ", celebrantNames) : string.Empty;
 
-                // Dynamic Celebrant Label based on Event Category
+                var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
                 string celebrantLabel;
                 if (isBirthdayEvent)
                 {
@@ -1096,38 +1096,9 @@ public class EventService : IEventService
                 }
                 else
                 {
-                    celebrantLabel = celebrantNames.Count > 1 ? "Celebrants / Honorees" : "Celebrant / Honoree";
+                    celebrantLabel = celebrantNames.Count > 1 ? $"{safeCategoryName} Honorees" : $"{safeCategoryName} Honoree";
                 }
-
-                // Dynamically ensure Description reflects the Celebrant(s)
-                var safeCategoryName = !string.IsNullOrWhiteSpace(eventTypeName) ? eventTypeName.Trim() : "Event";
-                if (string.IsNullOrWhiteSpace(eventDescription))
-                {
-                    if (!string.IsNullOrWhiteSpace(celebrantsFormatted))
-                    {
-                        eventDescription = isSendOff
-                            ? $"Send-off celebration honoring {celebrantsFormatted}."
-                            : (isBirthdayEvent
-                                ? $"Birthday celebration honoring {celebrantsFormatted}."
-                                : (isMarriage
-                                    ? $"Wedding celebration honoring {celebrantsFormatted}."
-                                    : $"{safeCategoryName} celebration honoring {celebrantsFormatted}."));
-                    }
-                    else
-                    {
-                        eventDescription = isSendOff
-                            ? "Send-off celebration."
-                            : (isBirthdayEvent
-                                ? "Birthday celebration."
-                                : (isMarriage
-                                    ? "Wedding celebration."
-                                    : $"{safeCategoryName} celebration."));
-                    }
-                }
-                else if (!string.IsNullOrWhiteSpace(celebrantsFormatted) && !eventDescription.Contains(celebrantsFormatted, StringComparison.OrdinalIgnoreCase))
-                {
-                    eventDescription = $"{eventDescription} (Honoring: {celebrantsFormatted})";
-                }
+                eventDescription = eventDescription?.Trim() ?? string.Empty;
 
                 Func<MemberDto, DateTime> getCelebrantBirthDate = (m) =>
                 {
@@ -1441,7 +1412,36 @@ public class EventService : IEventService
                             }
                         }
 
+                        string detailsCardHtml = $@"
+            <div class=""details-card"">
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Event Name:</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{safeEventName}</span>
+                </div>
+                {celebrantsAndDatesHtml}
+                <div class=""detail-row"">
+                    <span class=""detail-label"">{eventDateLabel}</span>
+                    <span class=""detail-value"" style=""font-weight: 600;"">{eventDateValueDisplay}</span>
+                </div>
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Total Amount:</span>
+                    <span class=""detail-value"" style=""font-weight: 700;"">{totalAmountDisplay}</span>
+                </div>
+                {(string.IsNullOrWhiteSpace(eventDescription) ? string.Empty : $@"<div class=""detail-row"">
+                    <span class=""detail-label"">Description:</span>
+                    <span class=""detail-value"">{eventDescription}</span>
+                </div>")}
+                <div class=""detail-row"">
+                    <span class=""detail-label"">Contribution Amount:</span>
+                    <span class=""detail-value amount-highlight"">{formattedAmount}</span>
+                </div>
+            </div>";
+
                         bool qrInCustomDesc = (configuredDescription ?? string.Empty).Contains("{qrCode}", StringComparison.OrdinalIgnoreCase);
+
+                        string qrBlockWithTable = !string.IsNullOrWhiteSpace(qrCodeCardHtml)
+                            ? $"{detailsCardHtml}\n{qrCodeCardHtml}"
+                            : detailsCardHtml;
 
                         var interpolated = (configuredDescription ?? string.Empty)
                             .Replace("{memberName}", memberName, StringComparison.OrdinalIgnoreCase)
@@ -1450,17 +1450,21 @@ public class EventService : IEventService
                             .Replace("{eventDescription}", eventDescription ?? string.Empty, StringComparison.OrdinalIgnoreCase)
                             .Replace("{amount}", formattedAmount, StringComparison.OrdinalIgnoreCase)
                             .Replace("{dueDate}", formattedDueDate, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{paymentLink}", string.Empty, StringComparison.OrdinalIgnoreCase)
-                            .Replace("{qrCode}", qrCodeCardHtml, StringComparison.OrdinalIgnoreCase);
+                            .Replace("{orgName}", safeOrgName, StringComparison.OrdinalIgnoreCase);
 
                         var formattedText = interpolated
                             .Replace("\r\n", "<br />")
                             .Replace("\n", "<br />");
 
+                        formattedText = System.Text.RegularExpressions.Regex.Replace(formattedText, @"(<br\s*/?>\s*){3,}", "<br /><br />");
+
+                        formattedText = formattedText
+                            .Replace("{qrCode}", qrBlockWithTable, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{paymentLink}", $@"<div style=""text-align: center; margin: 16px 0;""><a href=""{portalContributionUrl}"" class=""btn-portal"" style=""display: inline-block; background: linear-gradient(135deg, #4a3f6b 0%, #2d2550 100%); color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 700; padding: 12px 30px; border-radius: 10px; box-shadow: 0 4px 14px rgba(74, 63, 107, 0.3);"">Go to Contribution Page &amp; Pay</a></div>", StringComparison.OrdinalIgnoreCase);
+
                         string customMessageHtml = $@"<div style=""font-size: 15px; line-height: 1.7; color: #334155; margin-bottom: 24px;"">{formattedText}</div>";
 
-                        string standaloneQrBlock = qrInCustomDesc ? string.Empty : qrCodeCardHtml;
+                        string fallbackCardAndQr = qrInCustomDesc ? string.Empty : $"{detailsCardHtml}\n{qrCodeCardHtml}";
 
                         var emailBody = $@"
 <!DOCTYPE html>
@@ -1610,34 +1614,7 @@ public class EventService : IEventService
         </div>
         <div class=""content"">
             {customMessageHtml}
-            
-            <div class=""details-card"">
-                <div class=""detail-row"">
-                    <span class=""detail-label"">Event Name:</span>
-                    <span class=""detail-value"" style=""font-weight: 700;"">{safeEventName}</span>
-                </div>
-                {celebrantsAndDatesHtml}
-                <div class=""detail-row"">
-                    <span class=""detail-label"">{eventDateLabel}</span>
-                    <span class=""detail-value"" style=""font-weight: 600;"">{eventDateValueDisplay}</span>
-                </div>
-                <div class=""detail-row"">
-                    <span class=""detail-label"">Total Amount:</span>
-                    <span class=""detail-value"" style=""font-weight: 700;"">{totalAmountDisplay}</span>
-                </div>
-                <div class=""detail-row"">
-                    <span class=""detail-label"">Description:</span>
-                    <span class=""detail-value"">{eventDescription}</span>
-                </div>
-                <div class=""detail-row"">
-                    <span class=""detail-label"">Contribution Amount:</span>
-                    <span class=""detail-value amount-highlight"">{formattedAmount}</span>
-                </div>
-            </div>
-
-            {standaloneQrBlock}
-
-
+            {fallbackCardAndQr}
         </div>
         <div class=""footer"">
             This is an automated notification from {safeOrgName}.
@@ -2647,15 +2624,11 @@ public class EventService : IEventService
         string eventTypeName,
         string templateType = "initial")
     {
-        string defaultBirthdaySubject = "Birthday Celebration Contribution - {categoryName}";
-        string defaultBirthdayDesc = "Dear {memberName},\n\nWe have upcoming birthdays this month in our team! Your planned contribution for {categoryName} is {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nWarm regards,\n{orgName}";
+        string defaultSubject = "Contribution Notice - {categoryName}";
+        string defaultDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease scan the dynamic UPI QR code below or log in to the portal to complete your contribution payment.\n\n{qrCode}\n\n{paymentLink}\n\nThank you,\n{orgName}";
 
-        string defaultGeneralSubject = "Contribution Notice - {categoryName}";
-        string defaultGeneralDesc = "Dear {memberName},\n\nThis is a notification regarding your contribution for {categoryName} of {amount}, due by {dueDate}.\n\n{eventDescription}\n\nPlease log in to the portal to view details and complete your contribution payment.\n\nThank you,\n{orgName}";
-
-        bool isBirthday = (eventTypeName ?? string.Empty).Contains("Birthday", StringComparison.OrdinalIgnoreCase);
-        string fallbackSubject = isBirthday ? defaultBirthdaySubject : defaultGeneralSubject;
-        string fallbackDesc = isBirthday ? defaultBirthdayDesc : defaultGeneralDesc;
+        string fallbackSubject = !string.IsNullOrWhiteSpace(settings?.EmailSubject) ? settings.EmailSubject.Trim() : defaultSubject;
+        string fallbackDesc = !string.IsNullOrWhiteSpace(settings?.EmailDescription) ? settings.EmailDescription.Trim() : defaultDesc;
 
         if (settings == null) return (fallbackSubject, fallbackDesc);
 
@@ -2719,24 +2692,7 @@ public class EventService : IEventService
                 }
             }
 
-            // 3. Try loose category name match
-            if (matchedEntry == null && !string.IsNullOrWhiteSpace(typeNameClean))
-            {
-                foreach (var property in root.EnumerateObject())
-                {
-                    var key = property.Name.Trim().ToLowerInvariant();
-                    if ((typeNameClean.Contains("birthday") && key.Contains("birthday")) ||
-                        (typeNameClean.Contains("dinner") && key.Contains("dinner")) ||
-                        (typeNameClean.Contains("farewell") && key.Contains("farewell")) ||
-                        (typeNameClean.Contains("outing") && key.Contains("outing")))
-                    {
-                        matchedEntry = property.Value;
-                        break;
-                    }
-                }
-            }
-
-            // 4. Try "all" fallback
+            // 3. Fallback to "all" in CategoryTemplates
             if (matchedEntry == null)
             {
                 foreach (var property in root.EnumerateObject())
@@ -2790,16 +2746,6 @@ public class EventService : IEventService
             }
         }
 
-        // 5. Fallback to settings.EmailSubject / settings.EmailDescription
-        if (!string.IsNullOrWhiteSpace(settings.EmailSubject) || !string.IsNullOrWhiteSpace(settings.EmailDescription))
-        {
-            return (
-                !string.IsNullOrWhiteSpace(settings.EmailSubject) ? settings.EmailSubject : fallbackSubject,
-                !string.IsNullOrWhiteSpace(settings.EmailDescription) ? settings.EmailDescription : fallbackDesc
-            );
-        }
-
-        // 6. Default fallback to standard templates (never null!)
         return (fallbackSubject, fallbackDesc);
     }
 
