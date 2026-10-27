@@ -280,5 +280,143 @@ public class EventSponsorTests : IDisposable
         Assert.True(result.RequireSponsorContribution);
         Assert.Equal(10000m, result.SponsorContributionAmount);
         Assert.Equal(2, result.Sponsors.Count);
+        Assert.Equal(20000m, result.BaseAmount);
+        Assert.Equal(10000m, result.RemainingFundingRequirement);
+    }
+
+    [Fact]
+    public async Task EventRepository_CalculatesRemainingFundingRequirement_WithSponsorDeduction()
+    {
+        // Scenario: Budget ₹10,000, sponsor ₹5,000
+        // Expected: Remaining funding requirement is ₹5,000, BaseAmount remains ₹10,000
+        var sponsorUser = new AppUser
+        {
+            UserId = Guid.NewGuid(),
+            FullName = "Generous Sponsor",
+            Username = "generous",
+            Email = "generous@sponsor.com",
+            IsActive = true,
+            IsDeleted = false
+        };
+        _context.Users.Add(sponsorUser);
+
+        var eventType = new EventType
+        {
+            EventTypeId = Guid.NewGuid(),
+            EventTypeName = "Team Outing",
+            IsActive = true
+        };
+        _context.EventTypes.Add(eventType);
+
+        var eventItem = new Event
+        {
+            EventId = Guid.NewGuid(),
+            EventName = "Annual Outing 2026",
+            EventTypeId = eventType.EventTypeId,
+            EventType = eventType,
+            EventDate = DateTime.UtcNow.AddDays(15),
+            Status = EventStatus.Planned,
+            BaseAmount = 10000m,
+            RequireSponsorContribution = true,
+            EnableCelebrantSelection = false,
+            CreatedBy = sponsorUser.UserId,
+            CreatedByUser = sponsorUser,
+            IsDeleted = false
+        };
+
+        var sponsor = new EventSponsor
+        {
+            SponsorId = Guid.NewGuid(),
+            EventId = eventItem.EventId,
+            Event = eventItem,
+            UserId = sponsorUser.UserId,
+            SponsorUser = sponsorUser,
+            ContributionAmount = 5000m,
+            IsActive = true,
+            IsDeleted = false,
+            CreatedAt = DateTime.UtcNow
+        };
+        eventItem.Sponsors.Add(sponsor);
+
+        _context.Events.Add(eventItem);
+        _context.EventSponsors.Add(sponsor);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _eventRepository.GetByIdWithDetailsAsync(eventItem.EventId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(10000m, result.BaseAmount); // Planned budget remains ₹10,000
+        Assert.Equal(5000m, result.SponsorContributionAmount); // Sponsor contribution is ₹5,000
+        Assert.Equal(5000m, result.RemainingFundingRequirement); // Remaining budget after sponsor is ₹5,000
+    }
+
+    [Fact]
+    public async Task EventRepository_ExcludesInactiveSponsor_FromRemainingFundingRequirement()
+    {
+        // Scenario: Budget ₹10,000, inactive sponsor ₹5,000
+        // Expected: Remaining funding requirement remains ₹10,000
+        var sponsorUser = new AppUser
+        {
+            UserId = Guid.NewGuid(),
+            FullName = "Former Sponsor",
+            Username = "former",
+            Email = "former@sponsor.com",
+            IsActive = true,
+            IsDeleted = false
+        };
+        _context.Users.Add(sponsorUser);
+
+        var eventType = new EventType
+        {
+            EventTypeId = Guid.NewGuid(),
+            EventTypeName = "Lunch",
+            IsActive = true
+        };
+        _context.EventTypes.Add(eventType);
+
+        var eventItem = new Event
+        {
+            EventId = Guid.NewGuid(),
+            EventName = "Team Lunch",
+            EventTypeId = eventType.EventTypeId,
+            EventType = eventType,
+            EventDate = DateTime.UtcNow.AddDays(7),
+            Status = EventStatus.Planned,
+            BaseAmount = 10000m,
+            RequireSponsorContribution = false, // disabled
+            EnableCelebrantSelection = false,
+            CreatedBy = sponsorUser.UserId,
+            CreatedByUser = sponsorUser,
+            IsDeleted = false
+        };
+
+        var inactiveSponsor = new EventSponsor
+        {
+            SponsorId = Guid.NewGuid(),
+            EventId = eventItem.EventId,
+            Event = eventItem,
+            UserId = sponsorUser.UserId,
+            SponsorUser = sponsorUser,
+            ContributionAmount = 5000m,
+            IsActive = false, // inactive!
+            IsDeleted = false,
+            CreatedAt = DateTime.UtcNow.AddDays(-1)
+        };
+        eventItem.Sponsors.Add(inactiveSponsor);
+
+        _context.Events.Add(eventItem);
+        _context.EventSponsors.Add(inactiveSponsor);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _eventRepository.GetByIdWithDetailsAsync(eventItem.EventId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(10000m, result.BaseAmount);
+        Assert.Null(result.SponsorContributionAmount);
+        Assert.Equal(10000m, result.RemainingFundingRequirement); // Not deducted because sponsor is inactive
     }
 }

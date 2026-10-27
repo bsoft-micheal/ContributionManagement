@@ -588,6 +588,28 @@ public class EventService : IEventService
             }
 
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
+            decimal totalSponsorAmount = 0m;
+            if (request.RequireSponsorContribution)
+            {
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
+
+                if (!sponsorInputs.Any())
+                {
+                    throw new InvalidOperationException("At least one sponsor must be provided when sponsor contribution is required.");
+                }
+
+                totalSponsorAmount = sponsorInputs.Sum(s => RoundingHelper.RoundToWhole(s.ContributionAmount));
+                if (totalSponsorAmount > plannedBudget)
+                {
+                    throw new InvalidOperationException($"Total sponsor contribution (₹{totalSponsorAmount:N0}) cannot exceed the total planned budget (₹{plannedBudget:N0}).");
+                }
+            }
+
+            decimal remainingFundingRequirement = Math.Max(0m, plannedBudget - totalSponsorAmount);
             decimal effectiveBudget = plannedBudget;
             decimal allocatedAmount = 0m;
             decimal appliedAdjustment = 0m;
@@ -610,7 +632,7 @@ public class EventService : IEventService
                     }
                     else if (appliedAdjustmentType == "SurplusCredit")
                     {
-                        appliedAdjustment = Math.Min(appliedAdjustment, plannedBudget);
+                        appliedAdjustment = Math.Min(appliedAdjustment, remainingFundingRequirement);
                         allocatedAmount = appliedAdjustment;
                     }
                 }
@@ -619,11 +641,11 @@ public class EventService : IEventService
             {
                 allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
                     ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value)
-                    : plannedBudget;
+                    : remainingFundingRequirement;
 
-                if (allocatedAmount > plannedBudget)
+                if (allocatedAmount > remainingFundingRequirement)
                 {
-                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the planned budget (₹{plannedBudget:N0}).");
+                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the remaining funding requirement (₹{remainingFundingRequirement:N0}).");
                 }
 
                 var balanceInfo = await GetAvailableAmountInHandAsync(null, cancellationToken);
@@ -770,8 +792,8 @@ public class EventService : IEventService
             }
 
             var remainingBudgetToCollect = (request.UsePreviousEventBalance && appliedAdjustmentType == "DeficitRecovery")
-                ? effectiveBudget
-                : (eventItem.UseAvailableBalance ? Math.Max(0m, effectiveBudget - allocatedAmount) : effectiveBudget);
+                ? (remainingFundingRequirement + appliedAdjustment)
+                : (eventItem.UseAvailableBalance ? Math.Max(0m, remainingFundingRequirement - allocatedAmount) : remainingFundingRequirement);
 
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
@@ -1900,6 +1922,28 @@ public class EventService : IEventService
             }
 
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
+            decimal totalSponsorAmount = 0m;
+            if (request.RequireSponsorContribution)
+            {
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
+
+                if (!sponsorInputs.Any())
+                {
+                    throw new InvalidOperationException("At least one sponsor must be provided when sponsor contribution is required.");
+                }
+
+                totalSponsorAmount = sponsorInputs.Sum(s => RoundingHelper.RoundToWhole(s.ContributionAmount));
+                if (totalSponsorAmount > plannedBudget)
+                {
+                    throw new InvalidOperationException($"Total sponsor contribution (₹{totalSponsorAmount:N0}) cannot exceed the total planned budget (₹{plannedBudget:N0}).");
+                }
+            }
+
+            decimal remainingFundingRequirement = Math.Max(0m, plannedBudget - totalSponsorAmount);
             decimal effectiveBudget = plannedBudget;
             decimal allocatedAmount = 0m;
             decimal appliedAdjustment = 0m;
@@ -1922,7 +1966,7 @@ public class EventService : IEventService
                     }
                     else if (appliedAdjustmentType == "SurplusCredit")
                     {
-                        appliedAdjustment = Math.Min(appliedAdjustment, plannedBudget);
+                        appliedAdjustment = Math.Min(appliedAdjustment, remainingFundingRequirement);
                         allocatedAmount = appliedAdjustment;
                     }
                 }
@@ -1931,11 +1975,11 @@ public class EventService : IEventService
             {
                 allocatedAmount = request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0
                     ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value)
-                    : plannedBudget;
+                    : remainingFundingRequirement;
 
-                if (allocatedAmount > plannedBudget)
+                if (allocatedAmount > remainingFundingRequirement)
                 {
-                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the planned budget (₹{plannedBudget:N0}).");
+                    throw new InvalidOperationException($"The deducted balance amount (₹{allocatedAmount:N0}) cannot exceed the remaining funding requirement (₹{remainingFundingRequirement:N0}).");
                 }
             }
 
@@ -2132,8 +2176,8 @@ public class EventService : IEventService
             }
 
             var remainingBudgetToCollect = (request.UsePreviousEventBalance && appliedAdjustmentType == "DeficitRecovery")
-                ? effectiveBudget
-                : (eventItem.UseAvailableBalance ? Math.Max(0m, effectiveBudget - allocatedAmount) : effectiveBudget);
+                ? (remainingFundingRequirement + appliedAdjustment)
+                : (eventItem.UseAvailableBalance ? Math.Max(0m, remainingFundingRequirement - allocatedAmount) : remainingFundingRequirement);
 
             var memberAmounts = CalculateMemberContributionAmounts(
                 eventType,
@@ -2792,6 +2836,19 @@ public class EventService : IEventService
             decimal plannedBudget = RoundingHelper.RoundToWhole(request.BaseAmount);
             var memberLookup = members.ToDictionary(m => m.MemberId);
 
+            decimal totalSponsorAmount = 0m;
+            if (request.RequireSponsorContribution)
+            {
+                var sponsorInputs = request.Sponsors != null && request.Sponsors.Any()
+                    ? request.Sponsors
+                    : (request.SponsorUserId.HasValue && request.SponsorContributionAmount.HasValue
+                        ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
+                        : new List<EventSponsorInputDto>());
+
+                totalSponsorAmount = sponsorInputs.Sum(s => RoundingHelper.RoundToWhole(s.ContributionAmount));
+            }
+
+            decimal remainingFundingRequirement = Math.Max(0m, plannedBudget - totalSponsorAmount);
             decimal effectiveBudget = plannedBudget;
             decimal eligibleAdj = 0m;
             string adjType = "None";
@@ -2808,7 +2865,7 @@ public class EventService : IEventService
                 }
                 else if (adjType == "SurplusCredit")
                 {
-                    eligibleAdj = Math.Min(eligibleAdj, plannedBudget);
+                    eligibleAdj = Math.Min(eligibleAdj, remainingFundingRequirement);
                 }
             }
 
@@ -2818,23 +2875,23 @@ public class EventService : IEventService
             if (request.UsePreviousEventBalance && adjType == "DeficitRecovery")
             {
                 // Deficit recovery increases collection requirement to recover previous overspend
-                remainingBudgetToCollect = effectiveBudget;
+                remainingBudgetToCollect = remainingFundingRequirement + eligibleAdj;
             }
             else if (request.UsePreviousEventBalance && adjType == "SurplusCredit")
             {
                 // Surplus credit acts as allocated amount deduction
                 allocatedAmount = eligibleAdj;
-                remainingBudgetToCollect = Math.Max(0m, plannedBudget - allocatedAmount);
+                remainingBudgetToCollect = Math.Max(0m, remainingFundingRequirement - allocatedAmount);
             }
             else
             {
                 // Normal available balance deduction logic
                 allocatedAmount = request.UseAvailableBalance
-                    ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value) : plannedBudget)
+                    ? (request.AllocatedAmount.HasValue && request.AllocatedAmount.Value > 0 ? RoundingHelper.RoundToWhole(request.AllocatedAmount.Value) : remainingFundingRequirement)
                     : 0m;
                 remainingBudgetToCollect = request.UseAvailableBalance
-                    ? Math.Max(0m, plannedBudget - allocatedAmount)
-                    : plannedBudget;
+                    ? Math.Max(0m, remainingFundingRequirement - allocatedAmount)
+                    : remainingFundingRequirement;
             }
 
             var detailedCalculations = CalculateDetailedMemberContributions(
@@ -2884,6 +2941,8 @@ public class EventService : IEventService
                 EligibleAdjustmentAmount = eligibleAdj,
                 AdjustmentType = adjType,
                 EffectiveBudget = effectiveBudget,
+                TotalSponsorContributionAmount = totalSponsorAmount,
+                RemainingFundingRequirement = remainingFundingRequirement,
                 Members = orderedPreview
             };
         }

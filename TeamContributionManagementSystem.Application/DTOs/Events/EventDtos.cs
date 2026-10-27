@@ -59,6 +59,7 @@ public class EventSummaryDto
     public Guid? SponsorUserId { get; set; }
     public string? SponsorName { get; set; }
     public decimal? SponsorContributionAmount { get; set; }
+    public decimal RemainingFundingRequirement { get; set; }
     public List<EventSponsorDto> Sponsors { get; set; } = new();
 
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
@@ -158,6 +159,10 @@ public class EventContributionPreviewRequestDto
     public string? PreviousEventAdjustmentType { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto>? ContributionOverrides { get; set; }
+    public bool RequireSponsorContribution { get; set; }
+    public Guid? SponsorUserId { get; set; }
+    public decimal? SponsorContributionAmount { get; set; }
+    public List<EventSponsorInputDto>? Sponsors { get; set; }
 }
 
 public class EventContributionPreviewMemberDto
@@ -183,6 +188,8 @@ public class EventContributionPreviewResponseDto
     public decimal EligibleAdjustmentAmount { get; set; }
     public string AdjustmentType { get; set; } = "None";
     public decimal EffectiveBudget { get; set; }
+    public decimal TotalSponsorContributionAmount { get; set; }
+    public decimal RemainingFundingRequirement { get; set; }
     public IReadOnlyCollection<EventContributionPreviewMemberDto> Members { get; set; } = Array.Empty<EventContributionPreviewMemberDto>();
 }
 

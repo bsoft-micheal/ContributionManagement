@@ -1551,5 +1551,10 @@ public class EventRepository : IEventRepository
         dto.PreviousEventAdjustment = adjAmt;
         dto.PreviousEventAdjustmentType = adjType;
         dto.OriginalPlannedBudget = origBudget > 0 ? origBudget : dto.BaseAmount;
+
+        decimal sponsorDeduction = dto.RequireSponsorContribution
+            ? (dto.SponsorContributionAmount ?? (dto.Sponsors != null && dto.Sponsors.Any() ? dto.Sponsors.Where(s => s.IsActive).Sum(s => s.ContributionAmount) : 0m))
+            : 0m;
+        dto.RemainingFundingRequirement = Math.Max(0m, dto.OriginalPlannedBudget - sponsorDeduction);
     }
 }
