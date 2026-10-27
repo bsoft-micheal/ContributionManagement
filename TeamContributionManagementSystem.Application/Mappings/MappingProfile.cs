@@ -53,6 +53,7 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.EventName, opt => opt.MapFrom(src => src.Event != null ? src.Event.EventName : string.Empty))
             .ForMember(dest => dest.MemberName, opt => opt.MapFrom(src => src.User != null ? src.User.FullName : (src.Member != null ? src.Member.Name : string.Empty)))
             .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Event != null && src.Event.EventType != null ? src.Event.EventType.EventTypeName : string.Empty))
+            .ForMember(dest => dest.PaymentStatus, opt => opt.MapFrom(src => src.PaymentStatus))
             .ForMember(dest => dest.StatusName, opt => opt.MapFrom(src => src.StatusItem != null ? src.StatusItem.StatusName : (src.PaymentStatus == PaymentStatus.Paid ? "Paid" : "Pending")))
             .ForMember(dest => dest.CreatedBy, opt => opt.MapFrom(src => src.CreatedBy.HasValue ? src.CreatedBy.Value.ToString() : null))
             .ForMember(dest => dest.CreatedOn, opt => opt.MapFrom(src => src.CreatedAt));
@@ -79,7 +80,7 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.Contributions, opt => opt.MapFrom(src => src.Contributions.Where(x => !x.IsDeleted)));
 
         CreateMap<RoleRight, RoleRightDto>()
-            .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role.ToString()))
+            .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role != null ? src.Role.ToString() : string.Empty))
             .ForMember(dest => dest.AccessType, opt => opt.MapFrom(src => (int)src.AccessType))
             .ReverseMap()
             .ForMember(dest => dest.Role, opt => opt.Ignore()); // Role set explicitly in service

@@ -38,7 +38,7 @@ public class SupportTicket
     [NotMapped]
     public string MemberName
     {
-        get => !string.IsNullOrWhiteSpace(_memberName) ? _memberName : (User != null ? (!string.IsNullOrWhiteSpace(User.FullName) ? User.FullName : User.Username) : string.Empty);
+        get => !string.IsNullOrWhiteSpace(_memberName) ? _memberName : (User != null ? (!string.IsNullOrWhiteSpace(User.FullName) ? User.FullName : (User.Username ?? string.Empty)) : string.Empty);
         set => _memberName = value;
     }
 

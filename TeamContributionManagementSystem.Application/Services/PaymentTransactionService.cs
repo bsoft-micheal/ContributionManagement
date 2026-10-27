@@ -366,7 +366,7 @@ public class PaymentTransactionService : IPaymentTransactionService
 
                 var digitalUtrs = request.Splits
                     .Where(s => !s.Mode.Trim().Contains("Cash", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(s.Utr))
-                    .Select(s => s.Utr.Trim().ToLowerInvariant())
+                    .Select(s => s.Utr!.Trim().ToLowerInvariant())
                     .ToList();
 
                 if (digitalUtrs.Count != digitalUtrs.Distinct().Count())

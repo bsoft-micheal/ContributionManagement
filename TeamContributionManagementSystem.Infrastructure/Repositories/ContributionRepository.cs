@@ -74,8 +74,8 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) ? PaymentStatus.Paid : PaymentStatus.Pending,
-                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : "Pending",
+                    PaymentStatus = ((x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) || ((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : (((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0) ? "Paid" : "Pending"),
                     PaymentDate = x.PaymentDate,
                     PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
@@ -130,8 +130,8 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) ? PaymentStatus.Paid : PaymentStatus.Pending,
-                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : "Pending",
+                    PaymentStatus = ((x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) || ((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : (((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0) ? "Paid" : "Pending"),
                     PaymentDate = x.PaymentDate,
                     PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
@@ -166,6 +166,11 @@ public class ContributionRepository : IContributionRepository
     {
         try
         {
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty) })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, cancellationToken);
+
             var items = await _context.Contributions
                 .Where(x => x.EventId == eventId && !x.IsDeleted)
                 .OrderBy(x => x.User != null ? x.User.FullName : string.Empty)
@@ -178,8 +183,8 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) ? PaymentStatus.Paid : PaymentStatus.Pending,
-                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : "Pending",
+                    PaymentStatus = ((x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) || ((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : (((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0) ? "Paid" : "Pending"),
                     PaymentDate = x.PaymentDate,
                     PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
@@ -294,8 +299,8 @@ public class ContributionRepository : IContributionRepository
                                 MemberId = x.UserId,
                                 MemberName = x.User != null ? x.User.FullName : string.Empty,
                                 Amount = x.Amount,
-                                PaymentStatus = (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed")) ? PaymentStatus.Paid : PaymentStatus.Pending,
-                                StatusName = x.StatusItem != null ? x.StatusItem.StatusName : "Pending",
+                                PaymentStatus = ((x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) || ((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                                StatusName = x.StatusItem != null ? x.StatusItem.StatusName : (((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0) ? "Paid" : "Pending"),
                                 PaymentDate = x.PaymentDate,
                                 PaymentMode = x.PaymentModeItem != null
                                     ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
@@ -385,8 +390,8 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) ? PaymentStatus.Paid : PaymentStatus.Pending,
-                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : "Pending",
+                    PaymentStatus = ((x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) || ((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : (((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0) ? "Paid" : "Pending"),
                     PaymentDate = x.PaymentDate,
                     PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))
@@ -485,8 +490,8 @@ public class ContributionRepository : IContributionRepository
                     MemberId = x.UserId,
                     MemberName = x.User != null ? x.User.FullName : string.Empty,
                     Amount = x.Amount,
-                    PaymentStatus = (x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) ? PaymentStatus.Paid : PaymentStatus.Pending,
-                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : "Pending",
+                    PaymentStatus = ((x.StatusItem != null && (x.StatusItem.StatusName.ToLower() == "paid" || x.StatusItem.StatusName.ToLower() == "verified" || x.StatusItem.StatusName.ToLower() == "closed" || x.StatusItem.StatusName.ToLower() == "completed" || x.StatusItem.StatusName.ToLower() == "approved")) || ((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0)) ? PaymentStatus.Paid : PaymentStatus.Pending,
+                    StatusName = x.StatusItem != null ? x.StatusItem.StatusName : (((x.CashAmount ?? 0) + (x.UpiAmount ?? 0) >= x.Amount && x.Amount > 0) ? "Paid" : "Pending"),
                     PaymentDate = x.PaymentDate,
                     PaymentMode = x.PaymentModeItem != null
                         ? (x.PaymentModeItem.IsCash ? PaymentMode.Cash : (x.PaymentModeItem.PaymentType == "Split" ? PaymentMode.Split : PaymentMode.Upi))

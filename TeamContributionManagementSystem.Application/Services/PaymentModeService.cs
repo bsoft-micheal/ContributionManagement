@@ -45,10 +45,10 @@ public class PaymentModeService : IPaymentModeService
                     var userDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var u in users)
                     {
-                        var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username;
+                        var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty);
                         userDict[u.UserId.ToString()] = displayName;
-                        if (!string.IsNullOrWhiteSpace(u.Username)) userDict[u.Username] = displayName;
-                        if (!string.IsNullOrWhiteSpace(u.FullName)) userDict[u.FullName] = displayName;
+                        if (!string.IsNullOrWhiteSpace(u.Username)) userDict[u.Username!] = displayName;
+                        if (!string.IsNullOrWhiteSpace(u.FullName)) userDict[u.FullName!] = displayName;
                     }
 
                     foreach (var dto in dtos)

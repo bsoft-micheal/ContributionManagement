@@ -47,12 +47,15 @@ public class GalleryService : IGalleryService
                     var userDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var u in users)
                     {
-                        var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username;
+                        var displayName = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : (u.Username ?? string.Empty);
                         userDict[u.UserId.ToString()] = displayName;
-                        userDict[u.Username] = displayName;
+                        if (!string.IsNullOrWhiteSpace(u.Username))
+                        {
+                            userDict[u.Username!] = displayName;
+                        }
                         if (!string.IsNullOrWhiteSpace(u.FullName))
                         {
-                            userDict[u.FullName] = displayName;
+                            userDict[u.FullName!] = displayName;
                         }
                     }
 
@@ -72,8 +75,8 @@ public class GalleryService : IGalleryService
 
                                 if (matched != null)
                                 {
-                                    var resolved = !string.IsNullOrWhiteSpace(matched.FullName) ? matched.FullName : matched.Username;
-                                    var staleName = dto.CreatedBy;
+                                    var resolved = (!string.IsNullOrWhiteSpace(matched.FullName) ? matched.FullName : matched.Username) ?? "User";
+                                    var staleName = dto.CreatedBy ?? string.Empty;
                                     dto.CreatedBy = resolved;
 
                                     _ = Task.Run(async () =>

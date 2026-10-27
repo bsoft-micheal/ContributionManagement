@@ -50,8 +50,13 @@ public class Contribution
             if (StatusItem != null && (
                 StatusItem.StatusName.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
                 StatusItem.StatusName.Equals("Verified", StringComparison.OrdinalIgnoreCase) ||
+                StatusItem.StatusName.Equals("Approved", StringComparison.OrdinalIgnoreCase) ||
                 StatusItem.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase) ||
                 StatusItem.StatusName.Equals("Completed", StringComparison.OrdinalIgnoreCase)))
+            {
+                return PaymentStatus.Paid;
+            }
+            if (Amount > 0 && ((CashAmount ?? 0) + (UpiAmount ?? 0)) >= Amount)
             {
                 return PaymentStatus.Paid;
             }
