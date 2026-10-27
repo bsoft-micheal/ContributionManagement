@@ -11,4 +11,6 @@ public interface IDeviceSessionRepository
     Task<IEnumerable<DeviceDetail>> GetSessionHistoryAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<DeviceLoginHistory?> GetLoginHistoryByIdAsync(Guid historyId, CancellationToken cancellationToken = default);
     void AddLoginHistory(DeviceLoginHistory loginHistory);
+    Task DeactivateExitedUserIfNoActiveSessionsAsync(Guid userId, Guid? currentHistoryId = null, CancellationToken cancellationToken = default);
+    Task LogoutAllActiveSessionsForUserAsync(Guid userId, CancellationToken cancellationToken = default);
 }

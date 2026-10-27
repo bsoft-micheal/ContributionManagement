@@ -346,12 +346,30 @@ public class ExitClearanceService : IExitClearanceService
         };
         await _clearanceRepo.AddHistoryAsync(history, cancellationToken);
 
-        // 5. Update Member Status (mark IsActive = false and IsExited = true)
+        // 5. Update Member Status
         var memberToUpdate = clearance.Member ?? await _clearanceRepo.GetUserByIdAsync(clearance.MemberId, cancellationToken);
         if (memberToUpdate != null)
         {
-            memberToUpdate.IsActive = false;
             memberToUpdate.IsExited = true;
+
+            // Check if member is currently logged in (active session or current user approving their own record)
+            bool isCurrentSessionUser = clearance.MemberId == adminUserId ||
+                                        string.Equals(_currentUserService.UserId, clearance.MemberId.ToString(), StringComparison.OrdinalIgnoreCase);
+            bool hasActiveSessions = isCurrentSessionUser || await _clearanceRepo.HasActiveLoginSessionsAsync(clearance.MemberId, cancellationToken);
+
+            if (hasActiveSessions)
+            {
+                // For currently logged in users, do NOT deactivate immediately while approving Exit Clearance.
+                // Keep IsActive = true so their active session continues uninterrupted; account will be deactivated once they log out.
+                memberToUpdate.IsActive = true;
+                _logger.LogInformation("Member {MemberId} is currently logged in. Marked IsExited = true; deactivation deferred until logout.", clearance.MemberId);
+            }
+            else
+            {
+                // If not currently logged in, deactivate immediately
+                memberToUpdate.IsActive = false;
+            }
+
             memberToUpdate.ModifiedBy = adminUserId;
             memberToUpdate.ModifiedOn = approvalTime;
         }

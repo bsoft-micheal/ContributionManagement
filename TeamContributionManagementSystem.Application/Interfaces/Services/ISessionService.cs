@@ -30,5 +30,10 @@ public interface ISessionService
     /// <param name="userId">The unique ID of the user performing the logout.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task LogoutSessionAsync(Guid historyId, Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Logs out the current session for a specified user, deactivating the user account if they have been marked as exited.
+    /// </summary>
+    Task LogoutCurrentSessionAsync(Guid userId, Guid? sessionId = null, CancellationToken cancellationToken = default);
 }
 

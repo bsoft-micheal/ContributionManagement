@@ -117,4 +117,52 @@ public class DeviceSessionRepository : IDeviceSessionRepository
             throw;
         }
     }
+
+    public async Task DeactivateExitedUserIfNoActiveSessionsAsync(Guid userId, Guid? currentHistoryId = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
+            if (user != null && user.IsExited)
+            {
+                bool hasOtherActive = await _context.DeviceLoginHistories
+                    .AnyAsync(h => h.UserId == userId && h.IsActive && h.LogoutTime == null && (!currentHistoryId.HasValue || h.Id != currentHistoryId.Value), cancellationToken);
+
+                if (!hasOtherActive)
+                {
+                    user.IsActive = false;
+                    user.ModifiedOn = DateTime.UtcNow;
+                    user.ModifiedBy = userId;
+                    _logger.LogInformation("Exited user {UserId} logged out from all sessions. Marked IsActive = false.", userId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeactivateExitedUserIfNoActiveSessionsAsync));
+            throw;
+        }
+    }
+
+    public async Task LogoutAllActiveSessionsForUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var activeHistories = await _context.DeviceLoginHistories
+                .Where(h => h.UserId == userId && h.IsActive && h.LogoutTime == null)
+                .ToListAsync(cancellationToken);
+
+            var now = DateTime.UtcNow;
+            foreach (var h in activeHistories)
+            {
+                h.IsActive = false;
+                h.LogoutTime = now;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(LogoutAllActiveSessionsForUserAsync));
+            throw;
+        }
+    }
 }

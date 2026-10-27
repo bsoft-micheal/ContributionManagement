@@ -1102,14 +1102,7 @@ public class EventService : IEventService
                         string emailHeader = isBirthdayEvent ? "Birthday Celebration" : $"{safeCategoryName} Contribution";
 
                         string eventDateLabel = "Event Date:";
-                        string celebrantDatesCsv = !string.IsNullOrWhiteSpace(eventDates)
-                            ? string.Join(", ", eventDates.Split(',').Select(d => d.Trim()).Where(d => !string.IsNullOrEmpty(d)).Distinct())
-                            : (isBirthdayEvent && targetCelebrants.Count > 0
-                                ? string.Join(", ", targetCelebrants.OrderBy(c => c.DateOfBirth.Day).Select(c => $"{c.DateOfBirth.Day} {getCelebrantBirthDate(c):MMM}").Distinct())
-                                : string.Empty);
-                        string eventDateValueDisplay = !string.IsNullOrWhiteSpace(celebrantDatesCsv)
-                            ? celebrantDatesCsv
-                            : $"{eventDate:MMMM dd, yyyy}";
+                        string eventDateValueDisplay = FormatEventDatesForDisplay(eventDates, eventDate, isBirthdayEvent, targetCelebrants);
 
                         string totalAmountDisplay = isBirthdayEvent && celebrantNames.Count > 1
                             ? $"Rs.{baseAmount:F2} ({celebrantNames.Count} celebrants combined)"
@@ -2989,6 +2982,98 @@ public class EventService : IEventService
                 }
             }
         }
+    }
+
+    private static string FormatEventDatesForDisplay(
+        string? rawEventDates,
+        DateTime fallbackDate,
+        bool isBirthdayEvent = false,
+        List<CelebratingMemberDto>? celebrants = null)
+    {
+        if (!string.IsNullOrWhiteSpace(rawEventDates))
+        {
+            var trimmed = rawEventDates.Trim();
+            if (trimmed.StartsWith("{"))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(trimmed);
+                    var formattedDates = new List<string>();
+
+                    void ExtractDates(System.Text.Json.JsonElement element)
+                    {
+                        if (element.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            foreach (var prop in element.EnumerateObject())
+                            {
+                                ExtractDates(prop.Value);
+                            }
+                        }
+                        else if (element.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var item in element.EnumerateArray())
+                            {
+                                ExtractDates(item);
+                            }
+                        }
+                        else if (element.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            var strVal = element.GetString()?.Trim();
+                            if (!string.IsNullOrWhiteSpace(strVal))
+                            {
+                                if (DateTime.TryParse(strVal, out var parsedDt))
+                                {
+                                    formattedDates.Add(parsedDt.ToString("MMMM dd, yyyy"));
+                                }
+                                else
+                                {
+                                    formattedDates.Add(strVal);
+                                }
+                            }
+                        }
+                    }
+
+                    ExtractDates(doc.RootElement);
+
+                    var distinct = formattedDates.Distinct().ToList();
+                    if (distinct.Count > 0)
+                    {
+                        return string.Join(", ", distinct);
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                var parts = trimmed.Split(',')
+                    .Select(p => p.Trim())
+                    .Where(p => !string.IsNullOrEmpty(p))
+                    .Select(p => DateTime.TryParse(p, out var dt) ? dt.ToString("MMMM dd, yyyy") : p)
+                    .Distinct()
+                    .ToList();
+
+                if (parts.Count > 0)
+                {
+                    return string.Join(", ", parts);
+                }
+            }
+        }
+
+        if (isBirthdayEvent && celebrants != null && celebrants.Count > 0)
+        {
+            var bdayDates = celebrants
+                .OrderBy(c => c.DateOfBirth.Day)
+                .Select(c => $"{c.DateOfBirth.Day} {c.DateOfBirth:MMM}")
+                .Distinct()
+                .ToList();
+
+            if (bdayDates.Count > 0)
+            {
+                return string.Join(", ", bdayDates);
+            }
+        }
+
+        return fallbackDate.ToString("MMMM dd, yyyy");
     }
 }
 
