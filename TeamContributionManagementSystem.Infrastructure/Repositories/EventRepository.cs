@@ -312,10 +312,9 @@ public class EventRepository : IEventRepository
                 .Where(x => !x.IsDeleted && x.CreatedBy == organizerUserId)
                 .AsQueryable();
 
-            // Multi-role session isolation: Check if this organizer user ALSO has the Admin role
+            // Multi-role session isolation: Check if this organizer user ALSO has the Admin role assigned
             var isUserAdmin = await _context.UserRoles
-                .AnyAsync(ur => ur.UserId == organizerUserId && ur.Role != null && !ur.Role.IsDeleted && ur.Role.RoleName.ToLower() == "admin", cancellationToken)
-                || await _context.Users.AnyAsync(u => u.UserId == organizerUserId && u.Role == Domain.Enums.UserRole.Admin, cancellationToken);
+                .AnyAsync(ur => ur.UserId == organizerUserId && ur.Role != null && !ur.Role.IsDeleted && ur.Role.RoleName.ToLower() == CommonRoles.Admin.ToLower(), cancellationToken);
 
             if (isUserAdmin)
             {

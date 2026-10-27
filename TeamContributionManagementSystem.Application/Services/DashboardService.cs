@@ -149,7 +149,9 @@ public class DashboardService : IDashboardService
             List<EventSummaryDto> monthlyEvents;
             List<ContributionDto> pendingContributions;
 
-            if (_currentUserService != null && _currentUserService.IsOrganizerRole)
+            var isOrganizer = _currentUserService != null && _currentUserService.IsOrganizerRole;
+
+            if (isOrganizer)
             {
                 Guid? orgUserId = null;
                 if (!string.IsNullOrWhiteSpace(_currentUserService.UserId) && Guid.TryParse(_currentUserService.UserId, out var parsedGuid))
@@ -172,11 +174,19 @@ public class DashboardService : IDashboardService
                     var orgEventIds = monthlyEvents.Select(e => e.EventId).ToHashSet();
                     var allPending = await _contributionRepository.GetPendingAsync(filterMonth, filterYear, cancellationToken);
                     pendingContributions = allPending.Where(p => orgEventIds.Contains(p.EventId)).ToList();
+
+                    // Restrict expenses strictly to events created by this organizer
+                    var allOrgEvents = await _eventRepository.GetAllForOrganizerAsync(orgUserId.Value, cancellationToken: cancellationToken);
+                    var orgEventNames = allOrgEvents.Select(e => e.EventName.Trim().ToLower()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    allExpenses = allExpenses
+                        .Where(e => !string.IsNullOrWhiteSpace(e.EventName) && orgEventNames.Contains(e.EventName.Trim().ToLower()))
+                        .ToList();
                 }
                 else
                 {
                     monthlyEvents = new List<EventSummaryDto>();
                     pendingContributions = new List<ContributionDto>();
+                    allExpenses = new List<TeamContributionManagementSystem.Application.DTOs.Expenses.ExpenseDto>();
                 }
             }
             else
@@ -195,7 +205,7 @@ public class DashboardService : IDashboardService
             var periodExpenses = (startDate.HasValue || endDate.HasValue)
                 ? allExpenses.Where(e => (!startDate.HasValue || e.ExpenseDate >= startDate.Value) && (!endDate.HasValue || e.ExpenseDate <= endDate.Value)).Sum(e => e.Amount)
                 : allExpenses.Sum(e => e.Amount);
-            var totalExpenses = monthlyEvents.Count > 0 ? eventExpensesSum : periodExpenses;
+            var totalExpenses = isOrganizer ? eventExpensesSum : (monthlyEvents.Count > 0 ? eventExpensesSum : periodExpenses);
             var totalAllocated = monthlyEvents.Where(e => e.UseAvailableBalance).Sum(e => e.AllocatedAmount);
             var totalRecoveredDeficit = monthlyEvents
                 .Where(e => e.UsePreviousEventBalance && e.PreviousEventAdjustmentType == "DeficitRecovery")
@@ -254,6 +264,11 @@ public class DashboardService : IDashboardService
                     };
                 }).ToList()
             };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("GetSummaryAsync request was canceled.");
+            throw;
         }
         catch (Exception ex)
         {
