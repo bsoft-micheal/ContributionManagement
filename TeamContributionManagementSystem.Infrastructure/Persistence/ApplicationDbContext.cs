@@ -48,6 +48,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<BirthdayReminderLog> BirthdayReminderLogs => Set<BirthdayReminderLog>();
     public DbSet<ExitClearance> ExitClearances => Set<ExitClearance>();
     public DbSet<ExitClearanceHistory> ExitClearanceHistories => Set<ExitClearanceHistory>();
+    public DbSet<EventSponsor> EventSponsors => Set<EventSponsor>();
+    public DbSet<EventSponsorHistory> EventSponsorHistories => Set<EventSponsorHistory>();
 
  
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -178,6 +180,8 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.Property(x => x.BaseAmount).HasPrecision(12, 2).IsRequired().HasDefaultValue(0);
             entity.Property(x => x.UseAvailableBalance).HasColumnName("use_available_balance").HasDefaultValue(false);
             entity.Property(x => x.AllocatedAmount).HasColumnName("allocated_amount").HasPrecision(12, 2).HasDefaultValue(0);
+            entity.Property(x => x.EnableCelebrantSelection).HasColumnName("enable_celebrant_selection").HasDefaultValue(false);
+            entity.Property(x => x.RequireSponsorContribution).HasColumnName("require_sponsor_contribution").HasDefaultValue(false);
             entity.HasIndex(x => new { x.EventDate, x.EventTypeId });
             entity.HasOne(x => x.EventType)
                 .WithMany(x => x.Events)
@@ -632,6 +636,68 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .WithMany()
                 .HasForeignKey(x => x.ApprovedBy)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EventSponsor>(entity =>
+        {
+            entity.ToTable("event_sponsors");
+            entity.HasKey(x => x.SponsorId);
+            entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+            entity.Ignore(x => x.SponsorUserId);
+            entity.Property(x => x.ContributionAmount).HasPrecision(12, 2).IsRequired();
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.Property(x => x.IsDeleted).HasDefaultValue(false);
+            entity.HasOne(x => x.Event)
+                .WithMany(x => x.Sponsors)
+                .HasForeignKey(x => x.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.SponsorUser)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedBy)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.ModifiedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ModifiedBy)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasMany(x => x.Histories)
+                .WithOne(x => x.Sponsor)
+                .HasForeignKey(x => x.SponsorId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventSponsorHistory>(entity =>
+        {
+            entity.ToTable("event_sponsor_histories");
+            entity.HasKey(x => x.HistoryId);
+            entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+            entity.Ignore(x => x.SponsorUserId);
+            entity.Property(x => x.ContributionAmount).HasPrecision(12, 2).IsRequired();
+            entity.Property(x => x.PreviousAmount).HasPrecision(12, 2);
+            entity.Property(x => x.ChangeType).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Notes).HasColumnType("text");
+            entity.HasOne(x => x.Sponsor)
+                .WithMany(x => x.Histories)
+                .HasForeignKey(x => x.SponsorId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.Event)
+                .WithMany()
+                .HasForeignKey(x => x.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.SponsorUser)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.ActionByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ActionBy)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.ApplySnakeCaseNames();
