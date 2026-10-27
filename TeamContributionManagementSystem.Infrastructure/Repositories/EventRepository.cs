@@ -185,6 +185,10 @@ public class EventRepository : IEventRepository
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
                     EnableCelebrantSelection = x.EnableCelebrantSelection,
+                    RequireSponsorContribution = x.RequireSponsorContribution,
+                    SponsorUserId = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (Guid?)s.UserId).FirstOrDefault(),
+                    SponsorName = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => s.SponsorUser != null ? (!string.IsNullOrWhiteSpace(s.SponsorUser.FullName) ? s.SponsorUser.FullName : s.SponsorUser.Username) : null).FirstOrDefault(),
+                    SponsorContributionAmount = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (decimal?)s.ContributionAmount).FirstOrDefault(),
                     ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? 0m)
@@ -436,6 +440,10 @@ public class EventRepository : IEventRepository
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
                     EnableCelebrantSelection = x.EnableCelebrantSelection,
+                    RequireSponsorContribution = x.RequireSponsorContribution,
+                    SponsorUserId = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (Guid?)s.UserId).FirstOrDefault(),
+                    SponsorName = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => s.SponsorUser != null ? (!string.IsNullOrWhiteSpace(s.SponsorUser.FullName) ? s.SponsorUser.FullName : s.SponsorUser.Username) : null).FirstOrDefault(),
+                    SponsorContributionAmount = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (decimal?)s.ContributionAmount).FirstOrDefault(),
                     ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? 0m)
@@ -568,6 +576,10 @@ public class EventRepository : IEventRepository
                     Status = x.Status,
                     BaseAmount = x.BaseAmount,
                     EnableCelebrantSelection = x.EnableCelebrantSelection,
+                    RequireSponsorContribution = x.RequireSponsorContribution,
+                    SponsorUserId = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (Guid?)s.UserId).FirstOrDefault(),
+                    SponsorName = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => s.SponsorUser != null ? (!string.IsNullOrWhiteSpace(s.SponsorUser.FullName) ? s.SponsorUser.FullName : s.SponsorUser.Username) : null).FirstOrDefault(),
+                    SponsorContributionAmount = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (decimal?)s.ContributionAmount).FirstOrDefault(),
                     ParticipantCount = x.Contributions.Count(c => !c.IsDeleted && c.UserId == memberId) > 0 ? 1 : (x.Participants.Count(p => !p.IsDeleted && p.UserId == memberId) > 0 ? 1 : 0),
                     TotalExpectedAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId).Sum(c => (decimal?)c.Amount) ?? 0m,
                     TotalPaidAmount = x.Contributions.Where(c => !c.IsDeleted && c.UserId == memberId && c.StatusId.HasValue && paidStatusIds.Contains(c.StatusId.Value))
@@ -785,6 +797,10 @@ public class EventRepository : IEventRepository
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
                     EnableCelebrantSelection = x.EnableCelebrantSelection,
+                    RequireSponsorContribution = x.RequireSponsorContribution,
+                    SponsorUserId = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (Guid?)s.UserId).FirstOrDefault(),
+                    SponsorName = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => s.SponsorUser != null ? (!string.IsNullOrWhiteSpace(s.SponsorUser.FullName) ? s.SponsorUser.FullName : s.SponsorUser.Username) : null).FirstOrDefault(),
+                    SponsorContributionAmount = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (decimal?)s.ContributionAmount).FirstOrDefault(),
                     ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? 0m)
@@ -892,6 +908,8 @@ public class EventRepository : IEventRepository
                 .Include(x => x.Contributions)
                     .ThenInclude(c => c.PaymentModeItem)
                 .Include(x => x.Participants)
+                .Include(x => x.Sponsors)
+                    .ThenInclude(s => s.Histories)
                 .FirstOrDefaultAsync(x => x.EventId == eventId && !x.IsDeleted, cancellationToken);
         }
         catch (Exception ex)
@@ -960,6 +978,10 @@ public class EventRepository : IEventRepository
                     UseAvailableBalance = x.UseAvailableBalance,
                     AllocatedAmount = x.AllocatedAmount,
                     EnableCelebrantSelection = x.EnableCelebrantSelection,
+                    RequireSponsorContribution = x.RequireSponsorContribution,
+                    SponsorUserId = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (Guid?)s.UserId).FirstOrDefault(),
+                    SponsorName = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => s.SponsorUser != null ? (!string.IsNullOrWhiteSpace(s.SponsorUser.FullName) ? s.SponsorUser.FullName : s.SponsorUser.Username) : null).FirstOrDefault(),
+                    SponsorContributionAmount = x.Sponsors.Where(s => s.IsActive && !s.IsDeleted).Select(s => (decimal?)s.ContributionAmount).FirstOrDefault(),
                     ParticipantCount = x.Participants.Count(p => !p.IsDeleted && !p.Member!.IsDeleted),
                     TotalExpectedAmount = x.Contributions.Any(c => !c.IsDeleted)
                         ? (x.Contributions.Where(c => !c.IsDeleted).Sum(c => (decimal?)c.Amount) ?? 0m)

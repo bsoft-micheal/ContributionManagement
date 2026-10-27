@@ -94,6 +94,7 @@ public class ApplicationDbContextSeeder
                 await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS gallery_photos ALTER COLUMN title TYPE VARCHAR(250);", cancellationToken);
                 await _context.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS enable_celebrant_selection BOOLEAN NOT NULL DEFAULT FALSE;", cancellationToken);
                 await ExecuteScriptIfExistsAsync("add_enable_celebrant_selection_to_events.sql", cancellationToken);
+                await ExecuteScriptIfExistsAsync("create_event_sponsors_tables.sql", cancellationToken);
 
                 // Ensure birthday_reminder_logs table exists
                 await _context.Database.ExecuteSqlRawAsync(@"

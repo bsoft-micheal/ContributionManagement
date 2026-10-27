@@ -55,6 +55,10 @@ public class EventSummaryDto
     public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
     public Dictionary<string, Dictionary<string, string>>? EventTypeMemberDates { get; set; }
     public bool EnableCelebrantSelection { get; set; }
+    public bool RequireSponsorContribution { get; set; }
+    public Guid? SponsorUserId { get; set; }
+    public string? SponsorName { get; set; }
+    public decimal? SponsorContributionAmount { get; set; }
 
     public IReadOnlyCollection<EventParticipantDto> Participants { get; set; } = Array.Empty<EventParticipantDto>();
 }
@@ -127,6 +131,10 @@ public class CreateEventRequestDto
     public Dictionary<string, List<Guid>>? EventTypeMembers { get; set; }
     public Dictionary<string, Dictionary<string, string>>? EventTypeMemberDates { get; set; }
     public bool EnableCelebrantSelection { get; set; }
+    public bool RequireSponsorContribution { get; set; }
+    public Guid? SponsorUserId { get; set; }
+    [Range(0, 1000000, ErrorMessage = "Sponsor contribution amount must be between 0 and 1,000,000.")]
+    public decimal? SponsorContributionAmount { get; set; }
     public List<Guid> ParticipantIds { get; set; } = new();
     public List<ContributionOverrideDto> ContributionOverrides { get; set; } = new();
 }
@@ -206,4 +214,42 @@ public class MonthlyEventRestrictionsDto
     public List<string> TakenEventTypeNames { get; set; } = new();
     public List<CelebratingMemberDto> CelebratingMembers { get; set; } = new();
 }
+
+public class EligibleSponsorDto
+{
+    public Guid UserId { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+    public string? RoleName { get; set; }
+}
+
+public class EventSponsorDto
+{
+    public Guid SponsorId { get; set; }
+    public Guid EventId { get; set; }
+    public Guid SponsorUserId { get; set; }
+    public string SponsorName { get; set; } = string.Empty;
+    public string? SponsorEmail { get; set; }
+    public decimal ContributionAmount { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedByName { get; set; }
+}
+
+public class EventSponsorHistoryDto
+{
+    public Guid HistoryId { get; set; }
+    public Guid SponsorId { get; set; }
+    public Guid EventId { get; set; }
+    public Guid SponsorUserId { get; set; }
+    public string SponsorName { get; set; } = string.Empty;
+    public decimal? PreviousAmount { get; set; }
+    public decimal ContributionAmount { get; set; }
+    public string ChangeType { get; set; } = string.Empty;
+    public DateTime ActionDate { get; set; }
+    public string? ActionByName { get; set; }
+    public string? Notes { get; set; }
+}
+
 
