@@ -76,12 +76,12 @@ CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_event_id ON exit_clearanc
 CREATE INDEX IF NOT EXISTS ix_exit_clearance_histories_clearance_id ON exit_clearance_histories(clearance_id);
 ", cancellationToken);
 
-            // Ensure any exited members whose exit clearance was approved remain active and usable
+            // Ensure members whose exit clearance is approved are marked as inactive and exited
             await _context.Database.ExecuteSqlRawAsync(@"
 UPDATE users 
-SET is_active = true, is_exited = false 
+SET is_active = false, is_exited = true 
 WHERE user_id IN (SELECT member_id FROM exit_clearances WHERE status = 'Approved') 
-  AND (is_active = false OR is_exited = true);
+  AND (is_active = true OR is_exited = false);
 ", cancellationToken);
         }
         catch (Exception ex)
@@ -251,8 +251,6 @@ WHERE user_id IN (SELECT member_id FROM exit_clearances WHERE status = 'Approved
 
     public void UpdateUser(AppUser user)
     {
-        user.IsActive = true;
-        user.IsExited = false;
         _context.Users.Update(user);
     }
 }
