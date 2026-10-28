@@ -2845,7 +2845,14 @@ public class EventService : IEventService
                         ? new List<EventSponsorInputDto> { new() { UserId = request.SponsorUserId.Value, ContributionAmount = request.SponsorContributionAmount.Value } }
                         : new List<EventSponsorInputDto>());
 
-                totalSponsorAmount = sponsorInputs.Sum(s => RoundingHelper.RoundToWhole(s.ContributionAmount));
+                if (sponsorInputs.Any())
+                {
+                    totalSponsorAmount = sponsorInputs.Sum(s => RoundingHelper.RoundToWhole(s.ContributionAmount));
+                    if (totalSponsorAmount > plannedBudget)
+                    {
+                        throw new InvalidOperationException($"Total sponsor contribution (₹{totalSponsorAmount:N0}) cannot exceed the total planned budget (₹{plannedBudget:N0}).");
+                    }
+                }
             }
 
             decimal remainingFundingRequirement = Math.Max(0m, plannedBudget - totalSponsorAmount);
