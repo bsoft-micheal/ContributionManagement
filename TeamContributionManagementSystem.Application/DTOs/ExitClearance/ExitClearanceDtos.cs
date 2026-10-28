@@ -110,6 +110,7 @@ public class ExitPaymentHistoryItemDto
 public class ApproveExitRequestDto
 {
     public string? ApprovalRemarks { get; set; }
+    public bool MarkAsInactive { get; set; } = true;
 }
 
 public class ExitClearanceHistoryDto
