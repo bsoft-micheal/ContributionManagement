@@ -39,6 +39,13 @@ public class MemberContributionItemDto
     public Guid? ContributionId { get; set; }
     public Guid MemberId { get; set; }
     public string MemberName { get; set; } = string.Empty;
+    public string? RejectionReason { get; set; }
+    public string? VerifiedBy { get; set; }
+    public DateTime? VerifiedOn { get; set; }
+    public string? PaymentMode { get; set; }
+    public decimal? SubmittedAmount { get; set; }
+    public string? TxnNumber { get; set; }
+    public string? Notes { get; set; }
 }
 
 /// <summary>

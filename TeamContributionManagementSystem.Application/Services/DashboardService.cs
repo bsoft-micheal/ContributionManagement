@@ -518,8 +518,14 @@ public class DashboardService : IDashboardService
                 string verificationStatus = "None";
                 bool canPay = true;
 
+                var rejectedTxn = evTxns
+                    .Where(t => string.Equals(t.Status, "Rejected", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(t => t.VerifiedOn ?? t.ModifiedOn ?? t.CreatedAt ?? t.PaymentDate)
+                    .FirstOrDefault();
+
                 bool isApproved = approvedPaid >= expected && expected > 0;
-                bool isRejected = latestTxn != null && string.Equals(latestTxn.Status, "Rejected", StringComparison.OrdinalIgnoreCase);
+                bool isRejected = (latestTxn != null && string.Equals(latestTxn.Status, "Rejected", StringComparison.OrdinalIgnoreCase)) || rejectedTxn != null;
+                var displayTxn = isRejected ? (rejectedTxn ?? latestTxn) : latestTxn;
 
                 if (isRejected)
                 {
@@ -555,22 +561,48 @@ public class DashboardService : IDashboardService
                     canPay = true;
                 }
 
-                // List down all events (both paid and unpaid) in My Contributions
+                // Compute previous arrears in memory (avoids N+1 database roundtrips that cause timeouts)
                 decimal previousArrears = 0m;
-                if (_paymentTransactionService != null)
+                foreach (var otherEv in memberEvents)
                 {
-                    try
+                    if (otherEv.EventId == ev.EventId) continue;
+                    if (otherEv.EventDate >= ev.EventDate) continue;
+
+                    decimal otherExpected = otherEv.TotalExpectedAmount > 0 ? otherEv.TotalExpectedAmount : otherEv.BaseAmount;
+                    var otherTxns = myTxns.Where(t =>
+                        (t.EventId.HasValue && t.EventId.Value == otherEv.EventId) ||
+                        (!string.IsNullOrWhiteSpace(t.EventName) && string.Equals(t.EventName.Trim(), otherEv.EventName.Trim(), StringComparison.OrdinalIgnoreCase))
+                    );
+                    decimal otherApproved = otherTxns
+                        .Where(t => string.Equals(t.Status, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(t.Status, "Completed", StringComparison.OrdinalIgnoreCase) ||
+                                    (!string.IsNullOrWhiteSpace(t.VerifiedBy) && !string.Equals(t.Status, "Rejected", StringComparison.OrdinalIgnoreCase)))
+                        .Sum(t => t.Amount);
+
+                    var otherContrib = myContribs.FirstOrDefault(c => c.EventId == otherEv.EventId);
+                    if (otherContrib != null && (
+                        string.Equals(otherContrib.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(otherContrib.StatusName, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(otherContrib.StatusName, "Closed", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(otherContrib.StatusName, "Completed", StringComparison.OrdinalIgnoreCase)))
                     {
-                        var context = await _paymentTransactionService.GetPaymentContextAsync(ev.EventId, memberId.Value, ev.EventName, memberName, cancellationToken);
-                        if (context != null)
-                        {
-                            previousArrears = context.PreviousArrears;
-                        }
+                        otherApproved = Math.Max(otherApproved, otherContrib.Amount);
                     }
-                    catch { }
+
+                    if (otherApproved < otherExpected)
+                    {
+                        previousArrears += (otherExpected - otherApproved);
+                    }
                 }
 
                 decimal remainingBalance = pending > 0 ? pending : expected;
+
+                bool isSplitPayment = evTxns.Count > 1 ||
+                                      evTxns.Any(x => string.Equals(x.PaymentMode, "Split", StringComparison.OrdinalIgnoreCase)) ||
+                                      (displayTxn?.Notes != null && displayTxn.Notes.Contains("[Split Breakdown:"));
+                decimal totalSubmitted = evTxns.Count > 0 ? evTxns.Sum(t => t.Amount) : (displayTxn?.Amount ?? 0);
+                string resolvedPaymentMode = isSplitPayment ? "Split" : (displayTxn?.PaymentMode ?? "None");
 
                 items.Add(new MemberContributionItemDto
                 {
@@ -590,7 +622,14 @@ public class DashboardService : IDashboardService
                     PaymentEligibility = canPay,
                     ContributionId = contrib?.ContributionId,
                     MemberId = memberId.Value,
-                    MemberName = memberName ?? string.Empty
+                    MemberName = memberName ?? string.Empty,
+                    RejectionReason = isRejected ? (displayTxn?.Notes ?? "Payment verification was rejected by administrator/organizer.") : null,
+                    VerifiedBy = displayTxn?.VerifiedBy,
+                    VerifiedOn = displayTxn?.VerifiedOn,
+                    PaymentMode = resolvedPaymentMode,
+                    SubmittedAmount = totalSubmitted > 0 ? totalSubmitted : (decimal?)null,
+                    TxnNumber = displayTxn?.ParentTxnNumber ?? displayTxn?.TxnNumber,
+                    Notes = displayTxn?.Notes
                 });
             }
 
@@ -669,29 +708,46 @@ public class DashboardService : IDashboardService
             var list = new List<MemberRecentPaymentDto>();
             var seenEventIds = new HashSet<Guid>();
 
-            foreach (var t in myTxns)
+            // Group transactions by logical payment (TransactionGroupId, or ParentTxnNumber, or EventId if multiple transactions exist for the event)
+            var paymentGroups = myTxns
+                .GroupBy(t => t.TransactionGroupId.HasValue && t.TransactionGroupId.Value != Guid.Empty
+                    ? t.TransactionGroupId.Value.ToString()
+                    : (!string.IsNullOrWhiteSpace(t.ParentTxnNumber)
+                        ? t.ParentTxnNumber.Trim().ToLowerInvariant()
+                        : (t.EventId.HasValue ? t.EventId.Value.ToString() : t.TransactionId.ToString())))
+                .ToList();
+
+            foreach (var g in paymentGroups)
             {
-                if (t.EventId.HasValue)
+                var groupItems = g.ToList();
+                var primary = groupItems.OrderByDescending(x => x.CreatedAt ?? x.PaymentDate).First();
+                bool isSplit = groupItems.Count > 1 ||
+                               groupItems.Any(x => string.Equals(x.PaymentMode, "Split", StringComparison.OrdinalIgnoreCase)) ||
+                               groupItems.Any(x => x.Notes != null && x.Notes.Contains("[Split Breakdown:"));
+                decimal totalAmount = groupItems.Sum(x => x.Amount);
+                string resolvedMode = isSplit ? "Split" : (!string.IsNullOrWhiteSpace(primary.PaymentMode) ? primary.PaymentMode : "GPay");
+
+                if (primary.EventId.HasValue)
                 {
-                    seenEventIds.Add(t.EventId.Value);
+                    seenEventIds.Add(primary.EventId.Value);
                 }
 
                 string evType = string.Empty;
-                if (t.EventId.HasValue && eventDict.TryGetValue(t.EventId.Value, out var typeName))
+                if (primary.EventId.HasValue && eventDict.TryGetValue(primary.EventId.Value, out var typeName))
                 {
                     evType = typeName ?? string.Empty;
                 }
 
                 list.Add(new MemberRecentPaymentDto
                 {
-                    PaymentId = t.TransactionId,
-                    TxnNumber = t.TxnNumber ?? string.Empty,
-                    EventId = t.EventId,
-                    EventName = !string.IsNullOrWhiteSpace(t.EventName) ? t.EventName : "Event Payment",
+                    PaymentId = primary.TransactionId,
+                    TxnNumber = primary.ParentTxnNumber ?? primary.TxnNumber ?? string.Empty,
+                    EventId = primary.EventId,
+                    EventName = !string.IsNullOrWhiteSpace(primary.EventName) ? primary.EventName : "Event Payment",
                     EventTypeName = evType,
-                    PaymentDate = t.PaymentDate,
-                    PaymentAmount = RoundingHelper.RoundToWhole(t.Amount),
-                    PaymentMode = !string.IsNullOrWhiteSpace(t.PaymentMode) ? t.PaymentMode : "UPI",
+                    PaymentDate = primary.PaymentDate,
+                    PaymentAmount = RoundingHelper.RoundToWhole(totalAmount),
+                    PaymentMode = resolvedMode,
                     VerificationStatus = "Approved"
                 });
             }
