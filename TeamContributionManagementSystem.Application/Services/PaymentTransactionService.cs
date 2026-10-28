@@ -222,7 +222,8 @@ public class PaymentTransactionService : IPaymentTransactionService
 
             // Resolve PaymentModeId
             Guid? resolvedPaymentModeId = null;
-            var paymentModeName = request.PaymentMode?.Trim() ?? "UPI";
+            var rawPm = request.PaymentMode?.Trim();
+            var paymentModeName = string.IsNullOrWhiteSpace(rawPm) || rawPm.Equals("UPI", StringComparison.OrdinalIgnoreCase) || rawPm.Equals("Online", StringComparison.OrdinalIgnoreCase) ? "GPay" : rawPm;
             if (_paymentModeRepository != null && !string.IsNullOrWhiteSpace(paymentModeName))
             {
                 var matchedPm = await _paymentModeRepository.GetByNameAsync(paymentModeName, cancellationToken);
@@ -518,7 +519,9 @@ public class PaymentTransactionService : IPaymentTransactionService
                 // Single-mode payment (Requirement 12: preserve single-mode payments and backward compatibility)
                 var singleMode = request.Splits != null && request.Splits.Count == 1 ? request.Splits[0].Mode : request.PaymentMode;
                 var singleUtr = request.Splits != null && request.Splits.Count == 1 ? request.Splits[0].Utr : request.Utr;
-                var paymentModeName = string.IsNullOrWhiteSpace(singleMode) ? CommonConstants.PaymentModes.Upi : singleMode.Trim();
+                var paymentModeName = string.IsNullOrWhiteSpace(singleMode) || singleMode.Trim().Equals("UPI", StringComparison.OrdinalIgnoreCase) || singleMode.Trim().Equals("Online", StringComparison.OrdinalIgnoreCase)
+                    ? CommonConstants.PaymentModes.GPay
+                    : singleMode.Trim();
                 
                 Guid? resolvedPaymentModeId = null;
                 if (_paymentModeRepository != null && !string.IsNullOrWhiteSpace(paymentModeName))
