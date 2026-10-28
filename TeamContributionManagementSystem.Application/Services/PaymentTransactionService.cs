@@ -976,7 +976,7 @@ public class PaymentTransactionService : IPaymentTransactionService
             decimal totalPaid = totalCash + totalUpi;
             bool isFullyCovered = !isAnyRejected && match != null && match.Amount > 0 && totalPaid >= match.Amount;
 
-            // Status determination: if member has paid required amount and not rejected, status is Paid (or Verified/Approved if already verified)
+            // Status determination: if member has paid required amount, status is Approved/Verified if admin verified it, or Pending if waiting for verification
             string targetStatusName;
             if (isAnyRejected)
             {
@@ -990,10 +990,6 @@ public class PaymentTransactionService : IPaymentTransactionService
             {
                 targetStatusName = "Verified";
             }
-            else if (isFullyCovered)
-            {
-                targetStatusName = "Paid";
-            }
             else
             {
                 targetStatusName = "Pending";
@@ -1004,14 +1000,6 @@ public class PaymentTransactionService : IPaymentTransactionService
             {
                 var st = await _statusRepository.GetByNameAsync(targetStatusName, cancellationToken);
                 if (st == null && targetStatusName == "Approved")
-                {
-                    st = await _statusRepository.GetByNameAsync("Verified", cancellationToken) ?? await _statusRepository.GetByNameAsync("Paid", cancellationToken);
-                }
-                else if (st == null && targetStatusName == "Verified")
-                {
-                    st = await _statusRepository.GetByNameAsync("Paid", cancellationToken);
-                }
-                else if (st == null && targetStatusName == "Paid")
                 {
                     st = await _statusRepository.GetByNameAsync("Verified", cancellationToken);
                 }
@@ -1049,8 +1037,8 @@ public class PaymentTransactionService : IPaymentTransactionService
                 match.PaymentDate = primary.PaymentDate != default ? primary.PaymentDate : DateTime.UtcNow;
                 match.PaymentMode = modeEnum;
 
-                // Mark contribution as paid ONLY if member paid the full amount without rejection
-                if (!isAnyRejected && isFullyCovered)
+                // Mark contribution as paid ONLY if admin/organizer explicitly approved or verified it
+                if (!isAnyRejected && isFullyCovered && (isExplicitlyVerified || primary.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase)))
                 {
                     match.PaymentStatus = PaymentStatus.Paid;
                 }
