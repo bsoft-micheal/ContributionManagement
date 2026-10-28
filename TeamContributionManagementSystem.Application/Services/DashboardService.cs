@@ -657,7 +657,14 @@ public class DashboardService : IDashboardService
                 string.Equals(c.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(c.StatusName, "Approved", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(c.StatusName, "Completed", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(c.StatusName, "Closed", StringComparison.OrdinalIgnoreCase))).ToList();
+                string.Equals(c.StatusName, "Closed", StringComparison.OrdinalIgnoreCase)) &&
+                !allTxns.Any(t => ((t.EventId.HasValue && t.EventId.Value == c.EventId) ||
+                                  (!string.IsNullOrWhiteSpace(t.EventName) && !string.IsNullOrWhiteSpace(c.EventName) && string.Equals(t.EventName.Trim(), c.EventName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
+                                  ((t.UserId.HasValue && t.UserId.Value == memberId.Value) ||
+                                  (!string.IsNullOrWhiteSpace(t.MemberName) && string.Equals(t.MemberName.Trim(), memberName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
+                                  (string.Equals(t.Status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                                   string.Equals(t.Status, "Pending Verification", StringComparison.OrdinalIgnoreCase) ||
+                                   string.IsNullOrWhiteSpace(t.VerifiedBy)))).ToList();
 
             var list = new List<MemberRecentPaymentDto>();
             var seenEventIds = new HashSet<Guid>();
