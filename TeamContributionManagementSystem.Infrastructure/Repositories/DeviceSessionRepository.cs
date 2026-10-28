@@ -120,28 +120,8 @@ public class DeviceSessionRepository : IDeviceSessionRepository
 
     public async Task DeactivateExitedUserIfNoActiveSessionsAsync(Guid userId, Guid? currentHistoryId = null, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
-            if (user != null && user.IsExited)
-            {
-                bool hasOtherActive = await _context.DeviceLoginHistories
-                    .AnyAsync(h => h.UserId == userId && h.IsActive && h.LogoutTime == null && (!currentHistoryId.HasValue || h.Id != currentHistoryId.Value), cancellationToken);
-
-                if (!hasOtherActive)
-                {
-                    user.IsActive = false;
-                    user.ModifiedOn = DateTime.UtcNow;
-                    user.ModifiedBy = userId;
-                    _logger.LogInformation("Exited user {UserId} logged out from all sessions. Marked IsActive = false.", userId);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, CommonLogMessages.General.ErrorInMethod, nameof(DeactivateExitedUserIfNoActiveSessionsAsync));
-            throw;
-        }
+        // Member exit clearance does not deactivate user accounts so they remain usable
+        await Task.CompletedTask;
     }
 
     public async Task LogoutAllActiveSessionsForUserAsync(Guid userId, CancellationToken cancellationToken = default)

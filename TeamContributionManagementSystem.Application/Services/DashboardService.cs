@@ -343,7 +343,7 @@ public class DashboardService : IDashboardService
             {
                 return new MemberDashboardSummaryDto
                 {
-                    MemberName = memberName,
+                    MemberName = memberName ?? string.Empty,
                     SelectedMonth = month,
                     SelectedYear = year
                 };
@@ -382,7 +382,9 @@ public class DashboardService : IDashboardService
 
                 decimal verifiedPaid = evTxns
                     .Where(t => string.Equals(t.Status, "Verified", StringComparison.OrdinalIgnoreCase) ||
-                                string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+                                string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(t.Status, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(t.Status, "Completed", StringComparison.OrdinalIgnoreCase))
                     .Sum(t => t.Amount);
 
                 var contrib = myContribs.FirstOrDefault(c => c.EventId == ev.EventId);
@@ -422,7 +424,7 @@ public class DashboardService : IDashboardService
                 TotalEvents = memberEvents.Count,
                 PaidEventsCount = paidEventsCount,
                 PendingEventsCount = pendingEventsCount,
-                MemberName = memberName,
+                MemberName = memberName ?? string.Empty,
                 SelectedMonth = filterMonth,
                 SelectedYear = filterYear
             };
@@ -483,7 +485,9 @@ public class DashboardService : IDashboardService
 
                 decimal verifiedPaid = evTxns
                     .Where(t => string.Equals(t.Status, "Verified", StringComparison.OrdinalIgnoreCase) ||
-                                string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+                                string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(t.Status, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(t.Status, "Completed", StringComparison.OrdinalIgnoreCase))
                     .Sum(t => t.Amount);
 
                 var contrib = myContribs.FirstOrDefault(c => c.EventId == ev.EventId);
@@ -503,32 +507,42 @@ public class DashboardService : IDashboardService
 
                 decimal pending = Math.Max(0, expected - verifiedPaid);
 
-                // Determine transaction / verification status
+                // Check for any pending verification transactions for this event
+                var hasPendingTxn = evTxns.Any(t =>
+                    string.Equals(t.Status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(t.Status, "Pending Verification", StringComparison.OrdinalIgnoreCase) ||
+                    (string.IsNullOrWhiteSpace(t.VerifiedBy) &&
+                     !string.Equals(t.Status, "Rejected", StringComparison.OrdinalIgnoreCase) &&
+                     !string.Equals(t.Status, "Verified", StringComparison.OrdinalIgnoreCase) &&
+                     !string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase) &&
+                     !string.Equals(t.Status, "Paid", StringComparison.OrdinalIgnoreCase))
+                );
+
                 var latestTxn = evTxns
-                    .OrderByDescending(t => t.PaymentDate)
-                    .ThenByDescending(t => t.CreatedAt ?? DateTime.MinValue)
+                    .OrderByDescending(t => t.CreatedAt ?? t.PaymentDate)
+                    .ThenByDescending(t => t.PaymentDate)
                     .FirstOrDefault();
 
                 string paymentStatus = "Unpaid";
                 string verificationStatus = "None";
                 bool canPay = true;
 
-                if (latestTxn != null)
+                if (hasPendingTxn)
+                {
+                    paymentStatus = "Pending Verification";
+                    verificationStatus = "Pending";
+                    canPay = false;
+                }
+                else if (latestTxn != null)
                 {
                     var st = (latestTxn.Status ?? string.Empty).Trim().ToLower();
-                    if (st == "pending")
-                    {
-                        paymentStatus = "Pending Verification";
-                        verificationStatus = "Pending";
-                        canPay = false;
-                    }
-                    else if (st == "rejected")
+                    if (st == "rejected")
                     {
                         paymentStatus = "Payment Rejected";
                         verificationStatus = "Rejected";
                         canPay = true;
                     }
-                    else if (st == "verified" || st == "approved")
+                    else if (st == "verified" || st == "approved" || st == "paid" || st == "completed")
                     {
                         verificationStatus = "Verified";
                         if (verifiedPaid >= expected && expected > 0)
@@ -570,6 +584,7 @@ public class DashboardService : IDashboardService
                     }
                 }
 
+                // List down all events (both paid and unpaid) in My Contributions
                 decimal previousArrears = 0m;
                 if (_paymentTransactionService != null)
                 {
@@ -584,15 +599,17 @@ public class DashboardService : IDashboardService
                     catch { }
                 }
 
+                decimal remainingBalance = pending > 0 ? pending : expected;
+
                 items.Add(new MemberContributionItemDto
                 {
                     EventId = ev.EventId,
                     EventTypeId = ev.EventTypeId,
                     EventTypeName = !string.IsNullOrWhiteSpace(ev.EventTypeName) ? ev.EventTypeName : "Event",
-                    EventName = ev.EventName,
+                    EventName = !string.IsNullOrWhiteSpace(ev.EventName) ? ev.EventName : "Event",
                     EventDate = ev.EventDate,
                     CreatedAt = ev.CreatedAt ?? ev.CreatedOn ?? ev.EventDate,
-                    ContributionAmount = RoundingHelper.RoundToWhole(expected),
+                    ContributionAmount = RoundingHelper.RoundToWhole(paymentStatus == "Partially Paid" ? remainingBalance : expected),
                     VerifiedPaidAmount = RoundingHelper.RoundToWhole(verifiedPaid),
                     OutstandingAmount = RoundingHelper.RoundToWhole(pending),
                     PreviousArrears = RoundingHelper.RoundToWhole(previousArrears),
@@ -602,7 +619,7 @@ public class DashboardService : IDashboardService
                     PaymentEligibility = canPay,
                     ContributionId = contrib?.ContributionId,
                     MemberId = memberId.Value,
-                    MemberName = memberName
+                    MemberName = memberName ?? string.Empty
                 });
             }
 
@@ -655,36 +672,83 @@ public class DashboardService : IDashboardService
                              (!string.IsNullOrWhiteSpace(t.MemberName) && string.Equals(t.MemberName.Trim(), memberName.Trim(), StringComparison.OrdinalIgnoreCase))) &&
                             (string.Equals(t.Status, "Completed", StringComparison.OrdinalIgnoreCase) ||
                              string.Equals(t.Status, "Verified", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase)))
+                             string.Equals(t.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(t.Status, "Paid", StringComparison.OrdinalIgnoreCase)))
                 .OrderByDescending(t => t.PaymentDate)
                 .ThenByDescending(t => t.CreatedAt ?? DateTime.MinValue)
-                .Take(limit)
                 .ToList();
 
             var eventDict = (await _eventRepository.GetAllAsync(null, null, cancellationToken))
                 .ToDictionary(e => e.EventId, e => e.EventTypeName);
 
-            return myTxns.Select(t =>
+            var allContribs = await _contributionRepository.GetAllAsync(null, null, cancellationToken);
+            var myPaidContribs = allContribs.Where(c => c.MemberId == memberId.Value && (
+                string.Equals(c.StatusName, "Verified", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.StatusName, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.StatusName, "Paid", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.StatusName, "Completed", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.StatusName, "Closed", StringComparison.OrdinalIgnoreCase))).ToList();
+
+            var list = new List<MemberRecentPaymentDto>();
+            var seenEventIds = new HashSet<Guid>();
+
+            foreach (var t in myTxns)
             {
+                if (t.EventId.HasValue)
+                {
+                    seenEventIds.Add(t.EventId.Value);
+                }
+
                 string evType = string.Empty;
                 if (t.EventId.HasValue && eventDict.TryGetValue(t.EventId.Value, out var typeName))
                 {
-                    evType = typeName;
+                    evType = typeName ?? string.Empty;
                 }
 
-                return new MemberRecentPaymentDto
+                list.Add(new MemberRecentPaymentDto
                 {
                     PaymentId = t.TransactionId,
-                    TxnNumber = t.TxnNumber,
+                    TxnNumber = t.TxnNumber ?? string.Empty,
                     EventId = t.EventId,
                     EventName = !string.IsNullOrWhiteSpace(t.EventName) ? t.EventName : "Event Payment",
                     EventTypeName = evType,
                     PaymentDate = t.PaymentDate,
                     PaymentAmount = RoundingHelper.RoundToWhole(t.Amount),
                     PaymentMode = !string.IsNullOrWhiteSpace(t.PaymentMode) ? t.PaymentMode : "UPI",
-                    VerificationStatus = !string.IsNullOrWhiteSpace(t.Status) ? t.Status : "Pending"
-                };
-            }).ToList();
+                    VerificationStatus = "Approved"
+                });
+            }
+
+            foreach (var c in myPaidContribs)
+            {
+                if (!seenEventIds.Contains(c.EventId))
+                {
+                    seenEventIds.Add(c.EventId);
+                    string evType = !string.IsNullOrWhiteSpace(c.CategoryName) ? c.CategoryName : string.Empty;
+                    if (string.IsNullOrWhiteSpace(evType) && eventDict.TryGetValue(c.EventId, out var typeName))
+                    {
+                        evType = typeName ?? string.Empty;
+                    }
+
+                    list.Add(new MemberRecentPaymentDto
+                    {
+                        PaymentId = c.ContributionId,
+                        TxnNumber = string.Empty,
+                        EventId = c.EventId,
+                        EventName = !string.IsNullOrWhiteSpace(c.EventName) ? c.EventName : "Event Payment",
+                        EventTypeName = evType,
+                        PaymentDate = c.PaymentDate ?? c.CreatedAt ?? DateTime.UtcNow,
+                        PaymentAmount = RoundingHelper.RoundToWhole(c.Amount),
+                        PaymentMode = c.PaymentMode.ToString(),
+                        VerificationStatus = "Approved"
+                    });
+                }
+            }
+
+            return list
+                .OrderByDescending(t => t.PaymentDate)
+                .Take(limit)
+                .ToList();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

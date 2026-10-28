@@ -618,7 +618,7 @@ public class UserManagementService : IUserManagementService
             _logger.LogInformation("User created successfully with Email {Email}", emailToUse);
 
             // Requirement 4: Catch-up birthday reminder for newly joined/imported member if celebration is tomorrow
-            if (appUser.IsActive && !appUser.IsDeleted && !appUser.IsExited && appUser.DateOfBirth != default)
+            if (appUser.IsActive && !appUser.IsDeleted && appUser.DateOfBirth != default)
             {
                 try
                 {
@@ -904,6 +904,10 @@ public class UserManagementService : IUserManagementService
             appUser.FullName = fullName;
             appUser.Role = enumRole;
             appUser.IsActive = request.IsActive;
+            if (appUser.IsActive)
+            {
+                appUser.IsExited = false;
+            }
 
             if (!string.IsNullOrWhiteSpace(request.Phone))
             {

@@ -739,9 +739,9 @@ public class EventService : IEventService
 
                     var sponsorUser = await _userRepository.GetByIdAsync(input.UserId, cancellationToken)
                         ?? throw new KeyNotFoundException("Selected sponsor user was not found.");
-                    if (sponsorUser.IsDeleted || !sponsorUser.IsActive || sponsorUser.IsExited)
+                    if (sponsorUser.IsDeleted || !sponsorUser.IsActive)
                     {
-                        throw new InvalidOperationException($"Selected sponsor user '{sponsorUser.FullName}' is inactive or exited.");
+                        throw new InvalidOperationException($"Selected sponsor user '{sponsorUser.FullName}' is inactive.");
                     }
 
                     var sponsorAmount = RoundingHelper.RoundToWhole(input.ContributionAmount);
@@ -2104,9 +2104,9 @@ public class EventService : IEventService
                     {
                         var sponsorUser = await _userRepository.GetByIdAsync(input.UserId, cancellationToken)
                             ?? throw new KeyNotFoundException("Selected sponsor user was not found.");
-                        if (sponsorUser.IsDeleted || !sponsorUser.IsActive || sponsorUser.IsExited)
+                        if (sponsorUser.IsDeleted || !sponsorUser.IsActive)
                         {
-                            throw new InvalidOperationException($"Selected sponsor user '{sponsorUser.FullName}' is inactive or exited.");
+                            throw new InvalidOperationException($"Selected sponsor user '{sponsorUser.FullName}' is inactive.");
                         }
 
                         var newSponsor = new EventSponsor
@@ -3661,7 +3661,7 @@ public class EventService : IEventService
     {
         var allUsers = await _userRepository.GetAllAsync(cancellationToken);
         return allUsers
-            .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited)
+            .Where(u => !u.IsDeleted && u.IsActive)
             .OrderBy(u => u.FullName)
             .Select(u => new EligibleSponsorDto
             {

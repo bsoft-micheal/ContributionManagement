@@ -429,7 +429,7 @@ public class ContributionReminderJobService : IContributionReminderJobService
                 if (targetCelebrants.Count == 0)
                 {
                     targetCelebrants = await _context.Users
-                        .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited && u.DateOfBirth.Month == eventDate.Month)
+                        .Where(u => !u.IsDeleted && u.IsActive && u.DateOfBirth.Month == eventDate.Month)
                         .ToListAsync(cancellationToken);
                 }
             }
