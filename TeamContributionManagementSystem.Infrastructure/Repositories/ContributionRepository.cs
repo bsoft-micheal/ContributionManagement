@@ -110,10 +110,99 @@ public class ContributionRepository : IContributionRepository
         }
     }
 
+    private async Task EnsureContributionsExistAsync(List<Event> events, CancellationToken cancellationToken)
+    {
+        if (events == null || events.Count == 0) return;
+
+        var eventIds = events.Select(e => e.EventId).Distinct().ToList();
+        var existingEventIds = await _context.Contributions
+            .Where(c => !c.IsDeleted && eventIds.Contains(c.EventId))
+            .Select(c => c.EventId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var eventsNeedingContributions = events
+            .Where(e => !existingEventIds.Contains(e.EventId))
+            .ToList();
+
+        if (eventsNeedingContributions.Count == 0) return;
+
+        var allActiveUserIds = await _context.Users
+            .Where(u => !u.IsDeleted && u.IsActive)
+            .Select(u => u.UserId)
+            .ToListAsync(cancellationToken);
+
+        var pendingStatus = await _context.Statuses
+            .FirstOrDefaultAsync(s => s.StatusName.ToLower() == "pending", cancellationToken);
+        var pendingStatusId = pendingStatus?.StatusId;
+
+        var newContribs = new List<Contribution>();
+        foreach (var ev in eventsNeedingContributions)
+        {
+            var participantUserIds = ev.Participants != null
+                ? ev.Participants.Where(p => !p.IsDeleted).Select(p => p.UserId).Distinct().ToList()
+                : new List<Guid>();
+
+            if (participantUserIds.Count == 0)
+            {
+                participantUserIds = allActiveUserIds;
+            }
+
+            if (participantUserIds.Count > 0)
+            {
+                var baseAmount = ev.BaseAmount;
+                var splitAmounts = RoundingHelper.DistributeEqualSplit(baseAmount, participantUserIds.Count);
+
+                for (int i = 0; i < participantUserIds.Count; i++)
+                {
+                    var uid = participantUserIds[i];
+                    var contrib = new Contribution
+                    {
+                        ContributionId = Guid.NewGuid(),
+                        EventId = ev.EventId,
+                        UserId = uid,
+                        Amount = splitAmounts[i],
+                        StatusId = pendingStatusId,
+                        PaymentStatus = PaymentStatus.Pending,
+                        PaymentMode = PaymentMode.None,
+                        PaymentModeId = null,
+                        PaymentDate = null,
+                        CashAmount = null,
+                        UpiAmount = null,
+                        IsActive = true,
+                        IsDeleted = false,
+                        CreatedBy = ev.CreatedBy,
+                        CreatedAt = ev.CreatedAt
+                    };
+                    newContribs.Add(contrib);
+                }
+            }
+        }
+
+        if (newContribs.Count > 0)
+        {
+            await _context.Contributions.AddRangeAsync(newContribs, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+    }
+
     public async Task<List<ContributionDto>> GetAllAsync(int? month, int? year, CancellationToken cancellationToken = default)
     {
         try
         {
+            var eventsQuery = _context.Events
+                .Include(e => e.Participants)
+                .Where(e => !e.IsDeleted && e.Status != EventStatus.Draft && e.Status != EventStatus.Cancelled);
+
+            if (month.HasValue)
+                eventsQuery = eventsQuery.Where(e => e.EventDate.Month == month.Value);
+
+            if (year.HasValue)
+                eventsQuery = eventsQuery.Where(e => e.EventDate.Year == year.Value);
+
+            var publishedEvents = await eventsQuery.ToListAsync(cancellationToken);
+            await EnsureContributionsExistAsync(publishedEvents, cancellationToken);
+
             var query = _context.Contributions
                 .Where(x => !x.IsDeleted && x.Event != null && !x.Event.IsDeleted);
 
@@ -254,52 +343,9 @@ public class ContributionRepository : IContributionRepository
 
                 if (ev != null)
                 {
-                    var participantUserIds = ev.Participants.Where(p => !p.IsDeleted).Select(p => p.UserId).Distinct().ToList();
-                    if (participantUserIds.Count == 0)
-                    {
-                        participantUserIds = await _context.Users
-                            .Where(u => !u.IsDeleted && u.IsActive)
-                            .Select(u => u.UserId)
-                            .ToListAsync(cancellationToken);
-                    }
+                    await EnsureContributionsExistAsync(new List<Event> { ev }, cancellationToken);
 
-                    if (participantUserIds.Count > 0)
-                    {
-                        var baseAmount = ev.BaseAmount;
-                        var splitAmounts = RoundingHelper.DistributeEqualSplit(baseAmount, participantUserIds.Count);
-
-                        var pendingStatus = await _context.Statuses.FirstOrDefaultAsync(s => s.StatusName.ToLower() == "pending", cancellationToken);
-                        var pendingStatusId = pendingStatus?.StatusId;
-
-                        var newContribs = new List<Contribution>();
-                        for (int i = 0; i < participantUserIds.Count; i++)
-                        {
-                            var uid = participantUserIds[i];
-                            var contrib = new Contribution
-                            {
-                                ContributionId = Guid.NewGuid(),
-                                EventId = ev.EventId,
-                                UserId = uid,
-                                Amount = splitAmounts[i],
-                                StatusId = pendingStatusId,
-                                PaymentStatus = PaymentStatus.Pending,
-                                PaymentMode = PaymentMode.None,
-                                PaymentModeId = null,
-                                PaymentDate = null,
-                                CashAmount = null,
-                                UpiAmount = null,
-                                IsActive = true,
-                                IsDeleted = false,
-                                CreatedBy = ev.CreatedBy,
-                                CreatedAt = ev.CreatedAt
-                            };
-                            newContribs.Add(contrib);
-                        }
-
-                        await _context.Contributions.AddRangeAsync(newContribs, cancellationToken);
-                        await _context.SaveChangesAsync(cancellationToken);
-
-                        items = await _context.Contributions
+                    items = await _context.Contributions
                             .Where(x => x.EventId == eventId && !x.IsDeleted)
                             .OrderBy(x => x.User != null ? x.User.FullName : string.Empty)
                             .Select(x => new ContributionDto
@@ -332,7 +378,6 @@ public class ContributionRepository : IContributionRepository
                             .ToListAsync(cancellationToken);
                     }
                 }
-            }
 
             await PopulateNamesAsync(items, cancellationToken);
 
