@@ -140,7 +140,7 @@ public class BirthdayAutomationService : IBirthdayAutomationService
         _logger.LogInformation("Processing catch-up birthday reminder check for user {UserId} against tomorrow {Tomorrow:yyyy-MM-dd}", newUserId, tomorrowIst);
 
         var user = await _userRepository.GetByIdAsync(newUserId, cancellationToken);
-        if (user == null || user.IsDeleted || !user.IsActive || user.IsExited || user.DateOfBirth == default)
+        if (user == null || user.IsDeleted || !user.IsActive || user.DateOfBirth == default)
         {
             _logger.LogInformation("User {UserId} is not eligible for birthday reminders (inactive/deleted/missing DOB).", newUserId);
             return;
@@ -170,7 +170,7 @@ public class BirthdayAutomationService : IBirthdayAutomationService
         var allUsers = await _userRepository.GetAllAsync(cancellationToken);
 
         var activeRecipients = allUsers
-            .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited && !string.IsNullOrWhiteSpace(u.Email))
+            .Where(u => !u.IsDeleted && u.IsActive && !string.IsNullOrWhiteSpace(u.Email))
             .DistinctBy(u => u.Email.Trim().ToLowerInvariant())
             .ToList();
 
@@ -182,7 +182,7 @@ public class BirthdayAutomationService : IBirthdayAutomationService
 
         // 2. Resolve all celebrants whose celebration date is targetDateOnly
         var candidateUsers = allUsers
-            .Where(u => !u.IsDeleted && u.IsActive && !u.IsExited && u.DateOfBirth.HasValue && u.DateOfBirth.Value != default)
+            .Where(u => !u.IsDeleted && u.IsActive && u.DateOfBirth.HasValue && u.DateOfBirth.Value != default)
             .ToList();
 
         if (specificCelebrantId.HasValue)
