@@ -205,7 +205,7 @@ public class SystemSettingRepository : ISystemSettingRepository
         try
         {
             const string sql = @"
-                CREATE TABLE IF NOT EXISTS public.event_type_payment_settings (
+                CREATE TABLE IF NOT EXISTS cms.event_type_payment_settings (
                     payment_setting_id uuid PRIMARY KEY,
                     event_type_id uuid NULL,
                     event_type_name varchar(100) NOT NULL,

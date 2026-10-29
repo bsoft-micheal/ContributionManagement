@@ -10,6 +10,9 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
 {
     private readonly ICurrentUserService? _currentUserService;
 
+    public const string CmsSchema = "cms";
+    public const string PublicSchema = "public";
+
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
         ICurrentUserService? currentUserService = null)
@@ -54,10 +57,14 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
  
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.HasDefaultSchema(CmsSchema);
+
         modelBuilder.Ignore<Member>();
 
         modelBuilder.Entity<Role>(entity =>
         {
+            entity.ToTable("roles", PublicSchema);
             entity.HasKey(x => x.RoleId);
             entity.Property(x => x.RoleName).HasMaxLength(100).IsRequired();
             entity.Ignore(x => x.DefaultContributionAmount);
@@ -78,6 +85,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
 
         modelBuilder.Entity<AppUser>(entity =>
         {
+            entity.ToTable("users", PublicSchema);
             entity.HasKey(x => x.UserId);
             entity.Property(x => x.Username).HasMaxLength(100).IsRequired(false);
             entity.Property(x => x.Email).HasMaxLength(150).IsRequired();
@@ -110,7 +118,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
 
         modelBuilder.Entity<AppUserRole>(entity =>
         {
-            entity.ToTable("user_roles");
+            entity.ToTable("user_roles", PublicSchema);
             entity.HasKey(x => new { x.UserId, x.RoleId });
             entity.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
             entity.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
@@ -135,6 +143,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
 
         modelBuilder.Entity<RoleRight>(entity =>
         {
+            entity.ToTable("role_rights", PublicSchema);
             entity.HasKey(x => x.RoleRightId);
             entity.Property(x => x.RoleId).IsRequired();
             entity.Property(x => x.FeatureID).IsRequired();
@@ -153,7 +162,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
 
         modelBuilder.Entity<NavigationMenu>(entity =>
         {
-            entity.ToTable("navigation_menus");
+            entity.ToTable("navigation_menus", PublicSchema);
             entity.HasKey(x => x.FeatureID);
             entity.Property(x => x.FeatureID).HasColumnName("feature_id");
             entity.Property(x => x.MainModuleID).HasColumnName("main_module_id");
