@@ -346,16 +346,19 @@ public class ExitClearanceService : IExitClearanceService
         };
         await _clearanceRepo.AddHistoryAsync(history, cancellationToken);
 
-        // 5. Update Member Status - do NOT deactivate member upon exit; keep user active and usable
+        // 5. Update Member Status - Mark member as inactive and exited upon approved clearance
         var memberToUpdate = clearance.Member ?? await _clearanceRepo.GetUserByIdAsync(clearance.MemberId, cancellationToken);
         if (memberToUpdate != null)
         {
-            memberToUpdate.IsActive = true;
-            memberToUpdate.IsExited = false;
+            if (request == null || request.MarkAsInactive)
+            {
+                memberToUpdate.IsActive = false;
+                memberToUpdate.IsExited = true;
+                _logger.LogInformation("Member {MemberId} exit clearance approved. Account deactivated (IsActive = false, IsExited = true).", clearance.MemberId);
+            }
             memberToUpdate.ModifiedBy = adminUserId;
             memberToUpdate.ModifiedOn = approvalTime;
             _clearanceRepo.UpdateUser(memberToUpdate);
-            _logger.LogInformation("Member {MemberId} exit clearance approved. Account kept active (IsActive = true, IsExited = false) for continued use.", clearance.MemberId);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
