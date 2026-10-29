@@ -1556,5 +1556,15 @@ public class EventRepository : IEventRepository
             ? (dto.SponsorContributionAmount ?? (dto.Sponsors != null && dto.Sponsors.Any() ? dto.Sponsors.Where(s => s.IsActive).Sum(s => s.ContributionAmount) : 0m))
             : 0m;
         dto.RemainingFundingRequirement = Math.Max(0m, dto.OriginalPlannedBudget - sponsorDeduction);
+
+        if (dto.ParticipantCount == 0 || (!dto.HasPaidContributions && dto.PaidContributionsCount == 0 && (dto.TotalExpectedAmount == dto.BaseAmount || dto.TotalExpectedAmount == 0)))
+        {
+            decimal fundingTarget = dto.RemainingFundingRequirement;
+            dto.TotalExpectedAmount = dto.UseAvailableBalance && dto.AllocatedAmount > 0
+                ? Math.Max(0m, fundingTarget - dto.AllocatedAmount)
+                : fundingTarget;
+            dto.PendingAmount = Math.Max(0m, dto.TotalExpectedAmount - dto.CollectedAmount);
+            dto.OverallExpectedAmount = dto.TotalExpectedAmount;
+        }
     }
 }
