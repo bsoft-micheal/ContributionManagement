@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TeamContributionManagementSystem.Domain.Entities;
 
-[Table("user_roles")]
+[Table("user_roles", Schema = "public")]
 public class AppUserRole
 {
     [NotMapped]

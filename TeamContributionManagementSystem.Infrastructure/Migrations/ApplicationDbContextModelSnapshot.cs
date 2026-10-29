@@ -17,6 +17,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("cms")
                 .HasAnnotation("ProductVersion", "9.0.1")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -161,7 +162,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("WorkTypeId")
                         .HasDatabaseName("ix_users_work_type_id");
 
-                    b.ToTable("users");
+                    b.ToTable("users", "public");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.AppUserRole", b =>
@@ -198,7 +199,71 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("RoleId")
                         .HasDatabaseName("ix_user_roles_role_id");
 
-                    b.ToTable("user_roles", (string)null);
+                    b.ToTable("user_roles", "public");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.BirthdayReminderLog", b =>
+                {
+                    b.Property<Guid>("ReminderLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("reminder_log_id");
+
+                    b.Property<Guid>("CelebrantUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("celebrant_user_id");
+
+                    b.Property<DateTime>("CelebrationDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("celebration_date");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("recipient_email");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_user_id");
+
+                    b.Property<string>("ReminderType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("reminder_type");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Sent")
+                        .HasColumnName("status");
+
+                    b.HasKey("ReminderLogId")
+                        .HasName("pk_birthday_reminder_logs");
+
+                    b.HasIndex("CelebrantUserId")
+                        .HasDatabaseName("ix_birthday_reminder_logs_celebrant_user_id");
+
+                    b.HasIndex("RecipientUserId")
+                        .HasDatabaseName("ix_birthday_reminder_logs_recipient_user_id");
+
+                    b.HasIndex("CelebrationDate", "CelebrantUserId", "RecipientUserId", "ReminderType")
+                        .IsUnique()
+                        .HasDatabaseName("ix_birthday_reminder_logs_celebration_date_celebrant_user_id_r~");
+
+                    b.ToTable("birthday_reminder_logs", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.BudgetCalculation", b =>
@@ -267,7 +332,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("ExpenseItem")
                         .HasDatabaseName("ix_budget_calculations_expense_item");
 
-                    b.ToTable("budget_calculations");
+                    b.ToTable("budget_calculations", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.BudgetCalculationHistory", b =>
@@ -353,7 +418,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("EffectiveFrom")
                         .HasDatabaseName("ix_budget_calculation_history_effective_from");
 
-                    b.ToTable("budget_calculation_history", (string)null);
+                    b.ToTable("budget_calculation_history", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.Contribution", b =>
@@ -452,7 +517,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_contributions_event_id_user_id");
 
-                    b.ToTable("contributions");
+                    b.ToTable("contributions", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.DeviceDetail", b =>
@@ -581,7 +646,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_device_details_user_id");
 
-                    b.ToTable("device_details");
+                    b.ToTable("device_details", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.DeviceLoginHistory", b =>
@@ -640,7 +705,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_device_login_history_user_id");
 
-                    b.ToTable("device_login_history");
+                    b.ToTable("device_login_history", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.Event", b =>
@@ -678,6 +743,12 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("description");
 
+                    b.Property<bool>("EnableCelebrantSelection")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("enable_celebrant_selection");
+
                     b.Property<DateTime>("EventDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("event_date");
@@ -709,6 +780,20 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_on");
 
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid?>("PublishedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by");
+
+                    b.Property<bool>("RequireSponsorContribution")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("require_sponsor_contribution");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -730,10 +815,13 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("EventTypeId")
                         .HasDatabaseName("ix_events_event_type_id");
 
+                    b.HasIndex("PublishedBy")
+                        .HasDatabaseName("ix_events_published_by");
+
                     b.HasIndex("EventDate", "EventTypeId")
                         .HasDatabaseName("ix_events_event_date_event_type_id");
 
-                    b.ToTable("events");
+                    b.ToTable("events", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventParticipant", b =>
@@ -785,7 +873,138 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_event_participants_event_id_user_id");
 
-                    b.ToTable("event_participants");
+                    b.ToTable("event_participants", "cms");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventSponsor", b =>
+                {
+                    b.Property<Guid>("SponsorId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("sponsor_id");
+
+                    b.Property<decimal>("ContributionAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("contribution_amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_at");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("modified_by");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("SponsorId")
+                        .HasName("pk_event_sponsors");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_event_sponsors_created_by");
+
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("ix_event_sponsors_event_id");
+
+                    b.HasIndex("ModifiedBy")
+                        .HasDatabaseName("ix_event_sponsors_modified_by");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_event_sponsors_user_id");
+
+                    b.ToTable("event_sponsors", "cms");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventSponsorHistory", b =>
+                {
+                    b.Property<Guid>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("history_id");
+
+                    b.Property<Guid?>("ActionBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("action_by");
+
+                    b.Property<DateTime>("ActionDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("action_date");
+
+                    b.Property<string>("ChangeType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("change_type");
+
+                    b.Property<decimal>("ContributionAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("contribution_amount");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<decimal?>("PreviousAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("previous_amount");
+
+                    b.Property<Guid>("SponsorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sponsor_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("HistoryId")
+                        .HasName("pk_event_sponsor_histories");
+
+                    b.HasIndex("ActionBy")
+                        .HasDatabaseName("ix_event_sponsor_histories_action_by");
+
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("ix_event_sponsor_histories_event_id");
+
+                    b.HasIndex("SponsorId")
+                        .HasDatabaseName("ix_event_sponsor_histories_sponsor_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_event_sponsor_histories_user_id");
+
+                    b.ToTable("event_sponsor_histories", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventType", b =>
@@ -864,7 +1083,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_event_types_event_type_name");
 
-                    b.ToTable("event_types");
+                    b.ToTable("event_types", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventTypePaymentSetting", b =>
@@ -917,7 +1136,209 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasKey("PaymentSettingId")
                         .HasName("pk_event_type_payment_settings");
 
-                    b.ToTable("event_type_payment_settings", (string)null);
+                    b.ToTable("event_type_payment_settings", "cms");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.ExitClearance", b =>
+                {
+                    b.Property<Guid>("ClearanceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("clearance_id");
+
+                    b.Property<string>("ApprovalRemarks")
+                        .HasColumnType("text")
+                        .HasColumnName("approval_remarks");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_by");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_on");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("member_id");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_on");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<DateTime?>("PlannedExitDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("planned_exit_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("PendingClearance")
+                        .HasColumnName("status");
+
+                    b.HasKey("ClearanceId")
+                        .HasName("pk_exit_clearances");
+
+                    b.HasIndex("ApprovedBy")
+                        .HasDatabaseName("ix_exit_clearances_approved_by");
+
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("ix_exit_clearances_event_id");
+
+                    b.HasIndex("MemberId")
+                        .HasDatabaseName("ix_exit_clearances_member_id");
+
+                    b.ToTable("exit_clearances", "cms");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.ExitClearanceHistory", b =>
+                {
+                    b.Property<Guid>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("history_id");
+
+                    b.Property<string>("ApprovalRemarks")
+                        .HasColumnType("text")
+                        .HasColumnName("approval_remarks");
+
+                    b.Property<Guid>("ApprovedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_by");
+
+                    b.Property<string>("ApprovedByName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("approved_by_name");
+
+                    b.Property<Guid>("ClearanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("clearance_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("EventNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("event_name_snapshot");
+
+                    b.Property<DateTime>("ExitApprovalDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("exit_approval_date");
+
+                    b.Property<DateTime?>("JoiningDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("joining_date");
+
+                    b.Property<string>("MemberCodeSnapshot")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("member_code_snapshot");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("member_id");
+
+                    b.Property<string>("MemberNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("member_name_snapshot");
+
+                    b.Property<decimal>("OutstandingAtApproval")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("outstanding_at_approval");
+
+                    b.Property<string>("PaymentVerificationSummary")
+                        .HasColumnType("text")
+                        .HasColumnName("payment_verification_summary");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("text")
+                        .HasColumnName("snapshot_json");
+
+                    b.Property<decimal>("TotalApprovedAdjustments")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("total_approved_adjustments");
+
+                    b.Property<decimal>("TotalObligations")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("total_obligations");
+
+                    b.Property<decimal>("TotalVerifiedPaid")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("total_verified_paid");
+
+                    b.HasKey("HistoryId")
+                        .HasName("pk_exit_clearance_histories");
+
+                    b.HasIndex("ApprovedBy")
+                        .HasDatabaseName("ix_exit_clearance_histories_approved_by");
+
+                    b.HasIndex("ClearanceId")
+                        .HasDatabaseName("ix_exit_clearance_histories_clearance_id");
+
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("ix_exit_clearance_histories_event_id");
+
+                    b.HasIndex("MemberId")
+                        .HasDatabaseName("ix_exit_clearance_histories_member_id");
+
+                    b.ToTable("exit_clearance_histories", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.Expense", b =>
@@ -926,6 +1347,10 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("expense_id");
+
+                    b.Property<string>("AdditionalExpenses")
+                        .HasColumnType("text")
+                        .HasColumnName("additional_expenses");
 
                     b.Property<decimal>("Amount")
                         .HasPrecision(12, 2)
@@ -936,6 +1361,13 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("approved_by");
+
+                    b.Property<decimal>("BudgetAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("budget_amount");
 
                     b.Property<string>("Category")
                         .IsRequired()
@@ -966,6 +1398,19 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.Property<DateTime>("ExpenseDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expense_date");
+
+                    b.Property<string>("ExpenseNo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("expense_no");
+
+                    b.Property<decimal>("ExtraAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("extra_amount");
 
                     b.Property<string>("FileName")
                         .HasColumnType("text")
@@ -1002,10 +1447,46 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasKey("ExpenseId")
                         .HasName("pk_expenses");
 
+                    b.HasIndex("ExpenseNo")
+                        .HasDatabaseName("ix_expenses_expense_no");
+
                     b.HasIndex("ExpenseDate", "Status")
                         .HasDatabaseName("ix_expenses_expense_date_status");
 
-                    b.ToTable("expenses");
+                    b.ToTable("expenses", "cms");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.ExpenseSequence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("LastSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("last_sequence");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer")
+                        .HasColumnName("month");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer")
+                        .HasColumnName("year");
+
+                    b.HasKey("Id")
+                        .HasName("pk_expense_sequences");
+
+                    b.HasIndex("Year", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("ix_expense_sequences_year_month");
+
+                    b.ToTable("expense_sequences", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.GalleryPhoto", b =>
@@ -1069,7 +1550,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("EventId")
                         .HasDatabaseName("ix_gallery_photos_event_id");
 
-                    b.ToTable("gallery_photos");
+                    b.ToTable("gallery_photos", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.NavigationMenu", b =>
@@ -1138,7 +1619,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasKey("FeatureID")
                         .HasName("pk_navigation_menus");
 
-                    b.ToTable("navigation_menus", (string)null);
+                    b.ToTable("navigation_menus", "public");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.PaymentModeItem", b =>
@@ -1208,7 +1689,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_payment_modes_payment_mode_name");
 
-                    b.ToTable("payment_modes", (string)null);
+                    b.ToTable("payment_modes", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.PaymentTransaction", b =>
@@ -1331,7 +1812,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_payment_transactions_user_id");
 
-                    b.ToTable("payment_transactions");
+                    b.ToTable("payment_transactions", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.Priority", b =>
@@ -1382,7 +1863,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_priorities_priority_name");
 
-                    b.ToTable("priorities");
+                    b.ToTable("priorities", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.Role", b =>
@@ -1433,7 +1914,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_roles_role_name");
 
-                    b.ToTable("roles");
+                    b.ToTable("roles", "public");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.RoleRight", b =>
@@ -1496,7 +1977,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_role_rights_role_id_feature_id");
 
-                    b.ToTable("role_rights");
+                    b.ToTable("role_rights", "public");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.Status", b =>
@@ -1535,7 +2016,6 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .HasColumnName("modified_on");
 
                     b.Property<string>("Module")
-                        .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -1559,7 +2039,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_statuses_status_name_module");
 
-                    b.ToTable("statuses");
+                    b.ToTable("statuses", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.SupportTicket", b =>
@@ -1680,7 +2160,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_support_tickets_user_id");
 
-                    b.ToTable("support_tickets");
+                    b.ToTable("support_tickets", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.SystemSetting", b =>
@@ -1749,7 +2229,62 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_system_settings_setting_key");
 
-                    b.ToTable("system_settings");
+                    b.ToTable("system_settings", "cms");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.TicketResolutionNote", b =>
+                {
+                    b.Property<Guid>("NoteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("note_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("timezone('utc', now())");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("SenderName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("sender_name");
+
+                    b.Property<Guid?>("StatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("status_id");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("NoteId")
+                        .HasName("pk_ticket_resolution_notes");
+
+                    b.HasIndex("StatusId")
+                        .HasDatabaseName("ix_ticket_resolution_notes_status_id");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_ticket_resolution_notes_ticket_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_ticket_resolution_notes_user_id");
+
+                    b.ToTable("ticket_resolution_notes", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.TicketType", b =>
@@ -1800,7 +2335,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_ticket_types_type_name");
 
-                    b.ToTable("ticket_types");
+                    b.ToTable("ticket_types", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.UserMfaDevice", b =>
@@ -1860,7 +2395,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_user_mfa_devices_user_id");
 
-                    b.ToTable("user_mfa_devices");
+                    b.ToTable("user_mfa_devices", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.WorkType", b =>
@@ -1911,7 +2446,7 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_work_types_work_type_name");
 
-                    b.ToTable("work_types");
+                    b.ToTable("work_types", "cms");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.AppUser", b =>
@@ -1944,6 +2479,27 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.Navigation("Role");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.BirthdayReminderLog", b =>
+                {
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "CelebrantUser")
+                        .WithMany()
+                        .HasForeignKey("CelebrantUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_birthday_reminder_logs_users_celebrant_user_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "RecipientUser")
+                        .WithMany()
+                        .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_birthday_reminder_logs_users_recipient_user_id");
+
+                    b.Navigation("CelebrantUser");
+
+                    b.Navigation("RecipientUser");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.BudgetCalculation", b =>
@@ -2061,9 +2617,17 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_events_event_types_event_type_id");
 
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "PublishedByUser")
+                        .WithMany()
+                        .HasForeignKey("PublishedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_events_users_published_by");
+
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("EventType");
+
+                    b.Navigation("PublishedByUser");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventParticipant", b =>
@@ -2081,6 +2645,149 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_event_participants_users_user_id");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("Member");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventSponsor", b =>
+                {
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_event_sponsors_users_created_by");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.Event", "Event")
+                        .WithMany("Sponsors")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_event_sponsors_events_event_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "ModifiedByUser")
+                        .WithMany()
+                        .HasForeignKey("ModifiedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_event_sponsors_users_modified_by");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "SponsorUser")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_event_sponsors_users_user_id");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("ModifiedByUser");
+
+                    b.Navigation("SponsorUser");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventSponsorHistory", b =>
+                {
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "ActionByUser")
+                        .WithMany()
+                        .HasForeignKey("ActionBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_event_sponsor_histories_users_action_by");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_event_sponsor_histories_events_event_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.EventSponsor", "Sponsor")
+                        .WithMany("Histories")
+                        .HasForeignKey("SponsorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_event_sponsor_histories_event_sponsors_sponsor_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "SponsorUser")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_event_sponsor_histories_users_user_id");
+
+                    b.Navigation("ActionByUser");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("Sponsor");
+
+                    b.Navigation("SponsorUser");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.ExitClearance", b =>
+                {
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_exit_clearances_users_approved_by");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exit_clearances_events_event_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "Member")
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exit_clearances_users_member_id");
+
+                    b.Navigation("ApprovedByUser");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("Member");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.ExitClearanceHistory", b =>
+                {
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exit_clearance_histories_users_approved_by");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.ExitClearance", "Clearance")
+                        .WithMany("Histories")
+                        .HasForeignKey("ClearanceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exit_clearance_histories_exit_clearances_clearance_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exit_clearance_histories_events_event_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "Member")
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exit_clearance_histories_users_member_id");
+
+                    b.Navigation("ApprovedByUser");
+
+                    b.Navigation("Clearance");
 
                     b.Navigation("Event");
 
@@ -2188,6 +2895,34 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.TicketResolutionNote", b =>
+                {
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.Status", "StatusItem")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_ticket_resolution_notes_statuses_status_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.SupportTicket", "Ticket")
+                        .WithMany("ResolutionNotesHistory")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_resolution_notes_support_tickets_ticket_id");
+
+                    b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_ticket_resolution_notes_users_user_id");
+
+                    b.Navigation("StatusItem");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.UserMfaDevice", b =>
                 {
                     b.HasOne("TeamContributionManagementSystem.Domain.Entities.AppUser", "User")
@@ -2228,6 +2963,13 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.Navigation("Contributions");
 
                     b.Navigation("Participants");
+
+                    b.Navigation("Sponsors");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventSponsor", b =>
+                {
+                    b.Navigation("Histories");
                 });
 
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.EventType", b =>
@@ -2235,11 +2977,21 @@ namespace TeamContributionManagementSystem.Infrastructure.Migrations
                     b.Navigation("Events");
                 });
 
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.ExitClearance", b =>
+                {
+                    b.Navigation("Histories");
+                });
+
             modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.Role", b =>
                 {
                     b.Navigation("RoleRights");
 
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("TeamContributionManagementSystem.Domain.Entities.SupportTicket", b =>
+                {
+                    b.Navigation("ResolutionNotesHistory");
                 });
 #pragma warning restore 612, 618
         }
